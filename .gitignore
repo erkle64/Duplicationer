@@ -1,0 +1,11 @@
+
+packages/*
+Duplicationer/.vs/*
+Duplicationer/obj/*
+Duplicationer/bin/*
+Libraries/*.dll
+.vs/*
+MigrationBackup/*
+Libraries/assembly-hash.txt
+Libraries/MethodAddressToToken.db
+Libraries/MethodXrefScanCache.db
