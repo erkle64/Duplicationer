@@ -855,13 +855,8 @@ namespace Duplicationer
         {
             var oldSize = CurrentBlueprintSize;
             var newSize = new Vector3Int(oldSize.z, oldSize.y, oldSize.x);
-            var oldCenter = oldSize / 2;
-            var newCenter = newSize / 2;
-
-            log.LogInfo((string)$"oldSize: {oldSize}");
-            log.LogInfo((string)$"newSize: {newSize}");
-            log.LogInfo((string)$"oldCenter: {oldCenter}");
-            log.LogInfo((string)$"newCenter: {newCenter}");
+            var oldCenter = ((Vector3)oldSize) / 2.0f;
+            var newCenter = ((Vector3)newSize) / 2.0f;
 
             BlueprintData currentBlueprint = CurrentBlueprint;
             for (int i = 0; i < currentBlueprint.buildableObjects.Length; ++i)
@@ -869,8 +864,8 @@ namespace Duplicationer
                 var buildableObjectData = currentBlueprint.buildableObjects[i];
                 var offsetX = buildableObjectData.worldZ - oldCenter.z;
                 var offsetZ = oldCenter.x - buildableObjectData.worldX;
-                var newX = newCenter.x + offsetX;
-                var newZ = newCenter.z + offsetZ;
+                var newX = Mathf.RoundToInt(newCenter.x + offsetX);
+                var newZ = Mathf.RoundToInt(newCenter.z + offsetZ);
 
                 var template = ItemTemplateManager.getBuildableObjectTemplate(buildableObjectData.templateId);
                 if (template != null)

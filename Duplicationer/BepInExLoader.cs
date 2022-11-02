@@ -21,7 +21,7 @@ namespace Duplicationer
             MODNAME = "Duplicationer",
             AUTHOR = "erkle64",
             GUID = "com." + AUTHOR + "." + MODNAME,
-            VERSION = "0.1.3";
+            VERSION = "0.1.4";
 
         public static BepInEx.Logging.ManualLogSource log;
 
