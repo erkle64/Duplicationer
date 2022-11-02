@@ -11,6 +11,7 @@ namespace Duplicationer
         public abstract void Exit();
         public abstract void HideMenu(int selected);
         public abstract void ShowMenu();
+        public abstract bool OnRotateY();
 
         protected static void DrawBox(Vector3 from, Vector3 to, Material material)
         {

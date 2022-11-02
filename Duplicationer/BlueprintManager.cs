@@ -83,7 +83,10 @@ namespace Duplicationer
 
                     var worldPos = new Vector3Int(buildableObjectData.worldX + placeholderAnchorPosition.x, buildableObjectData.worldY + placeholderAnchorPosition.y, buildableObjectData.worldZ + placeholderAnchorPosition.z);
                     int wx, wy, wz;
-                    BuildingManager.getWidthFromOrientation(placeholder.bogo.template, (BuildingManager.BuildOrientation)buildableObjectData.orientationY, out wx, out wy, out wz);
+                    if (placeholder.bogo.template.canBeRotatedAroundXAxis)
+                        BuildingManager.getWidthFromUnlockedOrientation(placeholder.bogo.template, buildableObjectData.orientationUnlocked, out wx, out wy, out wz);
+                    else
+                        BuildingManager.getWidthFromOrientation(placeholder.bogo.template, (BuildingManager.BuildOrientation)buildableObjectData.orientationY, out wx, out wy, out wz);
 
                     byte errorCodeRaw = 0;
                     BuildingManager.buildingManager_validateConstruction_buildableEntityWrapper(new v3i(worldPos.x, worldPos.y, worldPos.z), buildableObjectData.orientationY, buildableObjectData.orientationUnlocked, buildableObjectData.templateId, ref errorCodeRaw, IOBool.iofalse);
@@ -205,7 +208,8 @@ namespace Duplicationer
                     onBlueprintUpdated?.Invoke(countUntested, countBlocked, countClear, countDone);
                 }
 
-                var remainingTasks = activeConstructionTaskGroups.Sum((group) => group.Remaining);
+                int remainingTasks = 0;
+                foreach(var group in activeConstructionTaskGroups) remainingTasks += group.Remaining;
                 if (remainingTasks > 0) CurrentBlueprintStatusText = $"ToDo: {remainingTasks}{(CurrentBlueprintStatusText.Length > 0 ? "\n" : "")}{CurrentBlueprintStatusText}";
 
                 if (IsPlaceholdersHidden && Input.GetKey(KeyCode.Semicolon))
@@ -540,7 +544,10 @@ namespace Duplicationer
                 var worldPos = new Vector3Int(buildableObjectData.worldX, buildableObjectData.worldY, buildableObjectData.worldZ) + targetPosition;
 
                 int wx, wy, wz;
-                BuildingManager.getWidthFromOrientation(template, (BuildingManager.BuildOrientation)buildableObjectData.orientationY, out wx, out wy, out wz);
+                if (template.canBeRotatedAroundXAxis)
+                    BuildingManager.getWidthFromUnlockedOrientation(template, buildableObjectData.orientationUnlocked, out wx, out wy, out wz);
+                else
+                    BuildingManager.getWidthFromOrientation(template, (BuildingManager.BuildOrientation)buildableObjectData.orientationY, out wx, out wy, out wz);
 
                 ulong additionalData_ulong_01 = 0ul;
                 ulong additionalData_ulong_02 = 0ul;
@@ -844,6 +851,74 @@ namespace Duplicationer
             ActionManager.AddQueuedEvent(() => constructionTaskGroup.InvokeNextTask());
         }
 
+        internal static void RotateBlueprint()
+        {
+            var oldSize = CurrentBlueprintSize;
+            var newSize = new Vector3Int(oldSize.z, oldSize.y, oldSize.x);
+            var oldCenter = oldSize / 2;
+            var newCenter = newSize / 2;
+
+            log.LogInfo((string)$"oldSize: {oldSize}");
+            log.LogInfo((string)$"newSize: {newSize}");
+            log.LogInfo((string)$"oldCenter: {oldCenter}");
+            log.LogInfo((string)$"newCenter: {newCenter}");
+
+            BlueprintData currentBlueprint = CurrentBlueprint;
+            for (int i = 0; i < currentBlueprint.buildableObjects.Length; ++i)
+            {
+                var buildableObjectData = currentBlueprint.buildableObjects[i];
+                var offsetX = buildableObjectData.worldZ - oldCenter.z;
+                var offsetZ = oldCenter.x - buildableObjectData.worldX;
+                var newX = newCenter.x + offsetX;
+                var newZ = newCenter.z + offsetZ;
+
+                var template = ItemTemplateManager.getBuildableObjectTemplate(buildableObjectData.templateId);
+                if (template != null)
+                {
+                    if (template.canBeRotatedAroundXAxis)
+                    {
+                        var oldOrientation = buildableObjectData.orientationUnlocked;
+                        var newOrientation = Quaternion.Euler(0.0f, 90.0f, 0.0f) * oldOrientation;
+                        int wx, wy, wz;
+                        BuildingManager.getWidthFromUnlockedOrientation(template, newOrientation, out wx, out wy, out wz);
+                        newZ -= wz;
+                        buildableObjectData.orientationUnlocked = newOrientation;
+                    }
+                    else
+                    {
+                        var oldOrientation = buildableObjectData.orientationY;
+                        var newOrientation = (byte)((oldOrientation + 1) & 0x3);
+                        int wx, wy, wz;
+                        BuildingManager.getWidthFromOrientation(template, (BuildingManager.BuildOrientation)newOrientation, out wx, out wy, out wz);
+                        newZ -= wz;
+                        buildableObjectData.orientationY = newOrientation;
+                    }
+                }
+
+                buildableObjectData.worldX = newX;
+                buildableObjectData.worldZ = newZ;
+                currentBlueprint.buildableObjects[i] = buildableObjectData;
+            }
+
+            var newBlockIds = new byte[currentBlueprint.blocks.ids.Length];
+            int fromIndex = 0;
+            for (int x = 0; x < newSize.x; x++)
+            {
+                for (int y = 0; y < newSize.y; y++)
+                {
+                    for (int z = newSize.z - 1; z >= 0; z--)
+                    {
+                        newBlockIds[x + (y + z * newSize.y) * newSize.x] = currentBlueprint.blocks.ids[fromIndex++];
+                    }
+                }
+            }
+
+            currentBlueprint.blocks.ids = newBlockIds;
+            currentBlueprint.blocks.Size = newSize;
+
+            CurrentBlueprint = currentBlueprint;
+        }
+
         private static int FindEntityIndex(ulong entityId)
         {
             for (int i = 0; i < CurrentBlueprint.buildableObjects.Length; ++i)
@@ -857,7 +932,7 @@ namespace Duplicationer
         {
             var parentIndex = FindEntityIndex(parentId);
             if (parentIndex < 0) return 0;
-
+            
             if (HasCustomData(CurrentBlueprint.buildableObjects[parentIndex].customData, "modularParentId"))
             {
                 var grandparentId = GetCustomData<ulong>(CurrentBlueprint.buildableObjects[parentIndex].customData, "modularParentId");
@@ -882,7 +957,11 @@ namespace Duplicationer
                     if (bogo != null)
                     {
                         int wx, wy, wz;
-                        BuildingManager.getWidthFromOrientation(template, (BuildingManager.BuildOrientation)buildableObjectData.orientationY, out wx, out wy, out wz);
+                        if (template.canBeRotatedAroundXAxis)
+                            BuildingManager.getWidthFromUnlockedOrientation(template, buildableObjectData.orientationUnlocked, out wx, out wy, out wz);
+                        else
+                            BuildingManager.getWidthFromOrientation(template, (BuildingManager.BuildOrientation)buildableObjectData.orientationY, out wx, out wy, out wz);
+
                         var worldPos = new Vector3(buildableObjectData.worldX + wx * 0.5f, buildableObjectData.worldY + (template.canBeRotatedAroundXAxis ? wy * 0.5f : 0.0f), buildableObjectData.worldZ + wz * 0.5f) + targetPosition;
                         bogo.transform.position = worldPos;
                         bogo.transform.rotation = template.canBeRotatedAroundXAxis ? buildableObjectData.orientationUnlocked : Quaternion.EulerRotation(0, buildableObjectData.orientationY * Mathf.PI * 0.5f, 0.0f);
@@ -1145,7 +1224,10 @@ namespace Duplicationer
                 {
                     var worldPos = new Vector3Int(buildableObjectData.worldX + targetPosition.x, buildableObjectData.worldY + targetPosition.y, buildableObjectData.worldZ + targetPosition.z);
                     int wx, wy, wz;
-                    BuildingManager.getWidthFromOrientation(template, (BuildingManager.BuildOrientation)buildableObjectData.orientationY, out wx, out wy, out wz);
+                    if (template.canBeRotatedAroundXAxis)
+                        BuildingManager.getWidthFromUnlockedOrientation(template, buildableObjectData.orientationUnlocked, out wx, out wy, out wz);
+                    else
+                        BuildingManager.getWidthFromOrientation(template, (BuildingManager.BuildOrientation)buildableObjectData.orientationY, out wx, out wy, out wz);
                     aabb.reinitialize(worldPos.x, worldPos.y, worldPos.z, wx, wy, wz);
 
                     var depotEntityId = CheckIfBuildingExists(aabb, worldPos, buildableObjectData);
@@ -1195,7 +1277,10 @@ namespace Duplicationer
                 {
                     var worldPos = new Vector3Int(buildableObjectData.worldX + targetPosition.x, buildableObjectData.worldY + targetPosition.y, buildableObjectData.worldZ + targetPosition.z);
                     int wx, wy, wz;
-                    BuildingManager.getWidthFromOrientation(template, (BuildingManager.BuildOrientation)buildableObjectData.orientationY, out wx, out wy, out wz);
+                    if (template.canBeRotatedAroundXAxis)
+                        BuildingManager.getWidthFromUnlockedOrientation(template, buildableObjectData.orientationUnlocked, out wx, out wy, out wz);
+                    else
+                        BuildingManager.getWidthFromOrientation(template, (BuildingManager.BuildOrientation)buildableObjectData.orientationY, out wx, out wy, out wz);
                     aabb.reinitialize(worldPos.x, worldPos.y, worldPos.z, wx, wy, wz);
 
                     var depotEntityId = CheckIfBuildingExists(aabb, worldPos, buildableObjectData);
@@ -1431,8 +1516,30 @@ namespace Duplicationer
                 public byte itemMode;
                 public CustomData[] customData;
 
-                [JsonIgnore] public Quaternion orientationUnlocked => new Quaternion(orientationUnlockedX, orientationUnlockedY, orientationUnlockedZ, orientationUnlockedW);
-                [JsonIgnore] public Vector3Int worldPos => new Vector3Int(worldX, worldY, worldZ);
+                [JsonIgnore]
+                public Quaternion orientationUnlocked
+                {
+                    get => new Quaternion(orientationUnlockedX, orientationUnlockedY, orientationUnlockedZ, orientationUnlockedW);
+                    set
+                    {
+                        orientationUnlockedX = value.x;
+                        orientationUnlockedY = value.y;
+                        orientationUnlockedZ = value.z;
+                        orientationUnlockedW = value.w;
+                    }
+                }
+
+                [JsonIgnore]
+                public Vector3Int worldPos
+                {
+                    get => new Vector3Int(worldX, worldY, worldZ);
+                    set
+                    {
+                        worldX = value.x;
+                        worldY = value.y;
+                        worldZ = value.z;
+                    }
+                }
             }
 
             public struct BlockData
@@ -1442,7 +1549,16 @@ namespace Duplicationer
                 public int sizeZ;
                 public byte[] ids;
 
-                public Vector3Int Size => new Vector3Int(sizeX, sizeY, sizeZ);
+                public Vector3Int Size
+                {
+                    get => new Vector3Int(sizeX, sizeY, sizeZ);
+                    set
+                    {
+                        sizeX = value.x;
+                        sizeY = value.y;
+                        sizeZ = value.z;
+                    }
+                }
             }
 
             public uint blueprintVersion;

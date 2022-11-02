@@ -40,6 +40,7 @@ namespace Duplicationer
 
         private static GameObject duplicationerFrame = null;
         private static GameObject railMinerRow = null;
+        private static GameObject demolishRow = null;
         private static TextMeshProUGUI textMaterialReport = null;
         private static TextMeshProUGUI textPositionX = null;
         private static TextMeshProUGUI textPositionY = null;
@@ -799,17 +800,20 @@ namespace Duplicationer
             {
                 case BoxMode.None:
                     GameRoot.setHighVisibilityInfoText("");
+                    if (demolishRow != null) demolishRow.SetActive(false);
                     break;
 
                 case BoxMode.Blueprint:
                     DrawBoxWithEdges(RepeatBlueprintMin, RepeatBlueprintMax + Vector3.one, 0.015f, 0.04f, materialDragBox.Material, materialDragBoxEdge.Material);
                     var repeatCount = RepeatCount;
                     GameRoot.setHighVisibilityInfoText((repeatCount != Vector3Int.one) ? $"Repeat: {repeatCount.x}x{repeatCount.y}x{repeatCount.z}\n{CurrentBlueprintStatusText}" : CurrentBlueprintStatusText);
+                    if (demolishRow != null) demolishRow.SetActive(true);
                     break;
 
                 case BoxMode.Selection:
                     DrawBoxWithEdges(DragMin, DragMax + Vector3.one, 0.015f, 0.04f, materialDragBox.Material, materialDragBoxEdge.Material);
                     GameRoot.setHighVisibilityInfoText(DragSize == Vector3Int.one ? "" : $"{DragSize.x}x{DragSize.y}x{DragSize.z}");
+                    if (demolishRow != null) demolishRow.SetActive(mode != Mode.DragAreaIdle);
                     break;
             }
 
@@ -817,6 +821,17 @@ namespace Duplicationer
             {
                 DrawArrow(dragFaceRay.origin, dragFaceRay.direction, dragArrowMaterial, dragArrowScale, dragArrowOffset);
             }
+        }
+
+        public override bool OnRotateY()
+        {
+            if (!IsBlueprintLoaded || !IsPlaceholdersActive) return true;
+
+            RotateBlueprint();
+            HideBlueprint();
+            ShowBlueprint(CurrentBlueprintAnchor);
+
+            return false;
         }
 
         private void OnBlueprintMoved(Vector3Int oldPosition, ref Vector3Int newPosition)
@@ -970,8 +985,7 @@ namespace Duplicationer
                                 .Element("Material Report")
                                     .AutoSize(ContentSizeFitter.FitMode.Unconstrained, ContentSizeFitter.FitMode.PreferredSize)
                                     .Element_Text("", "OpenSansSemibold SDF", 14.0f, Color.white, TextAlignmentOptions.TopLeft)
-                                        .Keep(ref textMaterialReport)
-                                    .Done
+                                    .Keep(ref textMaterialReport)
                                 .Done
                                 .Element("Rail Miner Row")
                                     .Keep(ref railMinerRow)
@@ -1002,14 +1016,31 @@ namespace Duplicationer
                                         }
                                     })
                                 .Done
+                                .Element("Demolish Row")
+                                    .Keep(ref demolishRow)
+                                    .SetHorizontalLayout(new RectOffset(0, 0, 0, 0), 5.0f, TextAnchor.UpperLeft, false, true, true, false, true, false, false)
+                                    .Button("Button Demolish", "corner_cut", Color.white, new Vector4(10.0f, 1.0f, 2.0f, 10.0f))
+                                        .SetOnClick(new Action(DemolishArea))
+                                        .SetTransitionColors(new Color(0.2f, 0.2f, 0.2f, 1.0f), new Color(0.0f, 0.6f, 1.0f, 1.0f), new Color(0.222f, 0.667f, 1.0f, 1.0f), new Color(0.0f, 0.6f, 1.0f, 1.0f), new Color(0.5f, 0.5f, 0.5f, 1.0f), 1.0f, 0.1f)
+                                        .Layout()
+                                            .MinWidth(40)
+                                            .MinHeight(40)
+                                            .FlexibleWidth(1.0f)
+                                        .Done
+                                        .Element("Text")
+                                            .SetRectTransform(0.0f, 0.0f, 0.0f, 0.0f, 0.5f, 0.5f, 0.0f, 0.0f, 1.0f, 1.0f)
+                                            .Element_Text("Demolish", "OpenSansSemibold SDF", 18.0f, Color.white, TextAlignmentOptions.Center)
+                                        .Done
+                                    .Done
+                                .Done
                                 .Element("Row Position X")
                                     .SetHorizontalLayout(new RectOffset(0, 0, 0, 0), 5.0f, TextAnchor.UpperLeft, false, true, true, false, true, false, false)
                                     .Element("Position Display X")
                                         .Layout()
-                                        .MinWidth(100)
-                                        .FlexibleWidth(1)
-                                    .Done
-                                    .Element_Text("X: 0", "OpenSansSemibold SDF", 18.0f, Color.white, TextAlignmentOptions.MidlineLeft)
+                                            .MinWidth(100)
+                                            .FlexibleWidth(1)
+                                        .Done
+                                        .Element_Text("X: 0", "OpenSansSemibold SDF", 18.0f, Color.white, TextAlignmentOptions.MidlineLeft)
                                         .Keep(ref textPositionX)
                                     .Done
                                     .Button("Button Decrease", "corner_cut", Color.white, new Vector4(10.0f, 1.0f, 2.0f, 10.0f))
@@ -1047,10 +1078,10 @@ namespace Duplicationer
                                     .SetHorizontalLayout(new RectOffset(0, 0, 0, 0), 5.0f, TextAnchor.UpperLeft, false, true, true, false, true, false, false)
                                     .Element("Position Display Y")
                                         .Layout()
-                                        .MinWidth(100)
-                                        .FlexibleWidth(1)
-                                    .Done
-                                    .Element_Text("Y: 0", "OpenSansSemibold SDF", 18.0f, Color.white, TextAlignmentOptions.MidlineLeft)
+                                            .MinWidth(100)
+                                            .FlexibleWidth(1)
+                                        .Done
+                                        .Element_Text("Y: 0", "OpenSansSemibold SDF", 18.0f, Color.white, TextAlignmentOptions.MidlineLeft)
                                         .Keep(ref textPositionY)
                                     .Done
                                     .Button("Button Decrease", "corner_cut", Color.white, new Vector4(10.0f, 1.0f, 2.0f, 10.0f))
@@ -1088,10 +1119,10 @@ namespace Duplicationer
                                     .SetHorizontalLayout(new RectOffset(0, 0, 0, 0), 5.0f, TextAnchor.UpperLeft, false, true, true, false, true, false, false)
                                     .Element("Position Display Z")
                                         .Layout()
-                                        .MinWidth(100)
-                                        .FlexibleWidth(1)
-                                    .Done
-                                    .Element_Text("Z: 0", "OpenSansSemibold SDF", 18.0f, Color.white, TextAlignmentOptions.MidlineLeft)
+                                            .MinWidth(100)
+                                            .FlexibleWidth(1)
+                                        .Done
+                                        .Element_Text("Z: 0", "OpenSansSemibold SDF", 18.0f, Color.white, TextAlignmentOptions.MidlineLeft)
                                         .Keep(ref textPositionZ)
                                     .Done
                                     .Button("Button Decrease", "corner_cut", Color.white, new Vector4(10.0f, 1.0f, 2.0f, 10.0f))
@@ -1147,13 +1178,41 @@ namespace Duplicationer
                                 .Done
                             .Done
                         .Done
-                    .End();
+                    .Done
+                .End();
             }
 
             duplicationerFrame.SetActive(true);
             GlobalStateManager.addCursorRequirement();
 
             UpdateBlueprintPositionText();
+        }
+
+        private static void DemolishArea()
+        {
+            bool valid = false;
+            Vector3Int from = Vector3Int.zero;
+            Vector3Int to = Vector3Int.zero;
+
+            switch (boxMode)
+            {
+                case BoxMode.Selection:
+                    valid = true;
+                    from = DragMin;
+                    to = DragMax;
+                    break;
+
+                case BoxMode.Blueprint:
+                    valid = true;
+                    from = RepeatBlueprintMin;
+                    to = RepeatBlueprintMax;
+                    break;
+            }
+
+            if (valid)
+            {
+                GameRoot.addLockstepEvent(new Character.BulkDemolishBuildingEvent(GameRoot.getClientCharacter().usernameHash, from, to - from + Vector3Int.one));
+            }
         }
 
         private static void InsertRailMiners(ItemTemplate railMinerItemTemplate)

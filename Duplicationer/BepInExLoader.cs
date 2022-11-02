@@ -21,7 +21,7 @@ namespace Duplicationer
             MODNAME = "Duplicationer",
             AUTHOR = "erkle64",
             GUID = "com." + AUTHOR + "." + MODNAME,
-            VERSION = "0.1.2";
+            VERSION = "0.1.3";
 
         public static BepInEx.Logging.ManualLogSource log;
 
@@ -266,7 +266,6 @@ namespace Duplicationer
                 }
 
                 HandheldData data = GetHandheldData(__instance.relatedCharacter);
-
                 if (data.currentlySetMode != characterEquipmentMode && data.currentlySetMode >= 4)
                 {
                     customHandheldModes[data.currentlySetMode - 4].Exit();
@@ -388,6 +387,22 @@ namespace Duplicationer
             public static void ResourceDB_InitOnApplicationStart()
             {
                 BlueprintToolCHM.LoadIconSprites();
+            }
+
+            [HarmonyPatch(typeof(GameRoot), nameof(GameRoot.keyHandler_rotateY))]
+            [HarmonyPrefix]
+            public static bool GameRoot_keyHandler_rotateY()
+            {
+                HandheldData data = GetHandheldData(GameRoot.getClientCharacter());
+                if (data.currentlySetMode < 4) return true;
+
+                int customHandheldModeIndex = data.currentlySetMode - 4;
+                if (customHandheldModeIndex < customHandheldModes.Length)
+                {
+                    return customHandheldModes[customHandheldModeIndex].OnRotateY();
+                }
+
+                return true;
             }
 
             //[HarmonyPatch(typeof(GameRoot), nameof(GameRoot.addLockstepEvent))]
