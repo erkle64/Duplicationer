@@ -21,7 +21,7 @@ namespace Duplicationer
             MODNAME = "Duplicationer",
             AUTHOR = "erkle64",
             GUID = "com." + AUTHOR + "." + MODNAME,
-            VERSION = "0.1.0";
+            VERSION = "0.1.1";
 
         public static BepInEx.Logging.ManualLogSource log;
 
@@ -47,7 +47,12 @@ namespace Duplicationer
         private static ConfigEntry<string> configToggleBlueprintToolKey;
         public static KeyCode ToggleBlueprintToolKey { get; private set; }
 
+        private static ConfigEntry<string> configPasteBlueprintKey;
+        public static KeyCode PasteBlueprintKey { get; private set; }
+
         internal static bool IsAltHeld => Input.GetKey(KeyCode.LeftAlt) || Input.GetKey(KeyCode.RightAlt);
+        internal static bool IsKeyboardInputAllowed => !GlobalStateManager.IsInputFieldFocused() && !(EscapeMenu.singleton != null && EscapeMenu.singleton.enabled);
+        internal static bool IsMouseInputAllowed => !GlobalStateManager.isCursorOverUIElement() && !(EscapeMenu.singleton != null && EscapeMenu.singleton.enabled);
 
         private struct HandheldData
         {
@@ -84,9 +89,20 @@ namespace Duplicationer
             {
                 ToggleBlueprintToolKey = (KeyCode)Enum.Parse(typeof(KeyCode), keyName, true);
             }
-            catch(ArgumentException)
+            catch (ArgumentException)
             {
                 ToggleBlueprintToolKey = KeyCode.K;
+            }
+
+            configPasteBlueprintKey = Config.Bind("Input", "PasteBlueprintKey", "J", "Keyboard shortcut key for confirm paste");
+            keyName = configPasteBlueprintKey.Value;
+            try
+            {
+                PasteBlueprintKey = (KeyCode)Enum.Parse(typeof(KeyCode), keyName, true);
+            }
+            catch (ArgumentException)
+            {
+                PasteBlueprintKey = KeyCode.J;
             }
 
             if (!Directory.Exists(dataFolder)) Directory.CreateDirectory(dataFolder);
@@ -208,7 +224,7 @@ namespace Duplicationer
                 if (customHandheldModeIndex < customHandheldModes.Length)
                 {
                     var customHandheldMode = customHandheldModes[customHandheldModeIndex];
-                    if (Input.GetKeyDown(KeyCode.Mouse1))
+                    if (Input.GetKeyDown(KeyCode.Mouse1) && IsMouseInputAllowed)
                     {
                         customHandheldMode.ShowMenu();
                     }
@@ -329,7 +345,7 @@ namespace Duplicationer
             {
                 if (!__instance.isClientControlled) return;
 
-                if (Input.GetKeyDown(ToggleBlueprintToolKey))
+                if (Input.GetKeyDown(ToggleBlueprintToolKey) && IsKeyboardInputAllowed)
                 {
                     Character.ClientData clientData = __instance.relatedCharacter.clientData;
                     HandheldData data = GetHandheldData(__instance.relatedCharacter);
@@ -373,6 +389,14 @@ namespace Duplicationer
             {
                 BlueprintToolCHM.LoadIconSprites();
             }
+
+            //[HarmonyPatch(typeof(GameRoot), nameof(GameRoot.addLockstepEvent))]
+            //[HarmonyPostfix]
+            //public static void GameRoot_addLockstepEvent(GameRoot.LockstepEvent e)
+            //{
+            //    log.LogInfo("====== GameRoot.addLockstepEvent ======");
+            //    log.LogInfo(e.getDbgInfo());
+            //}
         }
     }
 }

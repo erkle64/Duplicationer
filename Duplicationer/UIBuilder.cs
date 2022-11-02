@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Threading;
 using TMPro;
 using UnityEngine;
 using UnityEngine.Events;
@@ -26,9 +27,9 @@ namespace Duplicationer
         public GameObject GameObject { get; private set; }
         public UIBuilder Parent { get; private set; }
         public UIBuilder Done => Parent;
-        public void End()
+        public void End(bool validate = true)
         {
-            if (Parent != null && Parent.GameObject != null) throw new Exception(string.Format("Invalid UI Builder End: {0}", Parent.GameObject.name));
+            if (validate && Parent != null && Parent.GameObject != null) throw new Exception(string.Format("Invalid UI Builder End: {0}", Parent.GameObject.name));
         }
 
         public UIBuilder Keep(ref GameObject gameObject)
@@ -229,6 +230,21 @@ namespace Duplicationer
             component.sprite = GetSprite(textureName, border);
             component.color = color;
 
+            return this;
+        }
+
+        public UIBuilder Element_Tooltip(string text)
+        {
+            var component = GameObject.AddComponent<UIRaycastTooltip>();
+            component.setTooltipText(text);
+
+            return this;
+        }
+
+        public delegate void DoDelegate(UIBuilder builder);
+        public UIBuilder Do(DoDelegate action)
+        {
+            action(this);
             return this;
         }
 

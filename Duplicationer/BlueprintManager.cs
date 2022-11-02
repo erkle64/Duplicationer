@@ -7,29 +7,38 @@ using Path = System.IO.Path;
 using static Duplicationer.BepInExLoader;
 using System;
 using static Duplicationer.BlueprintManager.BlueprintData;
-using static Duplicationer.BlueprintManager;
-using static RenderChunk;
-using static Il2CppSystem.Net.WebCompletionSource;
-using static Duplicationer.BlueprintManager.BlueprintData.BuildableObjectData;
 
 namespace Duplicationer
 {
     internal static class BlueprintManager
     {
-        public static bool isBlueprintLoaded { get; private set; } = false;
+        public static bool IsBlueprintLoaded { get; private set; } = false;
         public static BlueprintData CurrentBlueprint { get; private set; }
         public static string CurrentBlueprintStatusText { get; private set; } = "";
         public static Vector3Int CurrentBlueprintSize => CurrentBlueprint.blocks.Size;
         public static Vector3Int CurrentBlueprintAnchor => placeholderAnchorPosition;
 
+        public static bool HasMinecartDepots => IsBlueprintLoaded && minecartDepotIndices.Count > 0;
         private static Dictionary<ulong, BlueprintShoppingListData> shoppingList = new Dictionary<ulong, BlueprintShoppingListData>();
+        private static List<int> minecartDepotIndices = new List<int>();
+        private static List<MinecartDepotGO> existingMinecartDepots = new List<MinecartDepotGO>();
 
-        public static bool isPlaceholdersActive { get; private set; } = false;
+        public static bool IsPlaceholdersActive { get; private set; } = false;
+        public static bool IsPlaceholdersHidden { get; private set; } = false;
         private static Vector3Int placeholderAnchorPosition = Vector3Int.zero;
         private static List<BlueprintPlaceholder> buildingPlaceholders = new List<BlueprintPlaceholder>();
         private static List<BlueprintPlaceholder> terrainPlaceholders = new List<BlueprintPlaceholder>();
         private static int buildingPlaceholderUpdateIndex = 0;
         private static int terrainPlaceholderUpdateIndex = 0;
+        private static List<Il2CppSystem.Collections.Generic.List<Matrix4x4>>[] simplePlaceholderTransforms = new List<Il2CppSystem.Collections.Generic.List<Matrix4x4>>[5]
+        {
+            new List<Il2CppSystem.Collections.Generic.List<Matrix4x4>>(),
+            new List<Il2CppSystem.Collections.Generic.List<Matrix4x4>>(),
+            new List<Il2CppSystem.Collections.Generic.List<Matrix4x4>>(),
+            new List<Il2CppSystem.Collections.Generic.List<Matrix4x4>>(),
+            new List<Il2CppSystem.Collections.Generic.List<Matrix4x4>>()
+        };
+        private static int[] simplePlaceholderTransformsIndex = new int[5] { 0, 0, 0, 0, 0 };
 
         public delegate void BlueprintMovedDelegate(Vector3Int oldPosition, ref Vector3Int newPosition);
         public static event BlueprintMovedDelegate onBlueprintMoved;
@@ -52,8 +61,6 @@ namespace Duplicationer
             get => (powerlineItemTemplate == null) ? powerlineItemTemplate = ItemTemplateManager.getItemTemplate("_base_power_line_i") : powerlineItemTemplate;
         }
 
-        public static bool isPlaceholdersHidden { get; private set; } = false;
-
         public static int MaxBuildingValidationsPerFrame { get; internal set; } = 4;
         public static int MaxTerrainValidationsPerFrame { get; internal set; } = 20;
 
@@ -62,7 +69,7 @@ namespace Duplicationer
             ulong chunkIndex;
             uint blockIndex;
 
-            if (isPlaceholdersActive)
+            if (IsPlaceholdersActive)
             {
                 var quadTree = StreamingSystem.getBuildableObjectGOQuadtreeArray();
 
@@ -198,9 +205,58 @@ namespace Duplicationer
                     onBlueprintUpdated?.Invoke(countUntested, countBlocked, countClear, countDone);
                 }
 
-                foreach (var taskGroup in activeConstructionTaskGroups)
+                var remainingTasks = activeConstructionTaskGroups.Sum((group) => group.Remaining);
+                if (remainingTasks > 0) CurrentBlueprintStatusText = $"ToDo: {remainingTasks}{(CurrentBlueprintStatusText.Length > 0 ? "\n" : "")}{CurrentBlueprintStatusText}";
+
+                if (IsPlaceholdersHidden && Input.GetKey(KeyCode.Semicolon))
                 {
-                    CurrentBlueprintStatusText = $"ToDo:{taskGroup.Remaining} " + CurrentBlueprintStatusText;
+                    for (int i = 0; i < 5; i++)
+                    {
+                        foreach(var list in simplePlaceholderTransforms[i]) list.Clear();
+                        simplePlaceholderTransformsIndex[i] = 0;
+                    }
+
+                    foreach (var placeholder in buildingPlaceholders)
+                    {
+                        if (placeholder.bogo != null)
+                        {
+                            var stateIndex = (int)placeholder.state;
+                            var material = BlueprintPlaceholder.stateSimplePlaceholderMaterial[stateIndex];
+                            if (material != null)
+                            {
+                                AddSimplePlaceholderTransform(stateIndex, placeholder.BuildTransform());
+                            }
+                        }
+                    }
+
+                    foreach (var placeholder in terrainPlaceholders)
+                    {
+                        if (placeholder.bogo != null)
+                        {
+                            var stateIndex = (int)placeholder.state;
+                            var material = BlueprintPlaceholder.stateSimplePlaceholderMaterial[stateIndex];
+                            if (material != null)
+                            {
+                                AddSimplePlaceholderTransform(stateIndex, placeholder.BuildTransformBlock());
+                            }
+                        }
+                    }
+
+                    for (int i = 0; i < 5; i++)
+                    {
+                        if (BlueprintPlaceholder.stateSimplePlaceholderMaterial[i] != null)
+                        {
+                            for (int j = 0; j <= simplePlaceholderTransformsIndex[i] && j < simplePlaceholderTransforms[i].Count; j++)
+                            {
+                                Graphics.DrawMeshInstanced(
+                                    ResourceDB.mesh_cubeCenterPivot, 0,
+                                    BlueprintPlaceholder.stateSimplePlaceholderMaterial[i].Material,
+                                    simplePlaceholderTransforms[i][j], null,
+                                    UnityEngine.Rendering.ShadowCastingMode.Off, false,
+                                    GlobalStaticCache.s_Layer_BuildableObjectFullSize);
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -233,8 +289,8 @@ namespace Duplicationer
             }
 
             var buildingArray = buildings.ToArray();
-            var buildingDataArray = new BuildableObjectData[buildingArray.Length];
-            var customData = new List<BuildableObjectData.CustomData>();
+            var buildingDataArray = new BlueprintData.BuildableObjectData[buildingArray.Length];
+            var customData = new List<BlueprintData.BuildableObjectData.CustomData>();
             var powerGridBuildings = new HashSet<BuildableObjectGO>(new BuildableObjectGOComparer());
             for (int i = 0; i < buildingArray.Length; ++i)
             {
@@ -273,28 +329,28 @@ namespace Duplicationer
                 if (UnhollowerRuntimeLib.Il2CppType.Of<ProducerGO>().IsAssignableFrom(bogoType))
                 {
                     var assembler = bogo.Cast<ProducerGO>();
-                    customData.Add(new BuildableObjectData.CustomData("craftingRecipeId", assembler.getLastPolledRecipeId()));
+                    customData.Add(new BlueprintData.BuildableObjectData.CustomData("craftingRecipeId", assembler.getLastPolledRecipeId()));
                 }
                 if (UnhollowerRuntimeLib.Il2CppType.Of<LoaderGO>().IsAssignableFrom(bogoType))
                 {
                     var loader = bogo.Cast<LoaderGO>();
-                    customData.Add(new BuildableObjectData.CustomData("isInputLoader", loader.isInputLoader() ? "true" : "false"));
+                    customData.Add(new BlueprintData.BuildableObjectData.CustomData("isInputLoader", loader.isInputLoader() ? "true" : "false"));
                     if (bogo.template.loader_isFilter)
                     {
-                        customData.Add(new BuildableObjectData.CustomData("loaderFilterTemplateId", loader._cache_lastSetFilterTemplateId));
+                        customData.Add(new BlueprintData.BuildableObjectData.CustomData("loaderFilterTemplateId", loader._cache_lastSetFilterTemplateId));
                     }
                 }
                 if (UnhollowerRuntimeLib.Il2CppType.Of<PipeLoaderGO>().IsAssignableFrom(bogoType))
                 {
                     var loader = bogo.Cast<PipeLoaderGO>();
-                    customData.Add(new BuildableObjectData.CustomData("isInputLoader", loader.isInputLoader() ? "true" : "false"));
-                    customData.Add(new BuildableObjectData.CustomData("pipeLoaderFilterTemplateId", loader._cache_lastSetFilterTemplateId));
+                    customData.Add(new BlueprintData.BuildableObjectData.CustomData("isInputLoader", loader.isInputLoader() ? "true" : "false"));
+                    customData.Add(new BlueprintData.BuildableObjectData.CustomData("pipeLoaderFilterTemplateId", loader._cache_lastSetFilterTemplateId));
                 }
                 if (UnhollowerRuntimeLib.Il2CppType.Of<ConveyorBalancerGO>().IsAssignableFrom(bogoType))
                 {
                     var balancer = bogo.Cast<ConveyorBalancerGO>();
-                    customData.Add(new BuildableObjectData.CustomData("balancerInputPriority", balancer.getInputPriority()));
-                    customData.Add(new BuildableObjectData.CustomData("balancerOutputPriority", balancer.getOutputPriority()));
+                    customData.Add(new BlueprintData.BuildableObjectData.CustomData("balancerInputPriority", balancer.getInputPriority()));
+                    customData.Add(new BlueprintData.BuildableObjectData.CustomData("balancerOutputPriority", balancer.getOutputPriority()));
                 }
                 if (UnhollowerRuntimeLib.Il2CppType.Of<SignGO>().IsAssignableFrom(bogoType))
                 {
@@ -305,17 +361,17 @@ namespace Duplicationer
                     float textMaxSize = 0;
                     SignGO.signEntity_getSignText(bogo.relatedEntityId, signText, signTextLength, ref useAutoTextSize, ref textMinSize, ref textMaxSize);
 
-                    customData.Add(new BuildableObjectData.CustomData("signText", System.Text.Encoding.Default.GetString(signText)));
-                    customData.Add(new BuildableObjectData.CustomData("signUseAutoTextSize", useAutoTextSize));
-                    customData.Add(new BuildableObjectData.CustomData("signTextMinSize", textMinSize));
-                    customData.Add(new BuildableObjectData.CustomData("signTextMaxSize", textMaxSize));
+                    customData.Add(new BlueprintData.BuildableObjectData.CustomData("signText", System.Text.Encoding.Default.GetString(signText)));
+                    customData.Add(new BlueprintData.BuildableObjectData.CustomData("signUseAutoTextSize", useAutoTextSize));
+                    customData.Add(new BlueprintData.BuildableObjectData.CustomData("signTextMinSize", textMinSize));
+                    customData.Add(new BlueprintData.BuildableObjectData.CustomData("signTextMaxSize", textMaxSize));
                 }
                 if (UnhollowerRuntimeLib.Il2CppType.Of<BlastFurnaceBaseGO>().IsAssignableFrom(bogoType))
                 {
                     BlastFurnacePollingUpdateData data = default;
                     if (BlastFurnaceBaseGO.blastFurnaceEntity_queryPollingData(bogo.relatedEntityId, ref data) == IOBool.iotrue)
                     {
-                        customData.Add(new BuildableObjectData.CustomData("blastFurnaceModeTemplateId", data.modeTemplateId));
+                        customData.Add(new BlueprintData.BuildableObjectData.CustomData("blastFurnaceModeTemplateId", data.modeTemplateId));
                     }
                 }
                 if (bogo.template.hasPoleGridConnection)
@@ -326,7 +382,7 @@ namespace Duplicationer
                         {
                             if (PowerLineHH.buildingManager_powerlineHandheld_checkIfAlreadyConnected(powerGridBuilding.relatedEntityId, bogo.relatedEntityId) == IOBool.iotrue)
                             {
-                                customData.Add(new BuildableObjectData.CustomData("powerline", powerGridBuilding.relatedEntityId));
+                                customData.Add(new BlueprintData.BuildableObjectData.CustomData("powerline", powerGridBuilding.relatedEntityId));
                             }
                         }
                         powerGridBuildings.Add(bogo);
@@ -358,8 +414,8 @@ namespace Duplicationer
                     }
                     if (matchIndex >= 0)
                     {
-                        customData.Add(new CustomData("modularNodeIndex", matchIndex));
-                        customData.Add(new CustomData("modularParentId", pbogo.relatedEntityId));
+                        customData.Add(new BlueprintData.BuildableObjectData.CustomData("modularNodeIndex", matchIndex));
+                        customData.Add(new BlueprintData.BuildableObjectData.CustomData("modularParentId", pbogo.relatedEntityId));
                     }
                 }
 
@@ -377,7 +433,7 @@ namespace Duplicationer
                     var interactables = modularModule.GetInteractableObjects(ref interactableCount);
                     if (interactableCount > 0)
                     {
-                        customData.Add(new CustomData("interactableCount", interactableCount));
+                        customData.Add(new BlueprintData.BuildableObjectData.CustomData("interactableCount", interactableCount));
                         for (int j = 0; j < interactableCount; ++j)
                         {
                             var interactable = interactables[j];
@@ -385,10 +441,10 @@ namespace Duplicationer
                             {
                                 ulong filterTemplateId = 0;
                                 BuildableEntity.buildableEntity_getFilterTemplate(bogo.relatedEntityId, 0, ref filterTemplateId, interactable.filterIdx);
-                                if (filterTemplateId > 0) customData.Add(new BuildableObjectData.CustomData("itemFilter", $"{interactable.filterIdx}={filterTemplateId}"));
+                                if (filterTemplateId > 0) customData.Add(new BlueprintData.BuildableObjectData.CustomData("itemFilter", $"{interactable.filterIdx}={filterTemplateId}"));
 
                                 BuildableEntity.buildableEntity_getFilterTemplate(bogo.relatedEntityId, 1, ref filterTemplateId, interactable.filterIdx);
-                                if (filterTemplateId > 0) customData.Add(new BuildableObjectData.CustomData("elementFilter", $"{interactable.filterIdx}={filterTemplateId}"));
+                                if (filterTemplateId > 0) customData.Add(new BlueprintData.BuildableObjectData.CustomData("elementFilter", $"{interactable.filterIdx}={filterTemplateId}"));
                             }
                         }
                     }
@@ -412,14 +468,14 @@ namespace Duplicationer
             var json = JsonConvert.SerializeObject(blueprintData, Formatting.Indented);
             File.WriteAllText(Path.Combine(dataFolder, blueprintFilename), json);
             CurrentBlueprint = blueprintData;
-            isBlueprintLoaded = true;
+            IsBlueprintLoaded = true;
         }
 
         internal static void HideBlueprint()
         {
-            if (isPlaceholdersActive)
+            if (IsPlaceholdersActive)
             {
-                isPlaceholdersActive = false;
+                IsPlaceholdersActive = false;
 
                 foreach (var placeholder in buildingPlaceholders)
                 {
@@ -439,27 +495,26 @@ namespace Duplicationer
 
         internal static void MoveBlueprint(Vector3Int newPosition)
         {
-            if (!isPlaceholdersActive) return;
+            if (!IsPlaceholdersActive) return;
             onBlueprintMoved?.Invoke(placeholderAnchorPosition, ref newPosition);
             ShowBlueprint(newPosition);
         }
 
-        internal static void PlaceBlueprintMultiple(Vector3Int targetPosition, Vector3Int repeatFrom, Vector3Int repeatTo, float delayInterval = 0.23f)
+        internal static void PlaceBlueprintMultiple(Vector3Int targetPosition, Vector3Int repeatFrom, Vector3Int repeatTo)
         {
-            float delay = 0.0f;
             for (int y = repeatFrom.y; y <= repeatTo.y; ++y)
             {
                 for (int z = repeatFrom.z; z <= repeatTo.z; ++z)
                 {
                     for (int x = repeatFrom.x; x <= repeatTo.x; ++x)
                     {
-                        PlaceBlueprint(targetPosition + new Vector3Int(x, y, z) * BlueprintManager.CurrentBlueprintSize, delay += delayInterval);
+                        PlaceBlueprint(targetPosition + new Vector3Int(x, y, z) * CurrentBlueprintSize);
                     }
                 }
             }
         }
 
-        internal static void PlaceBlueprint(Vector3Int targetPosition, float delay)
+        internal static void PlaceBlueprint(Vector3Int targetPosition)
         {
             ulong usernameHash = GameRoot.getClientCharacter().usernameHash;
             log.LogMessage(string.Format("Placing blueprint at {0}", targetPosition.ToString()));
@@ -807,9 +862,9 @@ namespace Duplicationer
 
         internal static void ShowBlueprint(Vector3Int targetPosition)
         {
-            if (!isPlaceholdersActive)
+            if (!IsPlaceholdersActive)
             {
-                isPlaceholdersActive = true;
+                IsPlaceholdersActive = true;
 
                 foreach (var buildableObjectData in CurrentBlueprint.buildableObjects)
                 {
@@ -824,6 +879,7 @@ namespace Duplicationer
                         var worldPos = new Vector3(buildableObjectData.worldX + wx * 0.5f, buildableObjectData.worldY + (template.canBeRotatedAroundXAxis ? wy * 0.5f : 0.0f), buildableObjectData.worldZ + wz * 0.5f) + targetPosition;
                         bogo.transform.position = worldPos;
                         bogo.transform.rotation = template.canBeRotatedAroundXAxis ? buildableObjectData.orientationUnlocked : Quaternion.EulerRotation(0, buildableObjectData.orientationY * Mathf.PI * 0.5f, 0.0f);
+                        bogo.buildOrientation = (BuildingManager.BuildOrientation)buildableObjectData.orientationY;
 
                         buildingPlaceholders.Add(new BlueprintPlaceholder(bogo));
 
@@ -831,7 +887,7 @@ namespace Duplicationer
                         GameRoot.singleton.placeholder_currentItemMode = 0;
                         GameRoot.singleton.placeholder_currentItemTemplateId = 0;
 
-                        bogo.gameObject.SetActive(!isPlaceholdersHidden);
+                        bogo.gameObject.SetActive(!IsPlaceholdersHidden);
                     }
                     else
                     {
@@ -870,6 +926,7 @@ namespace Duplicationer
                                     if (bogo != null)
                                     {
                                         bogo.transform.position = worldPos;
+                                        bogo.buildOrientation = BuildingManager.BuildOrientation.xPos;
 
                                         terrainPlaceholders.Add(new BlueprintPlaceholder(bogo));
 
@@ -877,7 +934,7 @@ namespace Duplicationer
                                         GameRoot.singleton.placeholder_currentItemMode = 0;
                                         GameRoot.singleton.placeholder_currentItemTemplateId = 0;
 
-                                        bogo.gameObject.SetActive(!isPlaceholdersHidden);
+                                        bogo.gameObject.SetActive(!IsPlaceholdersHidden);
 
                                         //log.LogInfo((string)$"Terrain placeholder {template.name} created at ({worldPos.x}, {worldPos.y}, {worldPos.z}).");
                                     }
@@ -899,16 +956,16 @@ namespace Duplicationer
 
         public static void HidePlaceholders()
         {
-            if (isPlaceholdersHidden) return;
-            isPlaceholdersHidden = true;
+            if (IsPlaceholdersHidden) return;
+            IsPlaceholdersHidden = true;
             foreach (var buildingPlaceholder in buildingPlaceholders) buildingPlaceholder.bogo.gameObject.SetActive(false);
             foreach (var terrainPlaceholder in terrainPlaceholders) terrainPlaceholder.bogo.gameObject.SetActive(false);
         }
 
         public static void ShowPlaceholders()
         {
-            if (!isPlaceholdersHidden) return;
-            isPlaceholdersHidden = false;
+            if (!IsPlaceholdersHidden) return;
+            IsPlaceholdersHidden = false;
             foreach (var buildingPlaceholder in buildingPlaceholders) buildingPlaceholder.bogo.gameObject.SetActive(true);
             foreach (var terrainPlaceholder in terrainPlaceholders) terrainPlaceholder.bogo.gameObject.SetActive(true);
         }
@@ -916,14 +973,21 @@ namespace Duplicationer
         internal static void LoadBlueprint(string blueprint)
         {
             CurrentBlueprint = JsonConvert.DeserializeObject<BlueprintData>(blueprint);
-            isBlueprintLoaded = true;
+            IsBlueprintLoaded = true;
 
+            minecartDepotIndices.Clear();
             shoppingList.Clear();
+            int index = 0;
             foreach (var buildingData in CurrentBlueprint.buildableObjects)
             {
                 var buildingTemplate = ItemTemplateManager.getBuildableObjectTemplate(buildingData.templateId);
                 if (buildingTemplate != null && buildingTemplate.parentItemTemplate != null)
                 {
+                    if(buildingTemplate.type == BuildableObjectTemplate.BuildableObjectType.MinecartDepot)
+                    {
+                        minecartDepotIndices.Add(index);
+                    }
+
                     BlueprintShoppingListData shoppingListEntry;
                     if (!shoppingList.TryGetValue(buildingTemplate.parentItemTemplate.id, out shoppingListEntry))
                     {
@@ -933,6 +997,8 @@ namespace Duplicationer
                     ++shoppingListEntry.count;
                     shoppingList[buildingTemplate.parentItemTemplate.id] = shoppingListEntry;
                 }
+
+                ++index;
             }
 
             int blockIndex = 0;
@@ -971,7 +1037,7 @@ namespace Duplicationer
             }
         }
 
-        private static ulong CheckIfBuildingExists(AABB3D aabb, Vector3Int worldPos, BuildableObjectData buildableObjectData)
+        private static ulong CheckIfBuildingExists(AABB3D aabb, Vector3Int worldPos, BlueprintData.BuildableObjectData buildableObjectData)
         {
             bogoQueryResult.Clear();
             StreamingSystem.getBuildableObjectGOQuadtreeArray().queryAABB3D(aabb, bogoQueryResult, false);
@@ -1020,7 +1086,7 @@ namespace Duplicationer
         {
             CurrentBlueprintStatusText = "";
 
-            isPlaceholdersActive = false;
+            IsPlaceholdersActive = false;
             placeholderAnchorPosition = Vector3Int.zero;
             buildingPlaceholders.Clear();
             terrainPlaceholders.Clear();
@@ -1039,6 +1105,118 @@ namespace Duplicationer
             bogoQueryResult.Clear();
 
             shoppingList.Clear();
+        }
+
+        internal static List<MinecartDepotGO> GetExistingMinecartDepots(Vector3Int targetPosition, Vector3Int repeatFrom, Vector3Int repeatTo)
+        {
+            existingMinecartDepots.Clear();
+            for (int y = repeatFrom.y; y <= repeatTo.y; ++y)
+            {
+                for (int z = repeatFrom.z; z <= repeatTo.z; ++z)
+                {
+                    for (int x = repeatFrom.x; x <= repeatTo.x; ++x)
+                    {
+                        GetExistingMinecartDepots(targetPosition + new Vector3Int(x, y, z) * CurrentBlueprintSize, false);
+                    }
+                }
+            }
+
+            return existingMinecartDepots;
+        }
+
+        internal static List<MinecartDepotGO> GetExistingMinecartDepots(Vector3Int targetPosition, bool clearExisting = true)
+        {
+            AABB3D aabb = ObjectPoolManager.aabb3ds.getObject();
+            if (clearExisting) existingMinecartDepots.Clear();
+            foreach (var index in minecartDepotIndices)
+            {
+                var buildableObjectData = CurrentBlueprint.buildableObjects[index];
+                var template = ItemTemplateManager.getBuildableObjectTemplate(buildableObjectData.templateId);
+                if (template != null)
+                {
+                    var worldPos = new Vector3Int(buildableObjectData.worldX + targetPosition.x, buildableObjectData.worldY + targetPosition.y, buildableObjectData.worldZ + targetPosition.z);
+                    int wx, wy, wz;
+                    BuildingManager.getWidthFromOrientation(template, (BuildingManager.BuildOrientation)buildableObjectData.orientationY, out wx, out wy, out wz);
+                    aabb.reinitialize(worldPos.x, worldPos.y, worldPos.z, wx, wy, wz);
+
+                    var depotEntityId = CheckIfBuildingExists(aabb, worldPos, buildableObjectData);
+                    if (depotEntityId > 0)
+                    {
+                        var bogo = StreamingSystem.getBuildableObjectGOByEntityId(depotEntityId);
+                        if (bogo != null)
+                        {
+                            var depot = bogo.TryCast<MinecartDepotGO>();
+                            if (depot != null) existingMinecartDepots.Add(depot);
+                        }
+                    }
+                }
+            }
+            ObjectPoolManager.aabb3ds.returnObject(aabb); aabb = null;
+
+            return existingMinecartDepots;
+        }
+
+        internal static bool HasExistingMinecartDepots(Vector3Int targetPosition, Vector3Int repeatFrom, Vector3Int repeatTo)
+        {
+            existingMinecartDepots.Clear();
+            for (int y = repeatFrom.y; y <= repeatTo.y; ++y)
+            {
+                for (int z = repeatFrom.z; z <= repeatTo.z; ++z)
+                {
+                    for (int x = repeatFrom.x; x <= repeatTo.x; ++x)
+                    {
+                        if (HasExistingMinecartDepots(targetPosition + new Vector3Int(x, y, z) * CurrentBlueprintSize)) return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        internal static bool HasExistingMinecartDepots(Vector3Int targetPosition)
+        {
+            AABB3D aabb = ObjectPoolManager.aabb3ds.getObject();
+            foreach (var index in minecartDepotIndices)
+            {
+                var buildableObjectData = CurrentBlueprint.buildableObjects[index];
+                var template = ItemTemplateManager.getBuildableObjectTemplate(buildableObjectData.templateId);
+                if (template != null)
+                {
+                    var worldPos = new Vector3Int(buildableObjectData.worldX + targetPosition.x, buildableObjectData.worldY + targetPosition.y, buildableObjectData.worldZ + targetPosition.z);
+                    int wx, wy, wz;
+                    BuildingManager.getWidthFromOrientation(template, (BuildingManager.BuildOrientation)buildableObjectData.orientationY, out wx, out wy, out wz);
+                    aabb.reinitialize(worldPos.x, worldPos.y, worldPos.z, wx, wy, wz);
+
+                    var depotEntityId = CheckIfBuildingExists(aabb, worldPos, buildableObjectData);
+                    if (depotEntityId > 0)
+                    {
+                        var bogo = StreamingSystem.getBuildableObjectGOByEntityId(depotEntityId);
+                        if (bogo != null)
+                        {
+                            var depot = bogo.TryCast<MinecartDepotGO>();
+                            if (depot != null) return true;
+                        }
+                    }
+                }
+            }
+            ObjectPoolManager.aabb3ds.returnObject(aabb); aabb = null;
+
+            return false;
+        }
+
+        private static void AddSimplePlaceholderTransform(int stateIndex, Matrix4x4 transform)
+        {
+            var outer = simplePlaceholderTransforms[stateIndex];
+            while (simplePlaceholderTransformsIndex[stateIndex] >= outer.Count) outer.Add(new Il2CppSystem.Collections.Generic.List<Matrix4x4>(0));
+
+            var inner = outer[simplePlaceholderTransformsIndex[stateIndex]];
+            if(inner.Count >= 1023)
+            {
+                ++simplePlaceholderTransformsIndex[stateIndex];
+                outer.Add(inner = new Il2CppSystem.Collections.Generic.List<Matrix4x4>(0));
+            }
+
+            inner.Add(transform);
         }
 
         public struct BlueprintPlaceholder {
@@ -1060,6 +1238,29 @@ namespace Duplicationer
                 new Color(0.8f, 0.9f, 1.0f, 1.0f),
                 new Color(1.0f, 0.2f, 0.1f, 1.0f),
                 new Color(0.35f, 0.5f, 1.0f, 1.0f)
+            };
+
+            internal static LazyMaterial[] stateSimplePlaceholderMaterial = new LazyMaterial[] {
+                null,
+                new LazyMaterial(() =>
+                {
+                    var material = new Material(ResourceDB.material_glow_purple);
+                    material.SetColor("_Color", new Color(1.0f, 1.0f, 1.0f, 1.0f));
+                    return material;
+                }),
+                new LazyMaterial(() =>
+                {
+                    var material = new Material(ResourceDB.material_glow_blue);
+                    material.SetColor("_Color", new Color(0.8f, 0.9f, 1.0f, 1.0f));
+                    return material;
+                }),
+                new LazyMaterial(() =>
+                {
+                    var material = new Material(ResourceDB.material_glow_red);
+                    material.SetColor("_Color", new Color(1.0f, 0.2f, 0.1f, 1.0f));
+                    return material;
+                }),
+                null
             };
 
             public BlueprintPlaceholder(BuildableObjectGO bogo, State state = State.Untested)
@@ -1086,6 +1287,34 @@ namespace Duplicationer
                     var template = ItemTemplateManager.getBuildableObjectTemplate(kv.Key);
                     if(template != null) yield return new KeyValuePair<string, int[]>(template.name, kv.Value);
                 }
+            }
+
+            public Matrix4x4 BuildTransform()
+            {
+                if (bogo._aabb == null)
+                {
+                    BuildableEntity.BuildableEntityGeneralData data = default;
+                    BuildingManager.buildingManager_getBuildableEntityGeneralData(bogo.relatedEntityId, ref data);
+
+                    int wx, wy, wz;
+                    if(bogo.template.canBeRotatedAroundXAxis)
+                        BuildingManager.getWidthFromUnlockedOrientation(bogo.template, data.orientationUnlocked, out wx, out wy, out wz);
+                    else
+                        BuildingManager.getWidthFromOrientation(bogo.template, bogo.buildOrientation, out wx, out wy, out wz);
+
+                    bogo._aabb = ObjectPoolManager.aabb3ds.getObject();
+                    bogo._aabb.reinitialize(0, 0, 0, wx, wy, wz);
+                }
+
+                return Matrix4x4.TRS(
+                    new Vector3(bogo._aabb.x0, bogo._aabb.y0 + (bogo.template.canBeRotatedAroundXAxis ? 0.0f : bogo._aabb.wy * 0.5f), bogo._aabb.z0) + bogo.transform.position,
+                    Quaternion.identity,
+                    new Vector3(bogo._aabb.wx, bogo._aabb.wy, bogo._aabb.wz));
+            }
+
+            public Matrix4x4 BuildTransformBlock()
+            {
+                return Matrix4x4.TRS(bogo.transform.position + Vector3.up * 0.5f, Quaternion.identity, Vector3.one);
             }
 
             public void SetState(State state)

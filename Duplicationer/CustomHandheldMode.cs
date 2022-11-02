@@ -72,7 +72,7 @@ namespace Duplicationer
         {
             var lookRay = GetLookRay();
             RaycastHit hitInfo;
-            if (Physics.Raycast(lookRay, out hitInfo, 30.0f, GlobalStaticCache.s_LayerMask_Terrain | GlobalStaticCache.s_LayerMask_TerrainTileCollider | GlobalStaticCache.s_LayerMask_BuildableObjectFullSize | GlobalStaticCache.s_LayerMask_BuildableObjectPartialSize))
+            if (Physics.Raycast(lookRay, out hitInfo, 300.0f, GlobalStaticCache.s_LayerMask_Terrain | GlobalStaticCache.s_LayerMask_TerrainTileCollider | GlobalStaticCache.s_LayerMask_BuildableObjectFullSize | GlobalStaticCache.s_LayerMask_BuildableObjectPartialSize))
             {
                 targetPoint = hitInfo.point;
                 var normal = GameRoot.SnappedToNearestAxis(hitInfo.normal);

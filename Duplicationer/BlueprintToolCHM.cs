@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Xml.Linq;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -37,11 +39,14 @@ namespace Duplicationer
         private float dragArrowOffset = 0.5f;
 
         private static GameObject duplicationerFrame = null;
+        private static GameObject railMinerRow = null;
         private static TextMeshProUGUI textMaterialReport = null;
         private static TextMeshProUGUI textPositionX = null;
         private static TextMeshProUGUI textPositionY = null;
         private static TextMeshProUGUI textPositionZ = null;
         private static float nextUpdateTimeCountTexts = 0.0f;
+
+        private static List<ItemTemplate> railMinerTemplates = null;
 
         private static int NudgeX => GlobalStateManager.checkForKeyboardModifier(0, 1) ? CurrentBlueprint.blocks.sizeX : 1;
         private static int NudgeY => GlobalStateManager.checkForKeyboardModifier(0, 1) ? CurrentBlueprint.blocks.sizeY : 1;
@@ -86,6 +91,8 @@ namespace Duplicationer
             {
                 case Mode.Place:
                     TabletHelper.SetTabletTextQuickActions("LMB: Place Blueprint");
+                    HideBlueprint();
+                    boxMode = BoxMode.None;
                     break;
 
                 case Mode.MoveIdle:
@@ -93,16 +100,21 @@ namespace Duplicationer
                 case Mode.RepeatIdle:
                     TabletHelper.SetTabletTextQuickActions("");
                     ShowBlueprint(CurrentBlueprintAnchor);
+                    boxMode = BoxMode.Blueprint;
                     break;
 
                 case Mode.DragAreaIdle:
-                    TabletHelper.SetTabletTextQuickActions("LMB: Select Area");
+                    TabletHelper.SetTabletTextQuickActions("LMB: Select Start\nAlt+LMB: Select Block with Offset");
                     break;
 
                 case Mode.DragFacesIdle:
                 case Mode.DragFacesVerticalIdle:
                     TabletHelper.SetTabletTextQuickActions("");
                     boxMode = BoxMode.Selection;
+                    break;
+
+                default:
+                    log.LogWarning((string)$"Invalid start mode in BlueprintToolCHM: {mode}");
                     break;
             }
 
@@ -117,6 +129,7 @@ namespace Duplicationer
             isDragArrowVisible = false;
             HideBlueprintFrame();
             onBlueprintMoved -= OnBlueprintMoved;
+            onBlueprintUpdated -= OnBlueprintUpdated;
         }
 
         public override void HideMenu(int selected)
@@ -131,23 +144,29 @@ namespace Duplicationer
                     new CustomRadialMenu.CustomOption("Confirm Copy", iconCopy, false, "", () =>
                     {
                         CreateBlueprint(DragMin, DragSize);
+                        TabletHelper.SetTabletTextQuickActions("LMB: Place Blueprint");
                         isDragArrowVisible = false;
                         mode = Mode.Place;
                         boxMode = BoxMode.None;
+                        AudioManager.playUISoundEffect(ResourceDB.resourceLinker.audioClip_recipeCopyTool_copy);
                     }, () => boxMode == BoxMode.Selection),
                     new CustomRadialMenu.CustomOption("Confirm Paste", iconPaste, false, "", () =>
                     {
                         isDragArrowVisible = false;
                         PlaceBlueprintMultiple(CurrentBlueprintAnchor, repeatFrom, repeatTo);
-                    }, () => isBlueprintLoaded && isPlaceholdersActive),
+                        AudioManager.playUISoundEffect(ResourceDB.resourceLinker.audioClip_recipeCopyTool_paste);
+                    }, () => IsBlueprintLoaded && IsPlaceholdersActive),
                     new CustomRadialMenu.CustomOption("Place", iconPlace, false, "", () =>
                     {
+                        TabletHelper.SetTabletTextQuickActions("LMB: Place Blueprint");
                         isDragArrowVisible = false;
                         mode = Mode.Place;
                         boxMode = BoxMode.None;
-                    }, () => isBlueprintLoaded),
+                        HideBlueprint();
+                    }, () => IsBlueprintLoaded && mode != Mode.Place),
                     new CustomRadialMenu.CustomOption("Select Area", iconSelectArea, false, "", () =>
                     {
+                        TabletHelper.SetTabletTextQuickActions("LMB: Select Start\nAlt+LMB: Select Block with Offset");
                         mode = Mode.DragAreaIdle;
                         boxMode = BoxMode.None;
                         HideBlueprint();
@@ -156,21 +175,21 @@ namespace Duplicationer
                     {
                         isDragArrowVisible = false;
                         mode = Mode.MoveIdle;
-                    }, () => isBlueprintLoaded && isPlaceholdersActive),
+                    }, () => IsBlueprintLoaded && IsPlaceholdersActive),
                     new CustomRadialMenu.CustomOption("Move Vertical", iconMoveVertical, false, "", () =>
                     {
                         isDragArrowVisible = false;
                         mode = Mode.VerticalMoveIdle;
-                    }, () => isBlueprintLoaded && isPlaceholdersActive),
+                    }, () => IsBlueprintLoaded && IsPlaceholdersActive),
                     new CustomRadialMenu.CustomOption("Resize", iconResize, false, "", () => { mode = Mode.DragFacesIdle; }, () => boxMode == BoxMode.Selection),
                     new CustomRadialMenu.CustomOption("Resize Vertical", iconResizeVertical, false, "", () => { mode = Mode.DragFacesVerticalIdle; }, () => boxMode == BoxMode.Selection),
                     new CustomRadialMenu.CustomOption("Repeat", iconRepeat, false, "", () =>
                     {
                         isDragArrowVisible = false;
                         mode = Mode.RepeatIdle;
-                    }, () => isBlueprintLoaded && isPlaceholdersActive),
-                    new CustomRadialMenu.CustomOption("Show Placeholders", ResourceDB.sprite_waypointShow, false, "", () => { ShowPlaceholders(); }, () => isPlaceholdersHidden),
-                    new CustomRadialMenu.CustomOption("Hide Placeholders", ResourceDB.sprite_waypointHide, false, "", () => { HidePlaceholders(); }, () => !isPlaceholdersHidden),
+                    }, () => IsBlueprintLoaded && IsPlaceholdersActive),
+                    new CustomRadialMenu.CustomOption("Show Placeholders", ResourceDB.sprite_waypointShow, false, "", () => { ShowPlaceholders(); }, () => IsPlaceholdersHidden),
+                    new CustomRadialMenu.CustomOption("Hide Placeholders", ResourceDB.sprite_waypointHide, false, "", () => { HidePlaceholders(); }, () => !IsPlaceholdersHidden),
                     new CustomRadialMenu.CustomOption("Open Panel", iconPanel, false, "", () =>
                     {
                         ShowBlueprintFrame();
@@ -183,10 +202,16 @@ namespace Duplicationer
 
         public override void UpdateBehavoir()
         {
+            if (IsBlueprintLoaded && IsPlaceholdersActive && Input.GetKeyDown(PasteBlueprintKey) && IsKeyboardInputAllowed)
+            {
+                PlaceBlueprintMultiple(CurrentBlueprintAnchor, repeatFrom, repeatTo);
+                AudioManager.playUISoundEffect(ResourceDB.resourceLinker.audioClip_recipeCopyTool_paste);
+            }
+
             switch (mode)
             {
                 case Mode.Place:
-                    if (Input.GetKeyDown(KeyCode.Mouse0))
+                    if (Input.GetKeyDown(KeyCode.Mouse0) && IsMouseInputAllowed)
                     {
                         boxMode = BoxMode.None;
                         HideBlueprint();
@@ -202,7 +227,7 @@ namespace Duplicationer
                             ShowBlueprint(targetCoord - new Vector3Int(CurrentBlueprint.blocks.sizeX / 2, 0, CurrentBlueprint.blocks.sizeZ / 2));
                         }
                     }
-                    if (Input.GetKeyUp(KeyCode.Mouse0) && isPlaceholdersActive)
+                    if (Input.GetKeyUp(KeyCode.Mouse0) && IsPlaceholdersActive)
                     {
                         mode = Mode.MoveIdle;
                         TabletHelper.SetTabletTextQuickActions("");
@@ -255,7 +280,7 @@ namespace Duplicationer
                                     break;
                             }
 
-                            if (Input.GetKeyDown(KeyCode.Mouse0))
+                            if (Input.GetKeyDown(KeyCode.Mouse0) && IsMouseInputAllowed)
                             {
                                 mode = Mode.MoveXPos + faceIndex;
                             }
@@ -314,7 +339,7 @@ namespace Duplicationer
                             dragArrowOffset = 0.0f;
                             TabletHelper.SetTabletTextQuickActions($"LMB: Drag Y\nAlt+LMB: Drag Y*{CurrentBlueprint.blocks.sizeY}");
 
-                            if (Input.GetKeyDown(KeyCode.Mouse0)) mode = Mode.VerticalMove;
+                            if (Input.GetKeyDown(KeyCode.Mouse0) && IsMouseInputAllowed) mode = Mode.VerticalMove;
                         }
                         else
                         {
@@ -393,7 +418,7 @@ namespace Duplicationer
                                     break;
                             }
 
-                            if (Input.GetKeyDown(KeyCode.Mouse0))
+                            if (Input.GetKeyDown(KeyCode.Mouse0) && IsMouseInputAllowed)
                             {
                                 mode = Mode.RepeatXPos + faceIndex;
                             }
@@ -446,19 +471,28 @@ namespace Duplicationer
                     break;
 
                 case Mode.DragAreaIdle:
-                    isDragArrowVisible = false;
-                    if (Input.GetKeyDown(KeyCode.Mouse0))
                     {
+                        isDragArrowVisible = false;
                         Vector3 targetPoint;
                         Vector3Int targetCoord, targetNormal;
                         if (GetTargetCube(-0.01f, out targetPoint, out targetCoord, out targetNormal))
                         {
+                            if (IsAltHeld) targetCoord += Vector3Int.RoundToInt(GameRoot.SnappedToNearestAxis(targetNormal));
+
                             boxMode = BoxMode.Selection;
                             selectionFrom = selectionTo = targetCoord;
-                            dragPlane = new Plane(Vector3.up, targetPoint);
 
-                            mode = Mode.DragAreaStart;
-                            TabletHelper.SetTabletTextQuickActions("Release LMB: Select Other Corner");
+                            if (Input.GetKeyDown(KeyCode.Mouse0) && IsMouseInputAllowed)
+                            {
+                                dragPlane = new Plane(Vector3.up, targetPoint);
+
+                                mode = Mode.DragAreaStart;
+                                TabletHelper.SetTabletTextQuickActions("Release LMB: Confirm Start");
+                            }
+                        }
+                        else
+                        {
+                            boxMode = BoxMode.None;
                         }
                     }
                     break;
@@ -471,17 +505,18 @@ namespace Duplicationer
                         if (dragPlane.Raycast(lookRay, out distance))
                         {
                             var point = lookRay.GetPoint(distance);
+                            point.y = DragMax.y + 1;
                             isDragArrowVisible = true;
                             dragFaceRay = new Ray(point, Vector3.up);
                             dragArrowMaterial = ResourceDB.material_glow_yellow;
 
-                            mode = Mode.DragAreaVertical;
+                            mode = Mode.DragAreaVerticalUp;
                             TabletHelper.SetTabletTextQuickActions("LMB: Select Height");
                         }
                         else
                         {
                             mode = Mode.DragAreaIdle;
-                            TabletHelper.SetTabletTextQuickActions("LMB: Select Area");
+                            TabletHelper.SetTabletTextQuickActions("LMB: Select Start\nAlt+LMB: Select Start with Offset");
                         }
                     }
                     else
@@ -496,13 +531,16 @@ namespace Duplicationer
                         if (dragPlane.Raycast(lookRay, out distance))
                         {
                             var point = lookRay.GetPoint(distance);
-                            selectionTo = new Vector3Int(Mathf.FloorToInt(point.x - dragPlane.normal.x * 0.01f), Mathf.FloorToInt(point.y - dragPlane.normal.y * 0.01f), Mathf.FloorToInt(point.z - dragPlane.normal.z * 0.01f));
+                            selectionTo = new Vector3Int(Mathf.FloorToInt(point.x - dragPlane.normal.x * 0.01f), selectionFrom.y, Mathf.FloorToInt(point.z - dragPlane.normal.z * 0.01f));
+
+                            if(selectionFrom == selectionTo) TabletHelper.SetTabletTextQuickActions("Release LMB: Confirm Start");
+                            else TabletHelper.SetTabletTextQuickActions("Release LMB: Select Other Corner");
                         }
                     }
                     break;
 
-                case Mode.DragAreaVertical:
-                    if (Input.GetKeyDown(KeyCode.Mouse0))
+                case Mode.DragAreaVerticalUp:
+                    if (Input.GetKeyDown(KeyCode.Mouse0) && IsMouseInputAllowed)
                     {
                         mode = Mode.DragFacesIdle;
                         TabletHelper.SetTabletTextQuickActions("");
@@ -514,12 +552,60 @@ namespace Duplicationer
                         {
                             var min = DragMin;
                             var max = DragMax;
-                            var roundedOffset = Mathf.Max(min.y - max.y, Mathf.RoundToInt(offset));
-                            if (Mathf.Abs(roundedOffset) >= 1)
+                            int roundedOffset = Mathf.RoundToInt(offset);
+                            var clampedOffset = Mathf.Max(min.y - max.y, roundedOffset);
+                            if(roundedOffset < clampedOffset)
                             {
-                                max.y += roundedOffset;
+                                mode = Mode.DragAreaVerticalDown;
+                                dragFaceRay.direction = -dragFaceRay.direction;
+                                dragFaceRay.origin += Vector3.up * (clampedOffset - 1);
 
-                                dragFaceRay.origin += Vector3.up * roundedOffset;
+                                max.y += clampedOffset;
+                                selectionFrom = min;
+                                selectionTo = max;
+                            }
+                            else if (Mathf.Abs(clampedOffset) >= 1)
+                            {
+                                dragFaceRay.origin += Vector3.up * clampedOffset;
+
+                                max.y += clampedOffset;
+                                selectionFrom = min;
+                                selectionTo = max;
+                            }
+                        }
+                    }
+                    break;
+
+                case Mode.DragAreaVerticalDown:
+                    if (Input.GetKeyDown(KeyCode.Mouse0) && IsMouseInputAllowed)
+                    {
+                        mode = Mode.DragFacesIdle;
+                        TabletHelper.SetTabletTextQuickActions("");
+                    }
+                    else
+                    {
+                        float offset;
+                        if (TryGetAxialDragOffset(dragFaceRay, GetLookRay(), out offset))
+                        {
+                            var min = DragMin;
+                            var max = DragMax;
+                            int roundedOffset = Mathf.RoundToInt(offset);
+                            var clampedOffset = Mathf.Max(min.y - max.y, roundedOffset);
+                            if(roundedOffset < clampedOffset)
+                            {
+                                mode = Mode.DragAreaVerticalUp;
+                                dragFaceRay.direction = -dragFaceRay.direction;
+                                dragFaceRay.origin += Vector3.down * (clampedOffset - 1);
+
+                                min.y -= clampedOffset;
+                                selectionFrom = min;
+                                selectionTo = max;
+                            }
+                            else if (Mathf.Abs(clampedOffset) >= 1)
+                            {
+                                dragFaceRay.origin += Vector3.down * clampedOffset;
+
+                                min.y -= clampedOffset;
                                 selectionFrom = min;
                                 selectionTo = max;
                             }
@@ -582,7 +668,7 @@ namespace Duplicationer
                                     break;
                             }
 
-                            if (Input.GetKeyDown(KeyCode.Mouse0))
+                            if (Input.GetKeyDown(KeyCode.Mouse0) && IsMouseInputAllowed)
                             {
                                 if (IsAltHeld)
                                 {
@@ -655,7 +741,7 @@ namespace Duplicationer
                             dragArrowOffset = 0.0f;
                             TabletHelper.SetTabletTextQuickActions("LMB: Drag +Y\nAlt+LMB: Drag -Y");
 
-                            if (Input.GetKeyDown(KeyCode.Mouse0))
+                            if (Input.GetKeyDown(KeyCode.Mouse0) && IsMouseInputAllowed)
                             {
                                 if (IsAltHeld)
                                 {
@@ -723,7 +809,7 @@ namespace Duplicationer
 
                 case BoxMode.Selection:
                     DrawBoxWithEdges(DragMin, DragMax + Vector3.one, 0.015f, 0.04f, materialDragBox.Material, materialDragBoxEdge.Material);
-                    GameRoot.setHighVisibilityInfoText($"{DragSize.x}x{DragSize.y}x{DragSize.z}");
+                    GameRoot.setHighVisibilityInfoText(DragSize == Vector3Int.one ? "" : $"{DragSize.x}x{DragSize.y}x{DragSize.z}");
                     break;
             }
 
@@ -744,6 +830,8 @@ namespace Duplicationer
             {
                 nextUpdateTimeCountTexts = Time.time + 0.5f;
 
+                int repeatCount = RepeatCount.x * RepeatCount.y * RepeatCount.z;
+
                 var materialReportBuilder = new System.Text.StringBuilder();
                 foreach (var kv in BlueprintPlaceholder.GetStateCounts())
                 {
@@ -752,10 +840,6 @@ namespace Duplicationer
                     {
                         var template = (kv.Key > 0) ? ItemTemplateManager.getItemTemplate(kv.Key) : null;
                         var name = (template != null) ? template.name : "Total";
-                        var untested = (kv.Value[0] > 0) ? $"<color=#AAAAAA>{kv.Value[0]}</color>/" : "";
-                        var clear = (kv.Value[1] > 0) ? $"{kv.Value[1]}/" : "";
-                        var blocked = (kv.Value[2] > 0) ? $"<color=#FF2F1F>{kv.Value[2]}</color>/" : "";
-                        var done = (kv.Value[3] > 0) ? $"<color=#AACCFF>{kv.Value[3]}</color>/" : "";
                         if (template != null)
                         {
                             ulong inventoryPtr = (GameRoot.getClientCharacter().inventoryId != 0) ? InventoryManager.inventoryManager_getInventoryPtr(GameRoot.getClientCharacter().inventoryId) : 0;
@@ -763,20 +847,25 @@ namespace Duplicationer
                             {
                                 var inventoryCount = InventoryManager.inventoryManagerPtr_countByItemTemplate(inventoryPtr, template.id, IOBool.iotrue);
 
-                                materialReportBuilder.AppendLine($"<color=#CCCCCC>{name}:</color> {untested}{clear}{blocked}{done}{total} <color=#FFFFAA>({inventoryCount})</color>");
+                                materialReportBuilder.AppendLine($"<color=#CCCCCC>{name}:</color> {total * repeatCount} <color=#FFFFAA>({inventoryCount})</color>");
                             }
                             else
                             {
-                                materialReportBuilder.AppendLine($"<color=#CCCCCC>{name}:</color> {untested}{clear}{blocked}{done}{total} <color=#FFFFAA>(###)</color>");
+                                materialReportBuilder.AppendLine($"<color=#CCCCCC>{name}:</color> {total * repeatCount} <color=#FFFFAA>(###)</color>");
                             }
                         }
                         else
                         {
-                            materialReportBuilder.AppendLine($"<color=#CCCCCC>{name}:</color> {untested}{clear}{blocked}{done}{total}");
+                            materialReportBuilder.AppendLine($"<color=#CCCCCC>{name}:</color> {total * repeatCount}");
                         }
                     }
                 }
                 textMaterialReport.text = materialReportBuilder.ToString();
+
+                if (railMinerRow != null)
+                {
+                    railMinerRow.SetActive(HasExistingMinecartDepots(CurrentBlueprintAnchor, repeatFrom, repeatTo));
+                }
             }
         }
 
@@ -811,7 +900,8 @@ namespace Duplicationer
 
                 case Mode.DragAreaIdle:
                 case Mode.DragAreaStart:
-                case Mode.DragAreaVertical:
+                case Mode.DragAreaVerticalUp:
+                case Mode.DragAreaVerticalDown:
                     return "Create Blueprint - Select";
 
                 case Mode.DragFacesIdle:
@@ -882,6 +972,35 @@ namespace Duplicationer
                                     .Element_Text("", "OpenSansSemibold SDF", 14.0f, Color.white, TextAlignmentOptions.TopLeft)
                                         .Keep(ref textMaterialReport)
                                     .Done
+                                .Done
+                                .Element("Rail Miner Row")
+                                    .Keep(ref railMinerRow)
+                                    .AutoSize(ContentSizeFitter.FitMode.Unconstrained, ContentSizeFitter.FitMode.PreferredSize)
+                                    .SetHorizontalLayout(new RectOffset(0, 0, 0, 0), 5.0f, TextAnchor.UpperLeft, false, true, true, false, true, false, false)
+                                    .Do((UIBuilder builder) =>
+                                    {
+                                        foreach (var template in GetRailMinerTemplates())
+                                        {
+                                            string tooltip = $"Insert and launch\n{template.name}";
+                                            builder.Button("Button Rail Miner", "corner_cut", Color.white, new Vector4(10.0f, 1.0f, 2.0f, 10.0f))
+                                                .SetOnClick(new Action(() => { InsertRailMiners(template); }))
+                                                .SetTransitionColors(new Color(0.2f, 0.2f, 0.2f, 1.0f), new Color(0.0f, 0.6f, 1.0f, 1.0f), new Color(0.222f, 0.667f, 1.0f, 1.0f), new Color(0.0f, 0.6f, 1.0f, 1.0f), new Color(0.5f, 0.5f, 0.5f, 1.0f), 1.0f, 0.1f)
+                                                .Layout()
+                                                    .MinWidth(40)
+                                                    .MinHeight(40)
+                                                    .PreferredWidth(40)
+                                                    .PreferredHeight(40)
+                                                .Done
+                                                .Element("Image")
+                                                    .SetRectTransform(5.0f, 5.0f, -5.0f, -5.0f, 0.5f, 0.5f, 0.0f, 0.0f, 1.0f, 1.0f)
+                                                    .SetRotation(90.0f)
+                                                    .Element_Image(template.icon_identifier, Color.white, Vector4.zero, Image.Type.Sliced)
+                                                    .Element_Tooltip(tooltip)
+                                                .Done
+                                                .Element_Tooltip(tooltip)
+                                            .End(false);
+                                        }
+                                    })
                                 .Done
                                 .Element("Row Position X")
                                     .SetHorizontalLayout(new RectOffset(0, 0, 0, 0), 5.0f, TextAnchor.UpperLeft, false, true, true, false, true, false, false)
@@ -1037,6 +1156,69 @@ namespace Duplicationer
             UpdateBlueprintPositionText();
         }
 
+        private static void InsertRailMiners(ItemTemplate railMinerItemTemplate)
+        {
+            AudioManager.playUISoundEffect(ResourceDB.resourceLinker.audioClip_recipeCopyTool_paste);
+
+            MinecartDepotPollingUpdateData data = default;
+            ulong playerInventoryPtr = (GameRoot.getClientCharacter().inventoryId != 0) ? InventoryManager.inventoryManager_getInventoryPtr(GameRoot.getClientCharacter().inventoryId) : 0;
+            if (playerInventoryPtr != 0)
+            {
+                uint inventorySlotCount = InventoryManager.inventoryManager_getInventorySlotCount(playerInventoryPtr);
+                int slotIndex = (int)inventorySlotCount;
+
+                var inventoryCount = InventoryManager.inventoryManagerPtr_countByItemTemplate(playerInventoryPtr, railMinerItemTemplate.id, IOBool.iotrue);
+                if (inventoryCount > 0)
+                {
+                    var depots = GetExistingMinecartDepots(CurrentBlueprintAnchor, repeatFrom, repeatTo);
+                    foreach (var depot in depots)
+                    {
+                        if (!AdvanceToNextValidSlot(railMinerItemTemplate, playerInventoryPtr, ref slotIndex, inventorySlotCount)) return;
+
+                        MinecartDepotGO.minecartDepotEntity_queryPollingData(depot.relatedEntityId, ref data);
+                        if (data.transitionState == 0 || data.transitionState == 3 && data.inventorySlot_railMiner.itemCount == 0)
+                        {
+                            var character = GameRoot.getClientCharacter();
+
+                            ulong depotInventoryId = 0;
+                            ulong depotInventoryPtr = 0;
+                            if (BuildingManager.buildingManager_getInventoryAccessors(depot.relatedEntityId, 1, ref depotInventoryId, ref depotInventoryPtr) == IOBool.iotrue && depotInventoryId > 0)
+                            {
+                                GameRoot.addLockstepEvent(new ItemQuickMoveEvent(character, depotInventoryId, character.inventoryId, (uint)slotIndex));
+                                GameRoot.addLockstepEvent(new MinecartDepotTransitionEvent(depot.relatedEntityId));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        private static bool AdvanceToNextValidSlot(ItemTemplate railMinerItemTemplate, ulong playerInventoryPtr, ref int slotIndex, uint inventorySlotCount)
+        {
+            ushort itemTemplateRunningIdx = 0;
+            uint itemCount = 0;
+            ushort lockedTemplateRunningIdx = 0;
+            IOBool isLocked = default;
+
+            for (--slotIndex; slotIndex >= 0; --slotIndex)
+            {
+                InventoryManager.inventoryManager_getSingleSlotData(playerInventoryPtr, (uint)slotIndex, ref itemTemplateRunningIdx, ref itemCount, ref lockedTemplateRunningIdx, ref isLocked, IOBool.iofalse);
+                if (itemCount > 0)
+                {
+                    var playerInventorySlotItemTemplate = GameRoot.RunningIdxTable_itemTemplates_all.getDataByRunningIdx(itemTemplateRunningIdx);
+                    if (playerInventorySlotItemTemplate != null)
+                    {
+                        if (playerInventorySlotItemTemplate.id == railMinerItemTemplate.id)
+                        {
+                            return true;
+                        }
+                    }
+                }
+            }
+
+            return false;
+        }
+
         internal static void UpdateBlueprintPositionText()
         {
             if (textPositionX != null) textPositionX.text = string.Format("Position X: {0}", CurrentBlueprintAnchor.x);
@@ -1056,6 +1238,24 @@ namespace Duplicationer
             iconResizeVertical = ResourceExt.LoadSprite("resize-vertical.png");
             iconResize = ResourceExt.LoadSprite("resize.png");
             iconSelectArea = ResourceExt.LoadSprite("select-area.png");
+        }
+
+        private static List<ItemTemplate> GetRailMinerTemplates()
+        {
+            if (railMinerTemplates == null)
+            {
+                railMinerTemplates = new List<ItemTemplate>();
+                foreach (var kv in ItemTemplateManager.getAllItemTemplates())
+                {
+                    var itemTemplate = kv.Value;
+                    if ((itemTemplate.flags & ItemTemplate.ItemTemplateFlags.RAIL_MINER) != 0)
+                    {
+                        railMinerTemplates.Add(itemTemplate);
+                    }
+                }
+            }
+
+            return railMinerTemplates;
         }
 
         private enum Mode
@@ -1079,7 +1279,8 @@ namespace Duplicationer
             RepeatZNeg,
             DragAreaIdle,
             DragAreaStart,
-            DragAreaVertical,
+            DragAreaVerticalUp,
+            DragAreaVerticalDown,
             DragFacesIdle,
             DragFacesXPos,
             DragFacesXNeg,
