@@ -265,6 +265,8 @@ namespace Duplicationer
         {
             var to = from + size;
 
+            minecartDepotIndices.Clear();
+
             ulong chunkIndex;
             uint blockIndex;
             var buildings = new HashSet<BuildableObjectGO>(new BuildableObjectGOComparer());
@@ -298,6 +300,11 @@ namespace Duplicationer
                 BuildableEntity.BuildableEntityGeneralData generalData = default;
                 var hasGeneralData = BuildingManager.buildingManager_getBuildableEntityGeneralData(bogo.Id, ref generalData);
                 Debug.Assert(hasGeneralData == IOBool.iotrue);
+
+                if (bogo.template.type == BuildableObjectTemplate.BuildableObjectType.MinecartDepot)
+                {
+                    minecartDepotIndices.Add(i);
+                }
 
                 buildingDataArray[i].originalEntityId = bogo.relatedEntityId;
                 buildingDataArray[i].templateName = bogo.template.name;
@@ -1130,6 +1137,8 @@ namespace Duplicationer
             if (clearExisting) existingMinecartDepots.Clear();
             foreach (var index in minecartDepotIndices)
             {
+                if (index >= CurrentBlueprint.buildableObjects.Length) continue;
+
                 var buildableObjectData = CurrentBlueprint.buildableObjects[index];
                 var template = ItemTemplateManager.getBuildableObjectTemplate(buildableObjectData.templateId);
                 if (template != null)
@@ -1178,6 +1187,8 @@ namespace Duplicationer
             AABB3D aabb = ObjectPoolManager.aabb3ds.getObject();
             foreach (var index in minecartDepotIndices)
             {
+                if (index >= CurrentBlueprint.buildableObjects.Length) continue;
+
                 var buildableObjectData = CurrentBlueprint.buildableObjects[index];
                 var template = ItemTemplateManager.getBuildableObjectTemplate(buildableObjectData.templateId);
                 if (template != null)
