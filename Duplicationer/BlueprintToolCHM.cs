@@ -1,70 +1,140 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Xml.Linq;
+﻿using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
-using static Duplicationer.BepInExLoader;
-using static Duplicationer.BlueprintManager;
+using UnityEngine.EventSystems;
+using Unfoundry;
+using System;
+using System.IO;
+using BepInEx;
+using System.Xml.Linq;
+using System.Linq;
 
 namespace Duplicationer
 {
     internal class BlueprintToolCHM : CustomHandheldMode
     {
-        private static CustomRadialMenuStateControl menuStateControl = null;
-        private static Mode mode = Mode.Place;
+        public bool IsBlueprintLoaded => CurrentBlueprint != null;
+        public Blueprint CurrentBlueprint { get; private set; } = null;
+        public string CurrentBlueprintStatusText { get; private set; } = "";
+        public Vector3Int CurrentBlueprintSize => CurrentBlueprint == null ? Vector3Int.zero : CurrentBlueprint.Size;
+        public Vector3Int CurrentBlueprintAnchor { get; private set; } = Vector3Int.zero;
 
-        private static BoxMode boxMode = BoxMode.None;
-        private static Vector3Int BlueprintMin => CurrentBlueprintAnchor;
-        private static Vector3Int BlueprintMax => CurrentBlueprintAnchor + CurrentBlueprintSize - Vector3Int.one;
+        public bool IsBlueprintActive { get; private set; } = false;
+        public bool IsPlaceholdersHidden { get; private set; } = false;
+        private BatchRenderingGroup placeholderRenderGroup = new BatchRenderingGroup();
+        private List<BlueprintPlaceholder> buildingPlaceholders = new List<BlueprintPlaceholder>();
+        private List<BlueprintPlaceholder> terrainPlaceholders = new List<BlueprintPlaceholder>();
+        private int buildingPlaceholderUpdateIndex = 0;
+        private int terrainPlaceholderUpdateIndex = 0;
 
-        private static Vector3Int repeatFrom = Vector3Int.zero;
-        private static Vector3Int repeatTo = Vector3Int.zero;
-        private static Vector3Int RepeatCount => repeatTo - repeatFrom + Vector3Int.one;
-        private static Vector3Int RepeatBlueprintMin => BlueprintMin + CurrentBlueprintSize * repeatFrom;
-        private static Vector3Int RepeatBlueprintMax => BlueprintMax + CurrentBlueprintSize * repeatTo;
+        private CustomRadialMenuStateControl menuStateControl = null;
+        public BlueprintToolMode CurrentMode { get; private set; } = null;
+        private BlueprintToolModePlace modePlace;
+        private BlueprintToolModeSelectArea modeSelectArea;
+        private BlueprintToolModeResize modeResize;
+        private BlueprintToolModeResizeVertical modeResizeVertical;
+        private BlueprintToolModeMove modeMove;
+        private BlueprintToolModeMoveVertical modeMoveVertical;
+        private BlueprintToolModeRepeat modeRepeat;
+        private BlueprintToolMode[] blueprintToolModes;
 
-        private static Plane dragPlane = default;
-        private static Vector3Int selectionFrom = Vector3Int.zero;
-        private static Vector3Int selectionTo = Vector3Int.zero;
+        public bool HasMinecartDepots => CurrentBlueprint?.HasMinecartDepots ?? false;
+        private static List<MinecartDepotGO> existingMinecartDepots = new List<MinecartDepotGO>();
 
-        private static Vector3Int DragMin => Vector3Int.Min(selectionFrom, selectionTo);
-        private static Vector3Int DragMax => Vector3Int.Max(selectionFrom, selectionTo);
-        private static Vector3Int DragSize => DragMax - DragMin + Vector3Int.one;
+        internal BoxMode boxMode = BoxMode.None;
+        public Vector3Int BlueprintMin => CurrentBlueprintAnchor;
+        public Vector3Int BlueprintMax => CurrentBlueprintAnchor + CurrentBlueprintSize - Vector3Int.one;
 
-        private static bool isDragArrowVisible = false;
-        private static Ray dragFaceRay = default;
-        private Material dragArrowMaterial = null;
-        private float dragArrowScale = 1.0f;
-        private float dragArrowOffset = 0.5f;
+        internal Vector3Int repeatFrom = Vector3Int.zero;
+        internal Vector3Int repeatTo = Vector3Int.zero;
+        public Vector3Int RepeatCount => repeatTo - repeatFrom + Vector3Int.one;
+        public Vector3Int RepeatBlueprintMin => BlueprintMin + CurrentBlueprintSize * repeatFrom;
+        public Vector3Int RepeatBlueprintMax => BlueprintMax + CurrentBlueprintSize * repeatTo;
 
-        private static GameObject duplicationerFrame = null;
-        private static GameObject railMinerRow = null;
-        private static GameObject demolishRow = null;
-        private static TextMeshProUGUI textMaterialReport = null;
-        private static TextMeshProUGUI textPositionX = null;
-        private static TextMeshProUGUI textPositionY = null;
-        private static TextMeshProUGUI textPositionZ = null;
-        private static float nextUpdateTimeCountTexts = 0.0f;
+        internal Plane dragPlane = default;
+        internal Vector3Int selectionFrom = Vector3Int.zero;
+        internal Vector3Int selectionTo = Vector3Int.zero;
 
-        private static List<ItemTemplate> railMinerTemplates = null;
+        public Vector3Int DragMin => Vector3Int.Min(selectionFrom, selectionTo);
+        public Vector3Int DragMax => Vector3Int.Max(selectionFrom, selectionTo);
+        public Vector3Int DragSize => DragMax - DragMin + Vector3Int.one;
 
-        private static int NudgeX => GlobalStateManager.checkForKeyboardModifier(0, 1) ? CurrentBlueprint.blocks.sizeX : 1;
-        private static int NudgeY => GlobalStateManager.checkForKeyboardModifier(0, 1) ? CurrentBlueprint.blocks.sizeY : 1;
-        private static int NudgeZ => GlobalStateManager.checkForKeyboardModifier(0, 1) ? CurrentBlueprint.blocks.sizeZ : 1;
+        internal bool isDragArrowVisible = false;
+        internal Ray dragFaceRay = default;
+        internal Material dragArrowMaterial = null;
+        internal float dragArrowScale = 1.0f;
+        internal float dragArrowOffset = 0.5f;
 
-        private static Sprite iconCopy = null;
-        private static Sprite iconMoveVertical = null;
-        private static Sprite iconMove = null;
-        private static Sprite iconPanel = null;
-        private static Sprite iconPaste = null;
-        private static Sprite iconPlace = null;
-        private static Sprite iconRepeat = null;
-        private static Sprite iconResizeVertical = null;
-        private static Sprite iconResize = null;
-        private static Sprite iconSelectArea = null;
+        public bool IsBlueprintFrameOpen => duplicationerFrame != null && duplicationerFrame.activeSelf;
+        private GameObject duplicationerFrame = null;
+        private GameObject railMinerRow = null;
+        private TextMeshProUGUI textMaterialReport = null;
+        private TextMeshProUGUI textPositionX = null;
+        private TextMeshProUGUI textPositionY = null;
+        private TextMeshProUGUI textPositionZ = null;
+        private float nextUpdateTimeCountTexts = 0.0f;
+        private float nextUpdateTimeRailMiners = 0.0f;
 
-        private static LazyMaterial materialDragBox = new LazyMaterial(() =>
+        public bool IsSaveFrameOpen => saveFrame != null && saveFrame.activeSelf;
+        private GameObject saveFrame = null;
+        private GameObject saveGridObject = null;
+        private GameObject saveFramePreviewContainer = null;
+        private Image[] saveFrameIconImages = new Image[4] { null, null, null, null };
+        private Image[] saveFramePreviewIconImages = new Image[4] { null, null, null, null };
+        private TMP_InputField saveFrameNameInputField = null;
+        private TextMeshProUGUI saveFramePreviewLabel = null;
+        private TextMeshProUGUI saveFrameMaterialReportText = null;
+        private ItemTemplate[] saveFrameIconItemTemplates = new ItemTemplate[4] { null, null, null, null };
+        private int saveFrameIconCount = 0;
+
+        public bool IsLibraryFrameOpen => libraryFrame != null && libraryFrame.activeSelf;
+        private GameObject libraryFrame = null;
+        private GameObject libraryGridObject = null;
+
+        public bool IsAnyFrameOpen => IsBlueprintFrameOpen || IsSaveFrameOpen || IsLibraryFrameOpen;
+
+        private List<ItemTemplate> railMinerTemplates = null;
+
+        private int NudgeX => CurrentBlueprint != null && InputHelpers.IsAltHeld ? CurrentBlueprint.SizeX : 1;
+        private int NudgeY => CurrentBlueprint != null && InputHelpers.IsAltHeld ? CurrentBlueprint.SizeY : 1;
+        private int NudgeZ => CurrentBlueprint != null && InputHelpers.IsAltHeld ? CurrentBlueprint.SizeZ : 1;
+
+        private static Il2CppSystem.Collections.Generic.List<BuildableObjectGO> bogoQueryResult = new Il2CppSystem.Collections.Generic.List<BuildableObjectGO>(0);
+
+        private List<UIBuilder.GenericUpdateDelegate> guiUpdaters = new List<UIBuilder.GenericUpdateDelegate>();
+
+        private static List<ConstructionTaskGroup> activeConstructionTaskGroups = new List<ConstructionTaskGroup>();
+
+        public static int MaxBuildingValidationsPerFrame { get; internal set; } = 4;
+        public static int MaxTerrainValidationsPerFrame { get; internal set; } = 20;
+
+        private LazyPrefab prefabGridScrollView = new LazyPrefab("Assets/Prefabs/GridScrollView.prefab");
+        private LazyPrefab prefabBlueprintNameInputField = new LazyPrefab("Assets/Prefabs/BlueprintNameInputField.prefab");
+        private LazyPrefab prefabBlueprintButtonDefaultIcon = new LazyPrefab("Assets/Prefabs/BlueprintButtonDefaultIcon.prefab");
+        private LazyPrefab prefabBlueprintButton1Icon = new LazyPrefab("Assets/Prefabs/BlueprintButton1Icon.prefab");
+        private LazyPrefab prefabBlueprintButton2Icon = new LazyPrefab("Assets/Prefabs/BlueprintButton2Icon.prefab");
+        private LazyPrefab prefabBlueprintButton3Icon = new LazyPrefab("Assets/Prefabs/BlueprintButton3Icon.prefab");
+        private LazyPrefab prefabBlueprintButton4Icon = new LazyPrefab("Assets/Prefabs/BlueprintButton4Icon.prefab");
+
+        private static Material placeholderMaterial = null;
+        private static Material placeholderPrepassMaterial = null;
+        private static Material placeholderSolidMaterial = null;
+
+        private LazyIconSprite iconBlack = null;
+        private LazyIconSprite iconEmpty = null;
+        private LazyIconSprite iconCopy = null;
+        private LazyIconSprite iconMoveVertical = null;
+        private LazyIconSprite iconMove = null;
+        private LazyIconSprite iconPanel = null;
+        private LazyIconSprite iconPaste = null;
+        private LazyIconSprite iconPlace = null;
+        private LazyIconSprite iconRepeat = null;
+        private LazyIconSprite iconResizeVertical = null;
+        private LazyIconSprite iconResize = null;
+        private LazyIconSprite iconSelectArea = null;
+
+        private LazyMaterial materialDragBox = new LazyMaterial(() =>
         {
             var material = new Material(ResourceDB.material_placeholder_green);
             material.renderQueue = 3001;
@@ -73,7 +143,7 @@ namespace Duplicationer
             return material;
         });
 
-        private static LazyMaterial materialDragBoxEdge = new LazyMaterial(() =>
+        private LazyMaterial materialDragBoxEdge = new LazyMaterial(() =>
         {
             var material = new Material(ResourceDB.material_glow_blue);
             material.SetColor("_Color", new Color(0.0f, 0.0f, 0.8f, 1.0f));
@@ -84,754 +154,490 @@ namespace Duplicationer
         {
             dragArrowScale = 1.0f;
             dragArrowOffset = 0.5f;
+
+            blueprintToolModes = new BlueprintToolMode[]
+            {
+                modeSelectArea = new BlueprintToolModeSelectArea(),
+                modeResize = new BlueprintToolModeResize(),
+                modeResizeVertical = new BlueprintToolModeResizeVertical(),
+                modePlace = new BlueprintToolModePlace(),
+                modeMove = new BlueprintToolModeMove(),
+                modeMoveVertical = new BlueprintToolModeMoveVertical(),
+                modeRepeat = new BlueprintToolModeRepeat()
+            };
+
+            modePlace.Connect(modeSelectArea, modeMove);
+            modeSelectArea.Connect(modeResize);
+
+            SetPlaceholderOpacity(Plugin.configPreviewAlpha.Value);
         }
 
         public override void Enter()
         {
-            switch (mode)
-            {
-                case Mode.Place:
-                    TabletHelper.SetTabletTextQuickActions("LMB: Place Blueprint");
-                    HideBlueprint();
-                    boxMode = BoxMode.None;
-                    break;
+            if (CurrentMode == null) SelectMode(modePlace);
 
-                case Mode.MoveIdle:
-                case Mode.VerticalMoveIdle:
-                case Mode.RepeatIdle:
-                    TabletHelper.SetTabletTextQuickActions("");
-                    ShowBlueprint(CurrentBlueprintAnchor);
-                    boxMode = BoxMode.Blueprint;
-                    break;
-
-                case Mode.DragAreaIdle:
-                    TabletHelper.SetTabletTextQuickActions("LMB: Select Start\nAlt+LMB: Select Block with Offset");
-                    break;
-
-                case Mode.DragFacesIdle:
-                case Mode.DragFacesVerticalIdle:
-                    TabletHelper.SetTabletTextQuickActions("");
-                    boxMode = BoxMode.Selection;
-                    break;
-
-                default:
-                    log.LogWarning((string)$"Invalid start mode in BlueprintToolCHM: {mode}");
-                    break;
-            }
-
-            onBlueprintMoved += OnBlueprintMoved;
-            onBlueprintUpdated += OnBlueprintUpdated;
+            CurrentMode?.Enter(this, null);
         }
 
         public override void Exit()
         {
-            HideBlueprint();
-            boxMode = BoxMode.None;
-            isDragArrowVisible = false;
-            HideBlueprintFrame();
-            onBlueprintMoved -= OnBlueprintMoved;
-            onBlueprintUpdated -= OnBlueprintUpdated;
-        }
-
-        public override void HideMenu(int selected)
-        {
+            CurrentMode?.Exit(this);
         }
 
         public override void ShowMenu()
         {
+            if (IsAnyFrameOpen) return;
+
             if (menuStateControl == null)
             {
                 menuStateControl = new CustomRadialMenuStateControl(
-                    new CustomRadialMenu.CustomOption("Confirm Copy", iconCopy, false, "", () =>
-                    {
-                        CreateBlueprint(DragMin, DragSize);
-                        TabletHelper.SetTabletTextQuickActions("LMB: Place Blueprint");
-                        isDragArrowVisible = false;
-                        mode = Mode.Place;
-                        boxMode = BoxMode.None;
-                        AudioManager.playUISoundEffect(ResourceDB.resourceLinker.audioClip_recipeCopyTool_copy);
-                    }, () => boxMode == BoxMode.Selection),
-                    new CustomRadialMenu.CustomOption("Confirm Paste", iconPaste, false, "", () =>
-                    {
-                        isDragArrowVisible = false;
-                        PlaceBlueprintMultiple(CurrentBlueprintAnchor, repeatFrom, repeatTo);
-                        AudioManager.playUISoundEffect(ResourceDB.resourceLinker.audioClip_recipeCopyTool_paste);
-                    }, () => IsBlueprintLoaded && IsPlaceholdersActive),
-                    new CustomRadialMenu.CustomOption("Place", iconPlace, false, "", () =>
-                    {
-                        TabletHelper.SetTabletTextQuickActions("LMB: Place Blueprint");
-                        isDragArrowVisible = false;
-                        mode = Mode.Place;
-                        boxMode = BoxMode.None;
-                        HideBlueprint();
-                    }, () => IsBlueprintLoaded && mode != Mode.Place),
-                    new CustomRadialMenu.CustomOption("Select Area", iconSelectArea, false, "", () =>
-                    {
-                        TabletHelper.SetTabletTextQuickActions("LMB: Select Start\nAlt+LMB: Select Block with Offset");
-                        mode = Mode.DragAreaIdle;
-                        boxMode = BoxMode.None;
-                        HideBlueprint();
-                    }),
-                    new CustomRadialMenu.CustomOption("Move", iconMove, false, "", () =>
-                    {
-                        isDragArrowVisible = false;
-                        mode = Mode.MoveIdle;
-                    }, () => IsBlueprintLoaded && IsPlaceholdersActive),
-                    new CustomRadialMenu.CustomOption("Move Vertical", iconMoveVertical, false, "", () =>
-                    {
-                        isDragArrowVisible = false;
-                        mode = Mode.VerticalMoveIdle;
-                    }, () => IsBlueprintLoaded && IsPlaceholdersActive),
-                    new CustomRadialMenu.CustomOption("Resize", iconResize, false, "", () => { mode = Mode.DragFacesIdle; }, () => boxMode == BoxMode.Selection),
-                    new CustomRadialMenu.CustomOption("Resize Vertical", iconResizeVertical, false, "", () => { mode = Mode.DragFacesVerticalIdle; }, () => boxMode == BoxMode.Selection),
-                    new CustomRadialMenu.CustomOption("Repeat", iconRepeat, false, "", () =>
-                    {
-                        isDragArrowVisible = false;
-                        mode = Mode.RepeatIdle;
-                    }, () => IsBlueprintLoaded && IsPlaceholdersActive),
-                    new CustomRadialMenu.CustomOption("Show Placeholders", ResourceDB.sprite_waypointShow, false, "", () => { ShowPlaceholders(); }, () => IsPlaceholdersHidden),
-                    new CustomRadialMenu.CustomOption("Hide Placeholders", ResourceDB.sprite_waypointHide, false, "", () => { HidePlaceholders(); }, () => !IsPlaceholdersHidden),
-                    new CustomRadialMenu.CustomOption("Open Panel", iconPanel, false, "", () =>
-                    {
-                        ShowBlueprintFrame();
-                    })
+                    new CustomRadialMenuOption(
+                        "Confirm Copy", iconCopy.Sprite, "",
+                        CopySelection,
+                        () => CurrentMode != null && CurrentMode.AllowCopy(this)),
+
+                    new CustomRadialMenuOption(
+                        "Confirm Paste", iconPaste.Sprite, "",
+                        () => {
+                            isDragArrowVisible = false;
+                            PlaceBlueprintMultiple(CurrentBlueprintAnchor, repeatFrom, repeatTo);
+                            AudioManager.playUISoundEffect(ResourceDB.resourceLinker.audioClip_recipeCopyTool_paste);
+                        },
+                        () => CurrentMode != null && CurrentMode.AllowPaste(this)),
+
+                    new CustomRadialMenuOption(
+                        "Place", iconPlace.Sprite, "",
+                        () => SelectMode(modePlace),
+                        () => IsBlueprintLoaded && CurrentMode != modePlace),
+
+                    new CustomRadialMenuOption(
+                        "Select Area", iconSelectArea.Sprite, "",
+                        () => SelectMode(modeSelectArea)),
+
+                    new CustomRadialMenuOption(
+                        "Move", iconMove.Sprite, "",
+                        () => SelectMode(modeMove),
+                        () => CurrentMode != null && CurrentMode.AllowPaste(this)),
+
+                    new CustomRadialMenuOption(
+                        "Move Vertical", iconMoveVertical.Sprite, "",
+                        () => SelectMode(modeMoveVertical),
+                        () => CurrentMode != null && CurrentMode.AllowPaste(this)),
+
+                    new CustomRadialMenuOption(
+                        "Resize", iconResize.Sprite, "",
+                        () => SelectMode(modeResize),
+                        () => CurrentMode != null && CurrentMode.AllowCopy(this)),
+
+                    new CustomRadialMenuOption(
+                        "Resize Vertical", iconResizeVertical.Sprite, "",
+                        () => SelectMode(modeResizeVertical),
+                        () => CurrentMode != null && CurrentMode.AllowCopy(this)),
+
+                    new CustomRadialMenuOption(
+                        "Repeat", iconRepeat.Sprite, "",
+                        () => SelectMode(modeRepeat),
+                        () => CurrentMode != null && CurrentMode.AllowPaste(this)),
+
+                    new CustomRadialMenuOption(
+                        "Open Panel", iconPanel.Sprite, "",
+                        ShowBlueprintFrame)
                 );
             }
 
-            CustomRadialMenu.ShowMenu(menuStateControl.GetMenuOptions());
+            if (menuStateControl != null)
+            {
+                CustomRadialMenuManager.ShowMenu(menuStateControl.GetMenuOptions());
+            }
+        }
+
+        internal void SelectMode(BlueprintToolMode mode)
+        {
+            var fromMode = CurrentMode;
+            CurrentMode?.Exit(this);
+            CurrentMode = mode;
+            CurrentMode?.Enter(this, fromMode);
+        }
+
+        private void CopySelection()
+        {
+            ClearBlueprintPlaceholders();
+            CurrentBlueprint = Blueprint.Create(DragMin, DragSize);
+            TabletHelper.SetTabletTextQuickActions("LMB: Place Blueprint");
+            isDragArrowVisible = false;
+            SelectMode(modePlace);
+            boxMode = BoxMode.None;
+            AudioManager.playUISoundEffect(ResourceDB.resourceLinker.audioClip_recipeCopyTool_copy);
         }
 
         public override void UpdateBehavoir()
         {
-            if (IsBlueprintLoaded && IsPlaceholdersActive && Input.GetKeyDown(PasteBlueprintKey) && IsKeyboardInputAllowed)
+            ulong chunkIndex;
+            uint blockIndex;
+
+            if (IsBlueprintActive)
+            {
+                var quadTree = StreamingSystem.getBuildableObjectGOQuadtreeArray();
+
+                AABB3D aabb = ObjectPoolManager.aabb3ds.getObject();
+                int count = Mathf.Min(MaxBuildingValidationsPerFrame, buildingPlaceholders.Count);
+                if (buildingPlaceholderUpdateIndex >= buildingPlaceholders.Count) buildingPlaceholderUpdateIndex = 0;
+                for (int i = 0; i < count; i++)
+                {
+                    var buildableObjectData = CurrentBlueprint.GetBuildableObjectData(buildingPlaceholderUpdateIndex);
+                    var placeholder = buildingPlaceholders[buildingPlaceholderUpdateIndex];
+
+                    var worldPos = new Vector3Int(buildableObjectData.worldX + CurrentBlueprintAnchor.x, buildableObjectData.worldY + CurrentBlueprintAnchor.y, buildableObjectData.worldZ + CurrentBlueprintAnchor.z);
+                    int wx, wy, wz;
+                    if (placeholder.Template.canBeRotatedAroundXAxis)
+                        BuildingManager.getWidthFromUnlockedOrientation(placeholder.Template, buildableObjectData.orientationUnlocked, out wx, out wy, out wz);
+                    else
+                        BuildingManager.getWidthFromOrientation(placeholder.Template, (BuildingManager.BuildOrientation)buildableObjectData.orientationY, out wx, out wy, out wz);
+
+                    byte errorCodeRaw = 0;
+                    BuildingManager.buildingManager_validateConstruction_buildableEntityWrapper(new v3i(worldPos.x, worldPos.y, worldPos.z), buildableObjectData.orientationY, buildableObjectData.orientationUnlocked, buildableObjectData.templateId, ref errorCodeRaw, IOBool.iofalse);
+                    var errorCode = (BuildingManager.CheckBuildableErrorCode)errorCodeRaw;
+
+                    bool positionClear = false;
+                    bool positionFilled = false;
+
+                    switch (errorCode)
+                    {
+                        case BuildingManager.CheckBuildableErrorCode.Success:
+                        case BuildingManager.CheckBuildableErrorCode.ModularBuilding_MissingModuleAttachmentPoint:
+                        case BuildingManager.CheckBuildableErrorCode.ModularBuilding_ModuleValidationFailed:
+                        case BuildingManager.CheckBuildableErrorCode.ModularBuilding_MissingFoundation:
+                            positionClear = true;
+                            break;
+                    }
+
+                    if (errorCode == BuildingManager.CheckBuildableErrorCode.BlockedByBuildableObject_Building)
+                    {
+                        aabb.reinitialize(worldPos.x, worldPos.y, worldPos.z, wx, wy, wz);
+                        if (Blueprint.CheckIfBuildingExists(aabb, worldPos, buildableObjectData) > 0) positionFilled = true;
+                    }
+
+                    if (positionFilled)
+                    {
+                        placeholder.SetState(BlueprintPlaceholder.State.Done);
+                    }
+                    else if (positionClear)
+                    {
+                        placeholder.SetState(BlueprintPlaceholder.State.Clear);
+                    }
+                    else
+                    {
+                        placeholder.SetState(BlueprintPlaceholder.State.Blocked);
+                    }
+
+                    buildingPlaceholders[buildingPlaceholderUpdateIndex] = placeholder;
+
+                    if (++buildingPlaceholderUpdateIndex >= buildingPlaceholders.Count) buildingPlaceholderUpdateIndex = 0;
+                }
+                ObjectPoolManager.aabb3ds.returnObject(aabb); aabb = null;
+
+                count = Mathf.Min(MaxTerrainValidationsPerFrame, terrainPlaceholders.Count);
+                if (terrainPlaceholderUpdateIndex >= terrainPlaceholders.Count) terrainPlaceholderUpdateIndex = 0;
+                for (int i = 0; i < count; i++)
+                {
+                    var placeholder = terrainPlaceholders[terrainPlaceholderUpdateIndex];
+                    var worldPos = Vector3Int.FloorToInt(placeholder.Position);
+                    var localPos = worldPos - CurrentBlueprintAnchor;
+
+                    bool positionClear = true;
+                    bool positionFilled = false;
+
+                    var queryResult = quadTree.queryPointXYZ(worldPos);
+                    if (queryResult != null)
+                    {
+                        positionClear = false;
+                    }
+                    else
+                    {
+                        ChunkManager.getChunkIdxAndTerrainArrayIdxFromWorldCoords(worldPos.x, worldPos.y, worldPos.z, out chunkIndex, out blockIndex);
+
+                        var blockId = CurrentBlueprint.GetBlockId(localPos.x, localPos.y, localPos.z);
+                        var terrainData = ChunkManager.chunks_getTerrainData(chunkIndex, blockIndex);
+                        if (terrainData == blockId)
+                        {
+                            positionFilled = true;
+                        }
+                        else if (terrainData > 0)
+                        {
+                            positionClear = false;
+                        }
+                    }
+
+                    if (positionClear)
+                    {
+                        if (positionFilled)
+                        {
+                            placeholder.SetState(BlueprintPlaceholder.State.Done);
+                        }
+                        else
+                        {
+                            placeholder.SetState(BlueprintPlaceholder.State.Clear);
+                        }
+                    }
+                    else
+                    {
+                        placeholder.SetState(BlueprintPlaceholder.State.Blocked);
+                    }
+
+                    terrainPlaceholders[terrainPlaceholderUpdateIndex] = placeholder;
+
+                    if (++terrainPlaceholderUpdateIndex >= terrainPlaceholders.Count) terrainPlaceholderUpdateIndex = 0;
+                }
+
+                string text = "";
+
+                int countUntested = BlueprintPlaceholder.GetStateCount(BlueprintPlaceholder.State.Untested);
+                if (countUntested > 0) text += $"<color=#CCCCCC>Untested:</color> {countUntested}\n";
+
+                int countClear = BlueprintPlaceholder.GetStateCount(BlueprintPlaceholder.State.Clear);
+                if (countClear > 0) text += $"Ready: {BlueprintPlaceholder.GetStateCount(BlueprintPlaceholder.State.Clear)}\n";
+
+                int countBlocked = BlueprintPlaceholder.GetStateCount(BlueprintPlaceholder.State.Blocked);
+                if (countBlocked > 0) text += $"<color=\"red\">Blocked:</color> {BlueprintPlaceholder.GetStateCount(BlueprintPlaceholder.State.Blocked)}\n";
+
+                int countDone = BlueprintPlaceholder.GetStateCount(BlueprintPlaceholder.State.Done);
+                if (countDone > 0) text += $"<color=#AACCFF>Done:</color> {BlueprintPlaceholder.GetStateCount(BlueprintPlaceholder.State.Done)}\n";
+
+                if (countUntested > 0 || countBlocked > 0 || countClear > 0 || countDone > 0)
+                {
+                    CurrentBlueprintStatusText = text + $"Total: {BlueprintPlaceholder.GetStateCountTotal()}";
+                    OnBlueprintUpdated(countUntested, countBlocked, countClear, countDone);
+                }
+                else
+                {
+                    CurrentBlueprintStatusText = "";
+                    OnBlueprintUpdated(countUntested, countBlocked, countClear, countDone);
+                }
+
+                int remainingTasks = 0;
+                foreach (var group in activeConstructionTaskGroups) remainingTasks += group.Remaining;
+                if (remainingTasks > 0) CurrentBlueprintStatusText = $"ToDo: {remainingTasks}{(CurrentBlueprintStatusText.Length > 0 ? "\n" : "")}{CurrentBlueprintStatusText}";
+
+                if (!IsPlaceholdersHidden)
+                {
+                    if (placeholderMaterial == null)
+                    {
+                        placeholderMaterial = Plugin.bundleMain.LoadAsset<Material>("Assets/PlaceholderMaterial.mat");
+                        UnityEngine.Object.DontDestroyOnLoad(placeholderMaterial);
+                    }
+
+                    if (placeholderPrepassMaterial == null)
+                    {
+                        placeholderPrepassMaterial = Plugin.bundleMain.LoadAsset<Material>("Assets/PlaceholderPrepassMaterial.mat");
+                        UnityEngine.Object.DontDestroyOnLoad(placeholderPrepassMaterial);
+                    }
+
+                    if (placeholderSolidMaterial == null)
+                    {
+                        placeholderSolidMaterial = Plugin.bundleMain.LoadAsset<Material>("Assets/PlaceholderSolidMaterial.mat");
+                        UnityEngine.Object.DontDestroyOnLoad(placeholderSolidMaterial);
+                    }
+
+                    float alpha = Plugin.configPreviewAlpha.Value;
+                    if (alpha > 0.0f)
+                    {
+                        if (alpha < 1.0f)
+                        {
+                            if (placeholderMaterial != null && placeholderPrepassMaterial != null)
+                            {
+                                placeholderRenderGroup.Render(placeholderPrepassMaterial, placeholderMaterial);
+                            }
+                        }
+                        else
+                        {
+                            if (placeholderSolidMaterial != null)
+                            {
+                                placeholderRenderGroup.Render(null, placeholderSolidMaterial);
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (IsBlueprintLoaded && IsBlueprintActive && Input.GetKeyDown(Plugin.PasteBlueprintKey) && InputHelpers.IsKeyboardInputAllowed)
             {
                 PlaceBlueprintMultiple(CurrentBlueprintAnchor, repeatFrom, repeatTo);
                 AudioManager.playUISoundEffect(ResourceDB.resourceLinker.audioClip_recipeCopyTool_paste);
             }
 
-            switch (mode)
+            if (Input.GetKeyDown(Plugin.TogglePanelKey) && InputHelpers.IsKeyboardInputAllowed)
             {
-                case Mode.Place:
-                    if (Input.GetKeyDown(KeyCode.Mouse0) && IsMouseInputAllowed)
-                    {
-                        boxMode = BoxMode.None;
-                        HideBlueprint();
-                    }
-                    if (Input.GetKey(KeyCode.Mouse0))
-                    {
-                        repeatFrom = repeatTo = Vector3Int.zero;
-                        boxMode = BoxMode.Blueprint;
-                        Vector3 targetPoint;
-                        Vector3Int targetCoord, targetNormal;
-                        if (GetTargetCube(0.01f, out targetPoint, out targetCoord, out targetNormal))
-                        {
-                            ShowBlueprint(targetCoord - new Vector3Int(CurrentBlueprint.blocks.sizeX / 2, 0, CurrentBlueprint.blocks.sizeZ / 2));
-                        }
-                    }
-                    if (Input.GetKeyUp(KeyCode.Mouse0) && IsPlaceholdersActive)
-                    {
-                        mode = Mode.MoveIdle;
-                        TabletHelper.SetTabletTextQuickActions("");
-                    }
-                    break;
-
-                case Mode.MoveIdle:
-                    {
-                        boxMode = BoxMode.Blueprint;
-                        var lookRay = GetLookRay();
-                        Vector3Int normal;
-                        int faceIndex;
-                        float distance = BoxRayIntersection(RepeatBlueprintMin, RepeatBlueprintMax + Vector3Int.one, lookRay, out normal, out faceIndex);
-                        if (distance >= 0.0f)
-                        {
-                            var point = lookRay.GetPoint(distance);
-                            isDragArrowVisible = true;
-                            dragFaceRay = new Ray(point, normal);
-                            dragArrowOffset = 0.5f;
-                            switch (faceIndex)
-                            {
-                                case 0:
-                                    dragArrowMaterial = ResourceDB.material_glow_red;
-                                    TabletHelper.SetTabletTextQuickActions($"LMB: Drag X\nAlt+LMB: Drag X*{CurrentBlueprint.blocks.sizeX}");
-                                    break;
-
-                                case 1:
-                                    dragArrowMaterial = ResourceDB.material_glow_red;
-                                    TabletHelper.SetTabletTextQuickActions($"LMB: Drag X\nAlt+LMB: Drag X*{CurrentBlueprint.blocks.sizeX}");
-                                    break;
-
-                                case 2:
-                                    dragArrowMaterial = ResourceDB.material_glow_yellow;
-                                    TabletHelper.SetTabletTextQuickActions($"LMB: Drag Y\nAlt+LMB: Drag Y*{CurrentBlueprint.blocks.sizeY}");
-                                    break;
-
-                                case 3:
-                                    dragArrowMaterial = ResourceDB.material_glow_yellow;
-                                    TabletHelper.SetTabletTextQuickActions($"LMB: Drag Y\nAlt+LMB: Drag Y*{CurrentBlueprint.blocks.sizeY}");
-                                    break;
-
-                                case 4:
-                                    dragArrowMaterial = ResourceDB.material_glow_purple;
-                                    TabletHelper.SetTabletTextQuickActions($"LMB: Drag Z\nAlt+LMB: Drag Z*{CurrentBlueprint.blocks.sizeZ}");
-                                    break;
-
-                                case 5:
-                                    dragArrowMaterial = ResourceDB.material_glow_purple;
-                                    TabletHelper.SetTabletTextQuickActions($"LMB: Drag Z\nAlt+LMB: Drag Z*{CurrentBlueprint.blocks.sizeZ}");
-                                    break;
-                            }
-
-                            if (Input.GetKeyDown(KeyCode.Mouse0) && IsMouseInputAllowed)
-                            {
-                                mode = Mode.MoveXPos + faceIndex;
-                            }
-                        }
-                        else
-                        {
-                            isDragArrowVisible = false;
-                            TabletHelper.SetTabletTextQuickActions("");
-                        }
-                    }
-                    break;
-
-                case Mode.MoveXPos:
-                case Mode.MoveXNeg:
-                case Mode.MoveYPos:
-                case Mode.MoveYNeg:
-                case Mode.MoveZPos:
-                case Mode.MoveZNeg:
-                    if (!Input.GetKey(KeyCode.Mouse0))
-                    {
-                        mode = Mode.MoveIdle;
-                    }
-                    else
-                    {
-                        float offset;
-                        if (TryGetAxialDragOffset(dragFaceRay, GetLookRay(), out offset))
-                        {
-                            int direction = mode - Mode.MoveXPos;
-                            int axis = direction >> 1;
-                            int dragStep =  IsAltHeld ? CurrentBlueprintSize[axis] : 1;
-                            var roundedOffset = Mathf.RoundToInt(offset / dragStep) * dragStep;
-                            if (Mathf.Abs(roundedOffset) >= dragStep)
-                            {
-                                var offsetVector = faceNormals[direction] * roundedOffset;
-                                ShowBlueprint(CurrentBlueprintAnchor + offsetVector);
-
-                                dragFaceRay.origin += faceNormals[direction] * roundedOffset;
-                            }
-                        }
-                    }
-                    break;
-
-                case Mode.VerticalMoveIdle:
-                    {
-                        boxMode = BoxMode.Blueprint;
-                        var lookRay = GetLookRay();
-                        Vector3Int normal;
-                        int faceIndex;
-                        float distance = BoxRayIntersection(RepeatBlueprintMin, RepeatBlueprintMax + Vector3Int.one, lookRay, out normal, out faceIndex);
-                        if (distance >= 0.0f)
-                        {
-                            var point = lookRay.GetPoint(distance) + (Vector3)normal * 0.5f;
-                            isDragArrowVisible = true;
-                            dragFaceRay = new Ray(point, Vector3.up);
-                            dragArrowMaterial = ResourceDB.material_glow_yellow;
-                            dragArrowOffset = 0.0f;
-                            TabletHelper.SetTabletTextQuickActions($"LMB: Drag Y\nAlt+LMB: Drag Y*{CurrentBlueprint.blocks.sizeY}");
-
-                            if (Input.GetKeyDown(KeyCode.Mouse0) && IsMouseInputAllowed) mode = Mode.VerticalMove;
-                        }
-                        else
-                        {
-                            isDragArrowVisible = false;
-                            TabletHelper.SetTabletTextQuickActions("");
-                        }
-                    }
-                    break;
-
-                case Mode.VerticalMove:
-                    if (!Input.GetKey(KeyCode.Mouse0))
-                    {
-                        mode = Mode.VerticalMoveIdle;
-                    }
-                    else
-                    {
-                        float offset;
-                        if (TryGetAxialDragOffset(dragFaceRay, GetLookRay(), out offset))
-                        {
-                            int dragStep = IsAltHeld ? CurrentBlueprintSize.y : 1;
-                            var roundedOffset = Mathf.RoundToInt(offset / dragStep) * dragStep;
-                            if (Mathf.Abs(roundedOffset) >= dragStep)
-                            {
-                                var offsetVector = Vector3Int.up * roundedOffset;
-                                ShowBlueprint(CurrentBlueprintAnchor + offsetVector);
-
-                                dragFaceRay.origin += Vector3Int.up * roundedOffset;
-                            }
-                        }
-                    }
-                    break;
-
-                case Mode.RepeatIdle:
-                    {
-                        boxMode = BoxMode.Blueprint;
-                        var lookRay = GetLookRay();
-                        Vector3Int normal;
-                        int faceIndex;
-                        float distance = BoxRayIntersection(RepeatBlueprintMin, RepeatBlueprintMax + Vector3Int.one, lookRay, out normal, out faceIndex);
-                        if (distance >= 0.0f)
-                        {
-                            var point = lookRay.GetPoint(distance);
-                            isDragArrowVisible = true;
-                            dragFaceRay = new Ray(point, normal);
-                            dragArrowOffset = 0.5f;
-                            switch (faceIndex)
-                            {
-                                case 0:
-                                    dragArrowMaterial = ResourceDB.material_glow_red;
-                                    TabletHelper.SetTabletTextQuickActions($"LMB: Drag +X*{CurrentBlueprint.blocks.sizeX}");
-                                    break;
-
-                                case 1:
-                                    dragArrowMaterial = ResourceDB.material_glow_red;
-                                    TabletHelper.SetTabletTextQuickActions($"LMB: Drag -X*{CurrentBlueprint.blocks.sizeX}");
-                                    break;
-
-                                case 2:
-                                    dragArrowMaterial = ResourceDB.material_glow_yellow;
-                                    TabletHelper.SetTabletTextQuickActions($"LMB: Drag +Y*{CurrentBlueprint.blocks.sizeY}");
-                                    break;
-
-                                case 3:
-                                    dragArrowMaterial = ResourceDB.material_glow_yellow;
-                                    TabletHelper.SetTabletTextQuickActions($"LMB: Drag -Y*{CurrentBlueprint.blocks.sizeY}");
-                                    break;
-
-                                case 4:
-                                    dragArrowMaterial = ResourceDB.material_glow_purple;
-                                    TabletHelper.SetTabletTextQuickActions($"LMB: Drag +Z*{CurrentBlueprint.blocks.sizeZ}");
-                                    break;
-
-                                case 5:
-                                    dragArrowMaterial = ResourceDB.material_glow_purple;
-                                    TabletHelper.SetTabletTextQuickActions($"LMB: Drag -Z*{CurrentBlueprint.blocks.sizeZ}");
-                                    break;
-                            }
-
-                            if (Input.GetKeyDown(KeyCode.Mouse0) && IsMouseInputAllowed)
-                            {
-                                mode = Mode.RepeatXPos + faceIndex;
-                            }
-                        }
-                        else
-                        {
-                            isDragArrowVisible = false;
-                            TabletHelper.SetTabletTextQuickActions("");
-                        }
-                    }
-                    break;
-
-                case Mode.RepeatXPos:
-                case Mode.RepeatXNeg:
-                case Mode.RepeatYPos:
-                case Mode.RepeatYNeg:
-                case Mode.RepeatZPos:
-                case Mode.RepeatZNeg:
-                    if (!Input.GetKey(KeyCode.Mouse0))
-                    {
-                        mode = Mode.RepeatIdle;
-                    }
-                    else
-                    {
-                        float offset;
-                        if (TryGetAxialDragOffset(dragFaceRay, GetLookRay(), out offset))
-                        {
-                            int direction = mode - Mode.RepeatXPos;
-                            bool positive = (direction & 0x1) == 0;
-                            int axis = direction >> 1;
-                            int dragStep = CurrentBlueprintSize[axis];
-                            var roundedOffset = Mathf.RoundToInt(offset / dragStep);
-                            if (Mathf.Abs(roundedOffset) >= 1)
-                            {
-                                var offsetVector = faceNormals[direction] * roundedOffset;
-
-                                if (positive)
-                                {
-                                    repeatTo = Vector3Int.Max(Vector3Int.zero, repeatTo + offsetVector);
-                                }
-                                else
-                                {
-                                    repeatFrom = Vector3Int.Min(Vector3Int.zero, repeatFrom + offsetVector);
-                                }
-
-                                dragFaceRay.origin += faceNormals[direction] * (roundedOffset * dragStep);
-                            }
-                        }
-                    }
-                    break;
-
-                case Mode.DragAreaIdle:
-                    {
-                        isDragArrowVisible = false;
-                        Vector3 targetPoint;
-                        Vector3Int targetCoord, targetNormal;
-                        if (GetTargetCube(-0.01f, out targetPoint, out targetCoord, out targetNormal))
-                        {
-                            if (IsAltHeld) targetCoord += Vector3Int.RoundToInt(GameRoot.SnappedToNearestAxis(targetNormal));
-
-                            boxMode = BoxMode.Selection;
-                            selectionFrom = selectionTo = targetCoord;
-
-                            if (Input.GetKeyDown(KeyCode.Mouse0) && IsMouseInputAllowed)
-                            {
-                                dragPlane = new Plane(Vector3.up, targetPoint);
-
-                                mode = Mode.DragAreaStart;
-                                TabletHelper.SetTabletTextQuickActions("Release LMB: Confirm Start");
-                            }
-                        }
-                        else
-                        {
-                            boxMode = BoxMode.None;
-                        }
-                    }
-                    break;
-
-                case Mode.DragAreaStart:
-                    if (Input.GetKeyDown(KeyCode.Mouse0) || Input.GetKeyUp(KeyCode.Mouse0) && selectionFrom != selectionTo)
-                    {
-                        var lookRay = GetLookRay();
-                        float distance;
-                        if (dragPlane.Raycast(lookRay, out distance))
-                        {
-                            var point = lookRay.GetPoint(distance);
-                            point.y = DragMax.y + 1;
-                            isDragArrowVisible = true;
-                            dragFaceRay = new Ray(point, Vector3.up);
-                            dragArrowMaterial = ResourceDB.material_glow_yellow;
-
-                            mode = Mode.DragAreaVerticalUp;
-                            TabletHelper.SetTabletTextQuickActions("LMB: Select Height");
-                        }
-                        else
-                        {
-                            mode = Mode.DragAreaIdle;
-                            TabletHelper.SetTabletTextQuickActions("LMB: Select Start\nAlt+LMB: Select Start with Offset");
-                        }
-                    }
-                    else
-                    {
-                        if (Input.GetKeyUp(KeyCode.Mouse0))
-                        {
-                            TabletHelper.SetTabletTextQuickActions("LMB: Select Other Corner");
-                        }
-
-                        var lookRay = GetLookRay();
-                        float distance;
-                        if (dragPlane.Raycast(lookRay, out distance))
-                        {
-                            var point = lookRay.GetPoint(distance);
-                            selectionTo = new Vector3Int(Mathf.FloorToInt(point.x - dragPlane.normal.x * 0.01f), selectionFrom.y, Mathf.FloorToInt(point.z - dragPlane.normal.z * 0.01f));
-
-                            if(selectionFrom == selectionTo) TabletHelper.SetTabletTextQuickActions("Release LMB: Confirm Start");
-                            else TabletHelper.SetTabletTextQuickActions("Release LMB: Select Other Corner");
-                        }
-                    }
-                    break;
-
-                case Mode.DragAreaVerticalUp:
-                    if (Input.GetKeyDown(KeyCode.Mouse0) && IsMouseInputAllowed)
-                    {
-                        mode = Mode.DragFacesIdle;
-                        TabletHelper.SetTabletTextQuickActions("");
-                    }
-                    else
-                    {
-                        float offset;
-                        if (TryGetAxialDragOffset(dragFaceRay, GetLookRay(), out offset))
-                        {
-                            var min = DragMin;
-                            var max = DragMax;
-                            int roundedOffset = Mathf.RoundToInt(offset);
-                            var clampedOffset = Mathf.Max(min.y - max.y, roundedOffset);
-                            if(roundedOffset < clampedOffset)
-                            {
-                                mode = Mode.DragAreaVerticalDown;
-                                dragFaceRay.direction = -dragFaceRay.direction;
-                                dragFaceRay.origin += Vector3.up * (clampedOffset - 1);
-
-                                max.y += clampedOffset;
-                                selectionFrom = min;
-                                selectionTo = max;
-                            }
-                            else if (Mathf.Abs(clampedOffset) >= 1)
-                            {
-                                dragFaceRay.origin += Vector3.up * clampedOffset;
-
-                                max.y += clampedOffset;
-                                selectionFrom = min;
-                                selectionTo = max;
-                            }
-                        }
-                    }
-                    break;
-
-                case Mode.DragAreaVerticalDown:
-                    if (Input.GetKeyDown(KeyCode.Mouse0) && IsMouseInputAllowed)
-                    {
-                        mode = Mode.DragFacesIdle;
-                        TabletHelper.SetTabletTextQuickActions("");
-                    }
-                    else
-                    {
-                        float offset;
-                        if (TryGetAxialDragOffset(dragFaceRay, GetLookRay(), out offset))
-                        {
-                            var min = DragMin;
-                            var max = DragMax;
-                            int roundedOffset = Mathf.RoundToInt(offset);
-                            var clampedOffset = Mathf.Max(min.y - max.y, roundedOffset);
-                            if(roundedOffset < clampedOffset)
-                            {
-                                mode = Mode.DragAreaVerticalUp;
-                                dragFaceRay.direction = -dragFaceRay.direction;
-                                dragFaceRay.origin += Vector3.down * (clampedOffset - 1);
-
-                                min.y -= clampedOffset;
-                                selectionFrom = min;
-                                selectionTo = max;
-                            }
-                            else if (Mathf.Abs(clampedOffset) >= 1)
-                            {
-                                dragFaceRay.origin += Vector3.down * clampedOffset;
-
-                                min.y -= clampedOffset;
-                                selectionFrom = min;
-                                selectionTo = max;
-                            }
-                        }
-                    }
-                    break;
-
-                case Mode.DragFacesIdle:
-                    {
-                        var lookRay = GetLookRay();
-                        Vector3Int normal;
-                        int faceIndex;
-                        float distance = BoxRayIntersection(DragMin, DragMax + Vector3Int.one, lookRay, out normal, out faceIndex);
-                        if (distance >= 0.0f)
-                        {
-                            var point = lookRay.GetPoint(distance);
-                            isDragArrowVisible = true;
-                            if (IsAltHeld)
-                            {
-                                mode = Mode.DragFacesXPos + (faceIndex ^ 1);
-                                dragFaceRay = new Ray(point, -normal);
-                                dragArrowOffset = -0.5f;
-                            }
-                            else
-                            {
-                                mode = Mode.DragFacesXPos + faceIndex;
-                                dragFaceRay = new Ray(point, normal);
-                                dragArrowOffset = 0.5f;
-                            }
-                            switch (faceIndex)
-                            {
-                                case 0:
-                                    dragArrowMaterial = ResourceDB.material_glow_red;
-                                    TabletHelper.SetTabletTextQuickActions("LMB: Drag +X\nAlt+LMB: Drag -X");
-                                    break;
-
-                                case 1:
-                                    dragArrowMaterial = ResourceDB.material_glow_red;
-                                    TabletHelper.SetTabletTextQuickActions("LMB: Drag -X\nAlt+LMB: Drag +X");
-                                    break;
-
-                                case 2:
-                                    dragArrowMaterial = ResourceDB.material_glow_yellow;
-                                    TabletHelper.SetTabletTextQuickActions("LMB: Drag +Y\nAlt+LMB: Drag -Y");
-                                    break;
-
-                                case 3:
-                                    dragArrowMaterial = ResourceDB.material_glow_yellow;
-                                    TabletHelper.SetTabletTextQuickActions("LMB: Drag -Y\nAlt+LMB: Drag +Y");
-                                    break;
-
-                                case 4:
-                                    dragArrowMaterial = ResourceDB.material_glow_purple;
-                                    TabletHelper.SetTabletTextQuickActions("LMB: Drag +Z\nAlt+LMB: Drag -Z");
-                                    break;
-
-                                case 5:
-                                    dragArrowMaterial = ResourceDB.material_glow_purple;
-                                    TabletHelper.SetTabletTextQuickActions("LMB: Drag -Z\nAlt+LMB: Drag +Z");
-                                    break;
-                            }
-
-                            if (Input.GetKeyDown(KeyCode.Mouse0) && IsMouseInputAllowed)
-                            {
-                                if (IsAltHeld)
-                                {
-                                    mode = Mode.DragFacesXPos + (faceIndex ^ 1);
-                                    dragFaceRay.direction = -normal;
-                                    dragArrowOffset = -0.5f;
-                                }
-                                else
-                                {
-                                    mode = Mode.DragFacesXPos + faceIndex;
-                                    dragFaceRay.direction = normal;
-                                    dragArrowOffset = 0.5f;
-                                }
-                            }
-                        }
-                        else
-                        {
-                            isDragArrowVisible = false;
-                            TabletHelper.SetTabletTextQuickActions("");
-                        }
-                    }
-                    break;
-
-                case Mode.DragFacesXPos:
-                case Mode.DragFacesXNeg:
-                case Mode.DragFacesYPos:
-                case Mode.DragFacesYNeg:
-                case Mode.DragFacesZPos:
-                case Mode.DragFacesZNeg:
-                    if (!Input.GetKey(KeyCode.Mouse0))
-                    {
-                        mode = Mode.DragFacesIdle;
-                    }
-                    else
-                    {
-                        float offset;
-                        if (TryGetAxialDragOffset(dragFaceRay, GetLookRay(), out offset))
-                        {
-                            int direction = mode - Mode.DragFacesXPos;
-                            int axis = direction >> 1;
-                            bool positive = (direction & 0x1) == 0;
-                            var min = DragMin;
-                            var max = DragMax;
-                            var roundedOffset = Mathf.Max(min[axis] - max[axis], Mathf.RoundToInt(offset));
-                            if (Mathf.Abs(roundedOffset) >= 1)
-                            {
-                                if (positive) max[axis] += roundedOffset;
-                                else min[axis] -= roundedOffset;
-
-                                dragFaceRay.origin += faceNormals[direction] * roundedOffset;
-                                selectionFrom = min;
-                                selectionTo = max;
-                            }
-                        }
-                    }
-                    break;
-
-                case Mode.DragFacesVerticalIdle:
-                    {
-                        var lookRay = GetLookRay();
-                        Vector3Int normal;
-                        int faceIndex;
-                        float distance = BoxRayIntersection(DragMin, DragMax + Vector3Int.one, lookRay, out normal, out faceIndex);
-                        if (distance >= 0.0f)
-                        {
-                            var point = lookRay.GetPoint(distance) + (Vector3)normal * 0.5f;
-                            isDragArrowVisible = true;
-                            dragFaceRay = new Ray(point, IsAltHeld ? Vector3.down : Vector3.up);
-                            dragArrowMaterial = ResourceDB.material_glow_yellow;
-                            dragArrowOffset = 0.0f;
-                            TabletHelper.SetTabletTextQuickActions("LMB: Drag +Y\nAlt+LMB: Drag -Y");
-
-                            if (Input.GetKeyDown(KeyCode.Mouse0) && IsMouseInputAllowed)
-                            {
-                                if (IsAltHeld)
-                                {
-                                    mode = Mode.DragFacesVerticalNeg;
-                                    dragFaceRay = new Ray(point, Vector3.down);
-                                }
-                                else
-                                {
-                                    mode = Mode.DragFacesVerticalPos;
-                                    dragFaceRay = new Ray(point, Vector3.up);
-                                }
-                            }
-                        }
-                        else
-                        {
-                            isDragArrowVisible = false;
-                            TabletHelper.SetTabletTextQuickActions("");
-                        }
-                    }
-                    break;
-
-                case Mode.DragFacesVerticalPos:
-                case Mode.DragFacesVerticalNeg:
-                    if (!Input.GetKey(KeyCode.Mouse0))
-                    {
-                        mode = Mode.DragFacesVerticalIdle;
-                    }
-                    else
-                    {
-                        float offset;
-                        if (TryGetAxialDragOffset(dragFaceRay, GetLookRay(), out offset))
-                        {
-                            bool positive = mode == Mode.DragFacesVerticalPos;
-                            var min = DragMin;
-                            var max = DragMax;
-                            var roundedOffset = Mathf.Max(min.y - max.y, Mathf.RoundToInt(offset));
-                            if (Mathf.Abs(roundedOffset) >= 1)
-                            {
-                                if (positive) max.y += roundedOffset;
-                                else min.y -= roundedOffset;
-
-                                dragFaceRay.origin += faceNormals[positive ? 2 : 3] * roundedOffset;
-                                selectionFrom = min;
-                                selectionTo = max;
-                            }
-                        }
-                    }
-                    break;
+                if (IsBlueprintFrameOpen) HideBlueprintFrame();
+                else ShowBlueprintFrame();
             }
 
+            if (Input.GetKeyDown(Plugin.SaveBlueprintKey) && InputHelpers.IsKeyboardInputAllowed)
+            {
+                if (IsBlueprintLoaded) BeginSaveBlueprint();
+            }
+
+            if (Input.GetKeyDown(Plugin.LoadBlueprintKey) && InputHelpers.IsKeyboardInputAllowed)
+            {
+                BeginLoadBlueprint();
+            }
+
+            CurrentMode?.Update(this);
+
             TabletHelper.SetTabletTextAnalyzer(GetTabletTitle());
-            TabletHelper.SetTabletTextLastCopiedConfig(ActionManager.StatusText + CurrentBlueprintStatusText.Replace('\n', ' '));
+            TabletHelper.SetTabletTextLastCopiedConfig(CurrentBlueprintStatusText.Replace('\n', ' '));
 
             switch (boxMode)
             {
                 case BoxMode.None:
-                    GameRoot.setHighVisibilityInfoText("");
-                    if (demolishRow != null) demolishRow.SetActive(false);
+                    GameRoot.setHighVisibilityInfoText(ActionManager.StatusText);
                     break;
 
                 case BoxMode.Blueprint:
                     DrawBoxWithEdges(RepeatBlueprintMin, RepeatBlueprintMax + Vector3.one, 0.015f, 0.04f, materialDragBox.Material, materialDragBoxEdge.Material);
                     var repeatCount = RepeatCount;
-                    GameRoot.setHighVisibilityInfoText((repeatCount != Vector3Int.one) ? $"Repeat: {repeatCount.x}x{repeatCount.y}x{repeatCount.z}\n{CurrentBlueprintStatusText}" : CurrentBlueprintStatusText);
-                    if (demolishRow != null) demolishRow.SetActive(true);
+                    GameRoot.setHighVisibilityInfoText((repeatCount != Vector3Int.one) ? $"{ActionManager.StatusText} Repeat: {repeatCount.x}x{repeatCount.y}x{repeatCount.z}\n{CurrentBlueprintStatusText}" : $"{ActionManager.StatusText} {CurrentBlueprintStatusText}");
                     break;
 
                 case BoxMode.Selection:
                     DrawBoxWithEdges(DragMin, DragMax + Vector3.one, 0.015f, 0.04f, materialDragBox.Material, materialDragBoxEdge.Material);
-                    GameRoot.setHighVisibilityInfoText(DragSize == Vector3Int.one ? "" : $"{DragSize.x}x{DragSize.y}x{DragSize.z}");
-                    if (demolishRow != null) demolishRow.SetActive(mode != Mode.DragAreaIdle);
+                    GameRoot.setHighVisibilityInfoText(DragSize == Vector3Int.one ? ActionManager.StatusText : $"{ActionManager.StatusText} {DragSize.x}x{DragSize.y}x{DragSize.z}");
                     break;
+            }
+
+            if (railMinerRow != null)
+            {
+                if (boxMode == BoxMode.Blueprint)
+                {
+                    if (Time.time >= nextUpdateTimeRailMiners)
+                    {
+                        nextUpdateTimeRailMiners = Time.time + 0.5f;
+                        bool hasDepots = HasExistingMinecartDepots(CurrentBlueprintAnchor, repeatFrom, repeatTo);
+                        railMinerRow.SetActive(hasDepots);
+                    }
+                }
+                else
+                {
+                    railMinerRow.SetActive(false);
+                }
             }
 
             if (isDragArrowVisible)
             {
                 DrawArrow(dragFaceRay.origin, dragFaceRay.direction, dragArrowMaterial, dragArrowScale, dragArrowOffset);
             }
+
+            foreach (var updater in guiUpdaters) updater();
         }
 
         public override bool OnRotateY()
         {
-            if (!IsBlueprintLoaded || !IsPlaceholdersActive) return true;
+            if (!IsBlueprintLoaded || !IsBlueprintActive) return true;
 
             RotateBlueprint();
-            HideBlueprint();
+            ClearBlueprintPlaceholders();
             ShowBlueprint(CurrentBlueprintAnchor);
 
             return false;
+        }
+
+        internal void ClearBlueprintPlaceholders()
+        {
+            if (IsBlueprintActive)
+            {
+                IsBlueprintActive = false;
+
+                foreach (var placeholder in buildingPlaceholders)
+                {
+                    placeholder.SetState(BlueprintPlaceholder.State.Invalid);
+                }
+                buildingPlaceholders.Clear();
+
+                foreach (var placeholder in terrainPlaceholders)
+                {
+                    placeholder.SetState(BlueprintPlaceholder.State.Invalid);
+                }
+                terrainPlaceholders.Clear();
+
+                placeholderRenderGroup.Clear();
+            }
+        }
+
+        internal void MoveBlueprint(Vector3Int newPosition)
+        {
+            if (IsBlueprintActive) OnBlueprintMoved(CurrentBlueprintAnchor, ref newPosition);
+
+            ShowBlueprint(newPosition);
+        }
+
+        internal void PlaceBlueprintMultiple(Vector3Int targetPosition, Vector3Int repeatFrom, Vector3Int repeatTo)
+        {
+            for (int y = repeatFrom.y; y <= repeatTo.y; ++y)
+            {
+                for (int z = repeatFrom.z; z <= repeatTo.z; ++z)
+                {
+                    for (int x = repeatFrom.x; x <= repeatTo.x; ++x)
+                    {
+                        PlaceBlueprint(targetPosition + new Vector3Int(x, y, z) * CurrentBlueprintSize);
+                    }
+                }
+            }
+        }
+
+        internal void PlaceBlueprint(Vector3Int targetPosition)
+        {
+            if (CurrentBlueprint == null) throw new ArgumentNullException(nameof(CurrentBlueprint));
+
+            ulong usernameHash = GameRoot.getClientCharacter().usernameHash;
+            Plugin.log.LogMessage(string.Format("Placing blueprint at {0}", targetPosition.ToString()));
+            AABB3D aabb = ObjectPoolManager.aabb3ds.getObject();
+            var modularBaseCoords = new Dictionary<ulong, Vector3Int>();
+            var constructionTaskGroup = new ConstructionTaskGroup((ConstructionTaskGroup taskGroup) => { activeConstructionTaskGroups.Remove(taskGroup); });
+            activeConstructionTaskGroups.Add(constructionTaskGroup);
+            ObjectPoolManager.aabb3ds.returnObject(aabb); aabb = null;
+
+            CurrentBlueprint.Place(targetPosition, constructionTaskGroup);
+
+            constructionTaskGroup.SortTasks();
+            ActionManager.AddQueuedEvent(() => constructionTaskGroup.InvokeNextTask());
+        }
+
+        internal void RotateBlueprint()
+        {
+            CurrentBlueprint?.Rotate();
+        }
+
+        internal void HideBlueprint()
+        {
+            IsPlaceholdersHidden = true;
+        }
+
+        internal void ShowBlueprint()
+        {
+            ShowBlueprint(CurrentBlueprintAnchor);
+        }
+
+        internal void ShowBlueprint(Vector3Int targetPosition)
+        {
+            if (!IsBlueprintLoaded) return;
+
+            IsPlaceholdersHidden = false;
+
+            if (!IsBlueprintActive)
+            {
+                IsBlueprintActive = true;
+                placeholderRenderGroup.Clear();
+
+                CurrentBlueprint?.Show(targetPosition, placeholderRenderGroup, buildingPlaceholders, terrainPlaceholders);
+            }
+            else if (targetPosition != CurrentBlueprintAnchor)
+            {
+                var offset = targetPosition - CurrentBlueprintAnchor;
+                placeholderRenderGroup.Move(offset);
+                foreach (var placeholder in buildingPlaceholders) placeholder.Moved(offset);
+                foreach (var placeholder in terrainPlaceholders) placeholder.Moved(offset);
+            }
+
+            CurrentBlueprintAnchor = targetPosition;
         }
 
         private void OnBlueprintMoved(Vector3Int oldPosition, ref Vector3Int newPosition)
@@ -846,98 +652,56 @@ namespace Duplicationer
                 nextUpdateTimeCountTexts = Time.time + 0.5f;
 
                 int repeatCount = RepeatCount.x * RepeatCount.y * RepeatCount.z;
+                ulong inventoryId = GameRoot.getClientCharacter().inventoryId;
+                ulong inventoryPtr = inventoryId != 0 ? InventoryManager.inventoryManager_getInventoryPtr(inventoryId) : 0;
 
+                int totalItemCount = 0;
                 var materialReportBuilder = new System.Text.StringBuilder();
-                foreach (var kv in BlueprintPlaceholder.GetStateCounts())
+                foreach (var kv in CurrentBlueprint.ShoppingList)
                 {
-                    var total = kv.Value[0] + kv.Value[1] + kv.Value[2] + kv.Value[3];
-                    if (total > 0)
+                    var itemCount = kv.Value.count;
+                    if (itemCount > 0)
                     {
-                        var template = (kv.Key > 0) ? ItemTemplateManager.getItemTemplate(kv.Key) : null;
-                        var name = (template != null) ? template.name : "Total";
-                        if (template != null)
+                        totalItemCount += itemCount;
+
+                        //var template = (kv.Key > 0) ? ItemTemplateManager.getItemTemplate(kv.Key) : null;
+                        var name = kv.Value.name;
+                        var templateId = kv.Value.itemTemplateId;
+                        if (templateId != 0)
                         {
-                            ulong inventoryPtr = (GameRoot.getClientCharacter().inventoryId != 0) ? InventoryManager.inventoryManager_getInventoryPtr(GameRoot.getClientCharacter().inventoryId) : 0;
                             if (inventoryPtr != 0)
                             {
-                                var inventoryCount = InventoryManager.inventoryManagerPtr_countByItemTemplate(inventoryPtr, template.id, IOBool.iotrue);
+                                var inventoryCount = InventoryManager.inventoryManagerPtr_countByItemTemplate(inventoryPtr, templateId, IOBool.iotrue);
 
-                                materialReportBuilder.AppendLine($"<color=#CCCCCC>{name}:</color> {total * repeatCount} <color=#FFFFAA>({inventoryCount})</color>");
+                                materialReportBuilder.AppendLine($"<color=#CCCCCC>{name}:</color> {itemCount * repeatCount} <color=#FFFFAA>({inventoryCount})</color>");
                             }
                             else
                             {
-                                materialReportBuilder.AppendLine($"<color=#CCCCCC>{name}:</color> {total * repeatCount} <color=#FFFFAA>(###)</color>");
+                                materialReportBuilder.AppendLine($"<color=#CCCCCC>{name}:</color> {itemCount * repeatCount} <color=#FFFFAA>(###)</color>");
                             }
                         }
                         else
                         {
-                            materialReportBuilder.AppendLine($"<color=#CCCCCC>{name}:</color> {total * repeatCount}");
+                            materialReportBuilder.AppendLine($"<color=#CCCCCC>{name}:</color> {itemCount * repeatCount}");
                         }
                     }
                 }
-                textMaterialReport.text = materialReportBuilder.ToString();
 
-                if (railMinerRow != null)
+                if (totalItemCount > 0)
                 {
-                    railMinerRow.SetActive(HasExistingMinecartDepots(CurrentBlueprintAnchor, repeatFrom, repeatTo));
+                    materialReportBuilder.AppendLine($"<color=#CCCCCC>Total:</color> {totalItemCount * repeatCount}");
                 }
+
+                textMaterialReport.text = materialReportBuilder.ToString();
             }
         }
 
         private string GetTabletTitle()
         {
-            switch (mode)
-            {
-                case Mode.Place:
-                    return "Place Blueprint";
-
-                case Mode.MoveIdle:
-                case Mode.MoveXPos:
-                case Mode.MoveXNeg:
-                case Mode.MoveYPos:
-                case Mode.MoveYNeg:
-                case Mode.MoveZPos:
-                case Mode.MoveZNeg:
-                    return "Place Blueprint - Move";
-
-                case Mode.VerticalMoveIdle:
-                case Mode.VerticalMove:
-                    return "Place Blueprint - Move Vertical";
-
-                case Mode.RepeatIdle:
-                case Mode.RepeatXPos:
-                case Mode.RepeatXNeg:
-                case Mode.RepeatYPos:
-                case Mode.RepeatYNeg:
-                case Mode.RepeatZPos:
-                case Mode.RepeatZNeg:
-                    return "Place Blueprint - Repeat";
-
-                case Mode.DragAreaIdle:
-                case Mode.DragAreaStart:
-                case Mode.DragAreaVerticalUp:
-                case Mode.DragAreaVerticalDown:
-                    return "Create Blueprint - Select";
-
-                case Mode.DragFacesIdle:
-                case Mode.DragFacesXPos:
-                case Mode.DragFacesXNeg:
-                case Mode.DragFacesYPos:
-                case Mode.DragFacesYNeg:
-                case Mode.DragFacesZPos:
-                case Mode.DragFacesZNeg:
-                    return "Create Blueprint - Resize";
-
-                case Mode.DragFacesVerticalIdle:
-                case Mode.DragFacesVerticalPos:
-                case Mode.DragFacesVerticalNeg:
-                    return "Create Blueprint - Resize Vertical";
-
-                default: throw new ArgumentOutOfRangeException();
-            }
+            return CurrentMode?.TabletTitle(this) ?? "";
         }
 
-        internal static void HideBlueprintFrame()
+        internal void HideBlueprintFrame()
         {
             if (duplicationerFrame == null || !duplicationerFrame.activeSelf) return;
 
@@ -945,34 +709,40 @@ namespace Duplicationer
             GlobalStateManager.removeCursorRequirement();
         }
 
-        internal static void ShowBlueprintFrame()
+        internal void ShowBlueprintFrame()
         {
             if (duplicationerFrame != null && duplicationerFrame.activeSelf) return;
 
             if (duplicationerFrame == null)
             {
+                foreach (var graphic in UIRaycastTooltipManager.singleton.tooltipRectTransform.GetComponentsInChildren<Graphic>())
+                {
+                    graphic.raycastTarget = false;
+                }
+
                 ulong usernameHash = GameRoot.getClientCharacter().usernameHash;
-                UIBuilder.BeginWith(DefaultCanvasGO)
-                    .Panel("DuplicationerFrame", "corner_cut_outline", new Color(0.133f, 0.133f, 0.133f, 1.0f), new Vector4(13, 10, 8, 13))
-                        .Keep(ref duplicationerFrame)
+                UIBuilder.BeginWith(GameRoot.getDefaultCanvas())
+                    .Element_PanelAutoSize("DuplicationerFrame", "corner_cut_outline", new Color(0.133f, 0.133f, 0.133f, 1.0f), new Vector4(13, 10, 8, 13))
+                        .Keep(out duplicationerFrame)
                         .SetVerticalLayout(new RectOffset(0, 0, 0, 0), 0.0f, TextAnchor.UpperLeft, false, true, true, true, false, false, false)
                         .SetRectTransform(-420.0f, 120.0f, -60.0f, 220.0f, 1.0f, 0.0f, 1.0f, 0.0f, 1.0f, 0.0f)
-                        .Header("HeaderBar", "corner_cut_outline", new Color(0.0f, 0.6f, 1.0f, 1.0f), new Vector4(13, 3, 8, 13))
+                        .Element_Header("HeaderBar", "corner_cut_outline", new Color(0.0f, 0.6f, 1.0f, 1.0f), new Vector4(13, 3, 8, 13))
                             .SetRectTransform(0.0f, -60.0f, 599.0f, 0.0f, 0.5f, 1.0f, 0.0f, 1.0f, 0.0f, 1.0f)
                             .Layout()
+                                .MinWidth(340)
                                 .MinHeight(60)
                             .Done
                             .Element("Heading")
                                 .SetRectTransform(0.0f, 0.0f, -60.0f, 0.0f, 0.0f, 0.5f, 0.0f, 0.0f, 1.0f, 1.0f)
-                                .Element_Text("Duplicationer", "OpenSansSemibold SDF", 34.0f, Color.white)
+                                .Component_Text("Duplicationer", "OpenSansSemibold SDF", 34.0f, Color.white)
                             .Done
-                            .Button("Button Close", "corner_cut_fully_inset", Color.white, new Vector4(13.0f, 1.0f, 4.0f, 13.0f))
-                                .SetOnClick(new Action(() => { HideBlueprintFrame(); }))
+                            .Element_Button("Button Close", "corner_cut_fully_inset", Color.white, new Vector4(13.0f, 1.0f, 4.0f, 13.0f))
+                                .SetOnClick(HideBlueprintFrame)
                                 .SetRectTransform(-60.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.5f, 1.0f, 0.0f, 1.0f, 1.0f)
                                 .SetTransitionColors(new Color(1.0f, 1.0f, 1.0f, 1.0f), new Color(1.0f, 0.25f, 0.0f, 1.0f), new Color(1.0f, 0.0f, 0.0f, 1.0f), new Color(1.0f, 0.25f, 0.0f, 1.0f), new Color(0.5f, 0.5f, 0.5f, 1.0f), 1.0f, 0.1f)
                                 .Element("Image")
                                     .SetRectTransform(5.0f, 5.0f, -5.0f, -5.0f, 0.5f, 0.5f, 0.0f, 0.0f, 1.0f, 1.0f)
-                                    .Element_Image("cross", Color.white, Vector4.zero, Image.Type.Sliced)
+                                    .Component_Image("cross", Color.white, Image.Type.Sliced, Vector4.zero)
                                 .Done
                             .Done
                         .Done
@@ -984,196 +754,165 @@ namespace Duplicationer
                                 .SetVerticalLayout(new RectOffset(0, 0, 0, 0), 10.0f, TextAnchor.UpperLeft, false, true, true, true, false, false, false)
                                 .Element("Material Report")
                                     .AutoSize(ContentSizeFitter.FitMode.Unconstrained, ContentSizeFitter.FitMode.PreferredSize)
-                                    .Element_Text("", "OpenSansSemibold SDF", 14.0f, Color.white, TextAlignmentOptions.TopLeft)
-                                    .Keep(ref textMaterialReport)
+                                    .Component_Text("", "OpenSansSemibold SDF", 14.0f, Color.white, TextAlignmentOptions.TopLeft)
+                                    .Keep(out textMaterialReport)
                                 .Done
                                 .Element("Rail Miner Row")
-                                    .Keep(ref railMinerRow)
+                                    .Keep(out railMinerRow)
                                     .AutoSize(ContentSizeFitter.FitMode.Unconstrained, ContentSizeFitter.FitMode.PreferredSize)
                                     .SetHorizontalLayout(new RectOffset(0, 0, 0, 0), 5.0f, TextAnchor.UpperLeft, false, true, true, false, true, false, false)
-                                    .Do((UIBuilder builder) =>
+                                    .Do((builder) =>
                                     {
                                         foreach (var template in GetRailMinerTemplates())
                                         {
-                                            string tooltip = $"Insert and launch\n{template.name}";
-                                            builder.Button("Button Rail Miner", "corner_cut", Color.white, new Vector4(10.0f, 1.0f, 2.0f, 10.0f))
-                                                .SetOnClick(new Action(() => { InsertRailMiners(template); }))
-                                                .SetTransitionColors(new Color(0.2f, 0.2f, 0.2f, 1.0f), new Color(0.0f, 0.6f, 1.0f, 1.0f), new Color(0.222f, 0.667f, 1.0f, 1.0f), new Color(0.0f, 0.6f, 1.0f, 1.0f), new Color(0.5f, 0.5f, 0.5f, 1.0f), 1.0f, 0.1f)
-                                                .Layout()
-                                                    .MinWidth(40)
-                                                    .MinHeight(40)
-                                                    .PreferredWidth(40)
-                                                    .PreferredHeight(40)
-                                                .Done
-                                                .Element("Image")
-                                                    .SetRectTransform(5.0f, 5.0f, -5.0f, -5.0f, 0.5f, 0.5f, 0.0f, 0.0f, 1.0f, 1.0f)
-                                                    .SetRotation(90.0f)
-                                                    .Element_Image(template.icon_identifier, Color.white, Vector4.zero, Image.Type.Sliced)
-                                                    .Element_Tooltip(tooltip)
-                                                .Done
-                                                .Element_Tooltip(tooltip)
+                                            builder.Element_ImageButton("Button Rail Miner", template.icon_identifier)
+                                                .Component_Tooltip($"Insert and launch\n{template.name}")
+                                                .SetOnClick(() => { InsertRailMiners(template); })
                                             .End(false);
                                         }
                                     })
                                 .Done
                                 .Element("Demolish Row")
-                                    .Keep(ref demolishRow)
+                                    .Updater(guiUpdaters, () => boxMode != BoxMode.None && CurrentMode != modeSelectArea)
                                     .SetHorizontalLayout(new RectOffset(0, 0, 0, 0), 5.0f, TextAnchor.UpperLeft, false, true, true, false, true, false, false)
-                                    .Button("Button Demolish", "corner_cut", Color.white, new Vector4(10.0f, 1.0f, 2.0f, 10.0f))
-                                        .SetOnClick(new Action(DemolishArea))
-                                        .SetTransitionColors(new Color(0.2f, 0.2f, 0.2f, 1.0f), new Color(0.0f, 0.6f, 1.0f, 1.0f), new Color(0.222f, 0.667f, 1.0f, 1.0f), new Color(0.0f, 0.6f, 1.0f, 1.0f), new Color(0.5f, 0.5f, 0.5f, 1.0f), 1.0f, 0.1f)
-                                        .Layout()
-                                            .MinWidth(40)
-                                            .MinHeight(40)
-                                            .FlexibleWidth(1.0f)
+                                    .Element_Label("Demolish Label", "Demolish ", 100, 1)
+                                    .Done
+                                    .Element_ImageButton("Button Demolish Buildings", "assembler_iii")
+                                        .Component_Tooltip("Demolish\nBuildings")
+                                        .SetOnClick(() => DemolishArea(true, false, false, false))
+                                    .Done
+                                    .Element_ImageButton("Button Demolish Blocks", "floor")
+                                        .Component_Tooltip("Demolish\nBlocks")
+                                        .SetOnClick(() => DemolishArea(false, true, false, false))
+                                    .Done
+                                    .Element_ImageButton("Button Demolish Terrain", "dirt")
+                                        .Component_Tooltip("Demolish\nTerrain")
+                                        .SetOnClick(() => DemolishArea(false, false, true, false))
+                                    .Done
+                                    .Element_ImageButton("Button Demolish Decor", "biomass")
+                                        .Component_Tooltip("Demolish\nDecor")
+                                        .SetOnClick(() => DemolishArea(false, false, false, true))
+                                    .Done
+                                    .Element_ImageButton("Button Demolish All", "icons8-error-100")
+                                        .Component_Tooltip("Demolish\nAll")
+                                        .SetOnClick(() => DemolishArea(true, true, true, true))
+                                    .Done
+                                .Done
+                                .Element("Destroy Row")
+                                    .Updater(guiUpdaters, () => boxMode != BoxMode.None && CurrentMode != modeSelectArea)
+                                    .SetHorizontalLayout(new RectOffset(0, 0, 0, 0), 5.0f, TextAnchor.UpperLeft, false, true, true, false, true, false, false)
+                                    .Element_Label("Destroy Label", "Destroy ", 100, 1)
+                                    .Done
+                                    .Element_ImageButton("Button Destroy Buildings", "assembler_iii")
+                                        .Component_Tooltip("Destroy\nBuildings")
+                                        .SetOnClick(() => ConfirmationFrame.Show("Permanently destroy buildings in selection?", () => DestroyArea(true, false, false, false)))
+                                    .Done
+                                    .Element_ImageButton("Button Destroy Blocks", "floor")
+                                        .Component_Tooltip("Destroy\nBlocks")
+                                        .SetOnClick(() => ConfirmationFrame.Show("Permanently destroy foundation blocks in selection?", () => DestroyArea(false, true, false, false)))
+                                    .Done
+                                    .Element_ImageButton("Button Destroy Terrain", "dirt")
+                                        .Component_Tooltip("Destroy\nTerrain")
+                                        .SetOnClick(() => ConfirmationFrame.Show("Permanently destroy terrain in selection?", () => DestroyArea(false, false, true, false)))
+                                    .Done
+                                    .Element_ImageButton("Button Destroy Decor", "biomass")
+                                        .Component_Tooltip("Destroy\nDecor")
+                                        .SetOnClick(() => ConfirmationFrame.Show("Permanently destroy plants in selection?", () => DestroyArea(false, false, false, true)))
+                                    .Done
+                                    .Element_ImageButton("Button Destroy All", "icons8-error-100")
+                                        .Component_Tooltip("Destroy\nAll")
+                                        .SetOnClick(() => ConfirmationFrame.Show("Permanently destroy everything in selection?", () => DestroyArea(true, true, true, true)))
+                                    .Done
+                                .Done
+                                .Element("Position Row")
+                                    .Updater(guiUpdaters, () => boxMode == BoxMode.Blueprint)
+                                    .AutoSize(ContentSizeFitter.FitMode.Unconstrained, ContentSizeFitter.FitMode.PreferredSize)
+                                    .SetVerticalLayout(new RectOffset(0, 0, 0, 0), 10.0f, TextAnchor.UpperLeft, false, true, true, true, false, false, false)
+                                    .Element("Row Position X")
+                                        .SetHorizontalLayout(new RectOffset(0, 0, 0, 0), 5.0f, TextAnchor.UpperLeft, false, true, true, false, true, false, false)
+                                        .Element("Position Display X")
+                                            .Layout()
+                                                .MinWidth(100)
+                                                .FlexibleWidth(1)
+                                            .Done
+                                            .Component_Text("X: 0", "OpenSansSemibold SDF", 18.0f, Color.white, TextAlignmentOptions.MidlineLeft)
+                                            .Keep(out textPositionX)
                                         .Done
-                                        .Element("Text")
-                                            .SetRectTransform(0.0f, 0.0f, 0.0f, 0.0f, 0.5f, 0.5f, 0.0f, 0.0f, 1.0f, 1.0f)
-                                            .Element_Text("Demolish", "OpenSansSemibold SDF", 18.0f, Color.white, TextAlignmentOptions.Center)
+                                        .Element_ImageButton("Button Decrease", "icons8-chevron-left-filled-100_white", 28, 28, 90.0f)
+                                            .SetOnClick(() => { MoveBlueprint(CurrentBlueprintAnchor + Vector3Int.left * NudgeX); })
+                                        .Done
+                                        .Element_ImageButton("Button Increase", "icons8-chevron-left-filled-100_white", 28, 28, 270.0f)
+                                            .SetOnClick(() => { MoveBlueprint(CurrentBlueprintAnchor + Vector3Int.right * NudgeX); })
+                                        .Done
+                                    .Done
+                                    .Element("Row Position Y")
+                                        .SetHorizontalLayout(new RectOffset(0, 0, 0, 0), 5.0f, TextAnchor.UpperLeft, false, true, true, false, true, false, false)
+                                        .Element("Position Display Y")
+                                            .Layout()
+                                                .MinWidth(100)
+                                                .FlexibleWidth(1)
+                                            .Done
+                                            .Component_Text("Y: 0", "OpenSansSemibold SDF", 18.0f, Color.white, TextAlignmentOptions.MidlineLeft)
+                                            .Keep(out textPositionY)
+                                        .Done
+                                        .Element_ImageButton("Button Decrease", "icons8-chevron-left-filled-100_white", 28, 28, 90.0f)
+                                            .SetOnClick(() => { MoveBlueprint(CurrentBlueprintAnchor + Vector3Int.down * NudgeY); })
+                                        .Done
+                                        .Element_ImageButton("Button Increase", "icons8-chevron-left-filled-100_white", 28, 28, 270.0f)
+                                            .SetOnClick(() => { MoveBlueprint(CurrentBlueprintAnchor + Vector3Int.up * NudgeY); })
+                                        .Done
+                                    .Done
+                                    .Element("Row Position Z")
+                                        .SetHorizontalLayout(new RectOffset(0, 0, 0, 0), 5.0f, TextAnchor.UpperLeft, false, true, true, false, true, false, false)
+                                        .Element("Position Display Z")
+                                            .Layout()
+                                                .MinWidth(100)
+                                                .FlexibleWidth(1)
+                                            .Done
+                                            .Component_Text("Z: 0", "OpenSansSemibold SDF", 18.0f, Color.white, TextAlignmentOptions.MidlineLeft)
+                                            .Keep(out textPositionZ)
+                                        .Done
+                                        .Element_ImageButton("Button Decrease", "icons8-chevron-left-filled-100_white", 28, 28, 90.0f)
+                                            .SetOnClick(() => { MoveBlueprint(CurrentBlueprintAnchor + Vector3Int.back * NudgeZ); })
+                                        .Done
+                                        .Element_ImageButton("Button Increase", "icons8-chevron-left-filled-100_white", 28, 28, 270.0f)
+                                            .SetOnClick(() => { MoveBlueprint(CurrentBlueprintAnchor + Vector3Int.forward * NudgeZ); })
                                         .Done
                                     .Done
                                 .Done
-                                .Element("Row Position X")
+                                .Element("Preview Opacity Row")
                                     .SetHorizontalLayout(new RectOffset(0, 0, 0, 0), 5.0f, TextAnchor.UpperLeft, false, true, true, false, true, false, false)
-                                    .Element("Position Display X")
+                                    .Element_Label("Preview Opacity Label", "Preview Opacity", 150, 1)
+                                    .Done
+                                    .Element_Slider("Preview Opacity Slider", Plugin.configPreviewAlpha.Value, 0.0f, 1.0f, (value) => { Plugin.configPreviewAlpha.Value = value; SetPlaceholderOpacity(value); })
                                         .Layout()
-                                            .MinWidth(100)
+                                            .MinWidth(200)
+                                            .MinHeight(40)
                                             .FlexibleWidth(1)
-                                        .Done
-                                        .Element_Text("X: 0", "OpenSansSemibold SDF", 18.0f, Color.white, TextAlignmentOptions.MidlineLeft)
-                                        .Keep(ref textPositionX)
-                                    .Done
-                                    .Button("Button Decrease", "corner_cut", Color.white, new Vector4(10.0f, 1.0f, 2.0f, 10.0f))
-                                        .SetOnClick(new Action(() => { MoveBlueprint(CurrentBlueprintAnchor + Vector3Int.left * NudgeX); }))
-                                        .SetTransitionColors(new Color(0.2f, 0.2f, 0.2f, 1.0f), new Color(0.0f, 0.6f, 1.0f, 1.0f), new Color(0.222f, 0.667f, 1.0f, 1.0f), new Color(0.0f, 0.6f, 1.0f, 1.0f), new Color(0.5f, 0.5f, 0.5f, 1.0f), 1.0f, 0.1f)
-                                        .Layout()
-                                            .MinWidth(40)
-                                            .MinHeight(40)
-                                            .PreferredWidth(40)
-                                            .PreferredHeight(40)
-                                        .Done
-                                        .Element("Image")
-                                            .SetRectTransform(5.0f, 5.0f, -5.0f, -5.0f, 0.5f, 0.5f, 0.0f, 0.0f, 1.0f, 1.0f)
-                                            .SetRotation(90.0f)
-                                            .Element_Image("icons8-chevron-left-filled-100_white", Color.white, Vector4.zero, Image.Type.Sliced)
-                                        .Done
-                                    .Done
-                                    .Button("Button Increase", "corner_cut", Color.white, new Vector4(10.0f, 1.0f, 2.0f, 10.0f))
-                                        .SetOnClick(new Action(() => { MoveBlueprint(CurrentBlueprintAnchor + Vector3Int.right * NudgeX); }))
-                                        .SetTransitionColors(new Color(0.2f, 0.2f, 0.2f, 1.0f), new Color(0.0f, 0.6f, 1.0f, 1.0f), new Color(0.222f, 0.667f, 1.0f, 1.0f), new Color(0.0f, 0.6f, 1.0f, 1.0f), new Color(0.5f, 0.5f, 0.5f, 1.0f), 1.0f, 0.1f)
-                                        .Layout()
-                                            .MinWidth(40)
-                                            .MinHeight(40)
-                                            .PreferredWidth(40)
-                                            .PreferredHeight(40)
-                                        .Done
-                                        .Element("Image")
-                                            .SetRectTransform(5.0f, 5.0f, -5.0f, -5.0f, 0.5f, 0.5f, 0.0f, 0.0f, 1.0f, 1.0f)
-                                            .SetRotation(270.0f)
-                                            .Element_Image("icons8-chevron-left-filled-100_white", Color.white, Vector4.zero, Image.Type.Sliced)
                                         .Done
                                     .Done
                                 .Done
-                                .Element("Row Position Y")
+                                .Element("Row Files")
                                     .SetHorizontalLayout(new RectOffset(0, 0, 0, 0), 5.0f, TextAnchor.UpperLeft, false, true, true, false, true, false, false)
-                                    .Element("Position Display Y")
-                                        .Layout()
-                                            .MinWidth(100)
-                                            .FlexibleWidth(1)
-                                        .Done
-                                        .Element_Text("Y: 0", "OpenSansSemibold SDF", 18.0f, Color.white, TextAlignmentOptions.MidlineLeft)
-                                        .Keep(ref textPositionY)
+                                    .Element_ImageTextButton("Button Save", "Save", "download", Color.white, 28, 28)
+                                        .Component_Tooltip("Save current blueprint")
+                                        .SetOnClick(BeginSaveBlueprint)
+                                        .Updater<Button>(guiUpdaters, () => IsBlueprintLoaded)
                                     .Done
-                                    .Button("Button Decrease", "corner_cut", Color.white, new Vector4(10.0f, 1.0f, 2.0f, 10.0f))
-                                        .SetOnClick(new Action(() => { MoveBlueprint(CurrentBlueprintAnchor + Vector3Int.down * NudgeY); }))
-                                        .SetTransitionColors(new Color(0.2f, 0.2f, 0.2f, 1.0f), new Color(0.0f, 0.6f, 1.0f, 1.0f), new Color(0.222f, 0.667f, 1.0f, 1.0f), new Color(0.0f, 0.6f, 1.0f, 1.0f), new Color(0.5f, 0.5f, 0.5f, 1.0f), 1.0f, 0.1f)
-                                        .Layout()
-                                            .MinWidth(40)
-                                            .MinHeight(40)
-                                            .PreferredWidth(40)
-                                            .PreferredHeight(40)
-                                        .Done
-                                        .Element("Image")
-                                            .SetRectTransform(5.0f, 5.0f, -5.0f, -5.0f, 0.5f, 0.5f, 0.0f, 0.0f, 1.0f, 1.0f)
-                                            .SetRotation(90.0f)
-                                            .Element_Image("icons8-chevron-left-filled-100_white", Color.white, Vector4.zero, Image.Type.Sliced)
-                                        .Done
-                                    .Done
-                                    .Button("Button Increase", "corner_cut", Color.white, new Vector4(10.0f, 1.0f, 2.0f, 10.0f))
-                                        .SetOnClick(new Action(() => { MoveBlueprint(CurrentBlueprintAnchor + Vector3Int.up * NudgeY); }))
-                                        .SetTransitionColors(new Color(0.2f, 0.2f, 0.2f, 1.0f), new Color(0.0f, 0.6f, 1.0f, 1.0f), new Color(0.222f, 0.667f, 1.0f, 1.0f), new Color(0.0f, 0.6f, 1.0f, 1.0f), new Color(0.5f, 0.5f, 0.5f, 1.0f), 1.0f, 0.1f)
-                                        .Layout()
-                                            .MinWidth(40)
-                                            .MinHeight(40)
-                                            .PreferredWidth(40)
-                                            .PreferredHeight(40)
-                                        .Done
-                                        .Element("Image")
-                                            .SetRectTransform(5.0f, 5.0f, -5.0f, -5.0f, 0.5f, 0.5f, 0.0f, 0.0f, 1.0f, 1.0f)
-                                            .SetRotation(270.0f)
-                                            .Element_Image("icons8-chevron-left-filled-100_white", Color.white, Vector4.zero, Image.Type.Sliced)
-                                        .Done
+                                    .Element_ImageTextButton("Button Load", "Load", "upload", Color.white, 28, 28)
+                                        .Component_Tooltip("Load blueprint from library")
+                                        .SetOnClick(BeginLoadBlueprint)
                                     .Done
                                 .Done
-                                .Element("Row Position Z")
+                                .Element("Row Confirm Buttons")
                                     .SetHorizontalLayout(new RectOffset(0, 0, 0, 0), 5.0f, TextAnchor.UpperLeft, false, true, true, false, true, false, false)
-                                    .Element("Position Display Z")
-                                        .Layout()
-                                            .MinWidth(100)
-                                            .FlexibleWidth(1)
-                                        .Done
-                                        .Element_Text("Z: 0", "OpenSansSemibold SDF", 18.0f, Color.white, TextAlignmentOptions.MidlineLeft)
-                                        .Keep(ref textPositionZ)
+                                    .Element_TextButton("Button Paste", "Confirm/Paste")
+                                        .Updater<Button>(guiUpdaters, () => CurrentMode != null && CurrentMode.AllowPaste(this))
+                                        .SetOnClick(() => { PlaceBlueprintMultiple(CurrentBlueprintAnchor, repeatFrom, repeatTo); })
                                     .Done
-                                    .Button("Button Decrease", "corner_cut", Color.white, new Vector4(10.0f, 1.0f, 2.0f, 10.0f))
-                                        .SetOnClick(new Action(() => { MoveBlueprint(CurrentBlueprintAnchor + Vector3Int.back * NudgeZ); }))
-                                        .SetTransitionColors(new Color(0.2f, 0.2f, 0.2f, 1.0f), new Color(0.0f, 0.6f, 1.0f, 1.0f), new Color(0.222f, 0.667f, 1.0f, 1.0f), new Color(0.0f, 0.6f, 1.0f, 1.0f), new Color(0.5f, 0.5f, 0.5f, 1.0f), 1.0f, 0.1f)
-                                        .Layout()
-                                            .MinWidth(40)
-                                            .MinHeight(40)
-                                            .PreferredWidth(40)
-                                            .PreferredHeight(40)
-                                        .Done
-                                        .Element("Image")
-                                            .SetRectTransform(5.0f, 5.0f, -5.0f, -5.0f, 0.5f, 0.5f, 0.0f, 0.0f, 1.0f, 1.0f)
-                                            .SetRotation(90.0f)
-                                            .Element_Image("icons8-chevron-left-filled-100_white", Color.white, Vector4.zero, Image.Type.Sliced)
-                                        .Done
-                                    .Done
-                                    .Button("Button Increase", "corner_cut", Color.white, new Vector4(10.0f, 1.0f, 2.0f, 10.0f))
-                                        .SetOnClick(new Action(() => { MoveBlueprint(CurrentBlueprintAnchor + Vector3Int.forward * NudgeZ); }))
-                                        .SetTransitionColors(new Color(0.2f, 0.2f, 0.2f, 1.0f), new Color(0.0f, 0.6f, 1.0f, 1.0f), new Color(0.222f, 0.667f, 1.0f, 1.0f), new Color(0.0f, 0.6f, 1.0f, 1.0f), new Color(0.5f, 0.5f, 0.5f, 1.0f), 1.0f, 0.1f)
-                                        .Layout()
-                                            .MinWidth(40)
-                                            .MinHeight(40)
-                                            .PreferredWidth(40)
-                                            .PreferredHeight(40)
-                                        .Done
-                                        .Element("Image")
-                                            .SetRectTransform(5.0f, 5.0f, -5.0f, -5.0f, 0.5f, 0.5f, 0.0f, 0.0f, 1.0f, 1.0f)
-                                            .SetRotation(270.0f)
-                                            .Element_Image("icons8-chevron-left-filled-100_white", Color.white, Vector4.zero, Image.Type.Sliced)
-                                        .Done
-                                    .Done
-                                .Done
-                                .Element("Row Buttons")
-                                    .SetHorizontalLayout(new RectOffset(0, 0, 0, 0), 5.0f, TextAnchor.UpperLeft, false, true, true, false, true, false, false)
-                                    .Button("Button Build", "corner_cut", Color.white, new Vector4(10.0f, 1.0f, 2.0f, 10.0f))
-                                        .SetOnClick(new Action(() =>
-                                        {
-                                            PlaceBlueprintMultiple(CurrentBlueprintAnchor, repeatFrom, repeatTo);
-                                        }))
-                                        .SetTransitionColors(new Color(0.2f, 0.2f, 0.2f, 1.0f), new Color(0.0f, 0.6f, 1.0f, 1.0f), new Color(0.222f, 0.667f, 1.0f, 1.0f), new Color(0.0f, 0.6f, 1.0f, 1.0f), new Color(0.5f, 0.5f, 0.5f, 1.0f), 1.0f, 0.1f)
-                                        .Layout()
-                                            .MinWidth(40)
-                                            .MinHeight(40)
-                                            .FlexibleWidth(1)
-                                            .FlexibleHeight(1)
-                                        .Done
-                                        .Element("Text")
-                                            .SetRectTransform(5.0f, 5.0f, -5.0f, -5.0f, 0.5f, 0.5f, 0.0f, 0.0f, 1.0f, 1.0f)
-                                            .Element_Text("Confirm/Paste", "OpenSansSemibold SDF", 22.0f, Color.white, TextAlignmentOptions.Center)
-                                        .Done
+                                    .Element_TextButton("Button Copy", "Confirm/Copy")
+                                        .Updater<Button>(guiUpdaters, () => CurrentMode != null && CurrentMode.AllowCopy(this))
+                                        .SetOnClick(CopySelection)
                                     .Done
                                 .Done
                             .Done
@@ -1188,34 +927,700 @@ namespace Duplicationer
             UpdateBlueprintPositionText();
         }
 
-        private static void DemolishArea()
+        private void BeginSaveBlueprint()
         {
-            bool valid = false;
-            Vector3Int from = Vector3Int.zero;
-            Vector3Int to = Vector3Int.zero;
+            HideBlueprintFrame();
+            ShowSaveFrame();
+        }
 
-            switch (boxMode)
+        private void FinishSaveBlueprint()
+        {
+            if (CurrentBlueprint == null) throw new ArgumentNullException(nameof(CurrentBlueprint));
+
+            string name = saveFrameNameInputField.text;
+            if (string.IsNullOrWhiteSpace(name)) return;
+
+            string filenameBase = PathHelpers.MakeValidFileName(name);
+            string path = Path.Combine(Plugin.BlueprintFolder, $"{filenameBase}.{Plugin.BlueprintExtension}");
+            int nextIndex = 1;
+            while (File.Exists(path)) path = Path.Combine(Plugin.BlueprintFolder, $"{filenameBase}{nextIndex++}.{Plugin.BlueprintExtension}");
+
+            Plugin.log.LogMessage((string)$"Saving blueprint '{name}' to '{path}'");
+            CurrentBlueprint.Save(path, name, saveFrameIconItemTemplates.Take(saveFrameIconCount).ToArray());
+
+            HideSaveFrame();
+        }
+
+        internal void HideSaveFrame()
+        {
+            if (saveFrame == null || !saveFrame.activeSelf) return;
+
+            saveFrame.SetActive(false);
+            GlobalStateManager.removeCursorRequirement();
+        }
+
+        internal void ShowSaveFrame()
+        {
+            if (saveFrame != null && saveFrame.activeSelf) return;
+
+            if (saveFrame == null)
             {
-                case BoxMode.Selection:
-                    valid = true;
-                    from = DragMin;
-                    to = DragMax;
+                var renderSize = GameRoot.getDefaultCanvas().GetComponent<Canvas>().renderingDisplaySize;
+                float halfWidth = (renderSize.x - 300.0f) * 0.5f;
+                float halfHeight = (renderSize.y - 300.0f) * 0.5f;
+
+                ulong usernameHash = GameRoot.getClientCharacter().usernameHash;
+                UIBuilder.BeginWith(GameRoot.getDefaultCanvas())
+                    .Element_Panel("Save Frame", "corner_cut_outline", new Color(0.133f, 0.133f, 0.133f, 1.0f), new Vector4(13, 10, 8, 13))
+                        .Keep(out saveFrame)
+                        .SetRectTransform(-halfWidth, -halfHeight, halfWidth, halfHeight, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f)
+                        .Element_Header("HeaderBar", "corner_cut_outline", new Color(0.0f, 0.6f, 1.0f, 1.0f), new Vector4(13, 3, 8, 13))
+                            .SetRectTransform(0.0f, -60.0f, 0.0f, 0.0f, 0.5f, 1.0f, 0.0f, 1.0f, 1.0f, 1.0f)
+                            .Element("Heading")
+                                .SetRectTransform(0.0f, 0.0f, -60.0f, 0.0f, 0.0f, 0.5f, 0.0f, 0.0f, 1.0f, 1.0f)
+                                .Component_Text("Save Blueprint", "OpenSansSemibold SDF", 34.0f, Color.white)
+                            .Done
+                            .Element_Button("Button Close", "corner_cut_fully_inset", Color.white, new Vector4(13.0f, 1.0f, 4.0f, 13.0f))
+                                .SetOnClick(HideSaveFrame)
+                                .SetRectTransform(-60.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.5f, 1.0f, 0.0f, 1.0f, 1.0f)
+                                .SetTransitionColors(new Color(1.0f, 1.0f, 1.0f, 1.0f), new Color(1.0f, 0.25f, 0.0f, 1.0f), new Color(1.0f, 0.0f, 0.0f, 1.0f), new Color(1.0f, 0.25f, 0.0f, 1.0f), new Color(0.5f, 0.5f, 0.5f, 1.0f), 1.0f, 0.1f)
+                                .Element("Image")
+                                    .SetRectTransform(5.0f, 5.0f, -5.0f, -5.0f, 0.5f, 0.5f, 0.0f, 0.0f, 1.0f, 1.0f)
+                                    .Component_Image("cross", Color.white, Image.Type.Sliced, Vector4.zero)
+                                .Done
+                            .Done
+                        .Done
+                        .Element("Content")
+                            .SetRectTransform(0.0f, 0.0f, 0.0f, -60.0f, 0.5f, 0.5f, 0.0f, 0.0f, 1.0f, 1.0f)
+                            .SetHorizontalLayout(new RectOffset(0, 0, 0, 0), 0, TextAnchor.UpperLeft, false, true, true, false, true, false, false)
+                            .Element("ContentLeft")
+                                .Layout()
+                                    .FlexibleWidth(1)
+                                .Done
+                                .Element("Padding")
+                                    .SetRectTransform(10.0f, 10.0f, -10.0f, -10.0f, 0.5f, 0.5f, 0.0f, 0.0f, 1.0f, 1.0f)
+                                    .Do(builder =>
+                                    {
+                                        var gameObject = UnityEngine.Object.Instantiate(prefabGridScrollView.Prefab, builder.GameObject.transform);
+                                        var grid = gameObject.GetComponentInChildren<GridLayoutGroup>();
+                                        if (grid == null) throw new Exception("Grid not found.");
+                                        saveGridObject = grid.gameObject;
+                                        grid.cellSize = new Vector2(80.0f, 80.0f);
+                                    })
+                                .Done
+                            .Done
+                            .Element("ContentRight")
+                                .Layout()
+                                    .MinWidth(132 + 4 + 132 + 4 + 132 + 10)
+                                    .FlexibleWidth(0)
+                                .Done
+                                .SetVerticalLayout(new RectOffset(0, 10, 10, 10), 10, TextAnchor.UpperLeft, false, true, true, true, false, false, false)
+                                .Element("Icons Row")
+                                    .Layout()
+                                        .MinHeight(132 + 6 + 132)
+                                        .FlexibleHeight(0)
+                                    .Done
+                                    .Element_Button("Icon 1 Button", iconBlack.Sprite, Color.white, Vector4.zero, Image.Type.Simple)
+                                        .SetRectTransform(0, -132, 132, 0, 0, 1, 0, 1, 0, 1)
+                                        .SetOnClick(() => SaveFrameRemoveIcon(0))
+                                        .SetTransitionColors(new Color(0.2f, 0.2f, 0.2f, 1.0f), new Color(0.0f, 0.6f, 1.0f, 1.0f), new Color(0.222f, 0.667f, 1.0f, 1.0f), new Color(0.0f, 0.6f, 1.0f, 1.0f), new Color(0.5f, 0.5f, 0.5f, 1.0f), 1.0f, 0.1f)
+                                        .Element("Image")
+                                            .SetRectTransform(0, 0, 0, 0,  0.5f, 0.5f,  0, 0, 1, 1)
+                                            .Component_Image(iconEmpty.Sprite, Color.white, Image.Type.Sliced, Vector4.zero)
+                                            .Keep(out saveFrameIconImages[0])
+                                        .Done
+                                    .Done
+                                    .Element_Button("Icon 2 Button", iconBlack.Sprite, Color.white, Vector4.zero, Image.Type.Simple)
+                                        .SetRectTransform(132 + 4, -132, 132 + 4 + 132, 0, 0, 1, 0, 1, 0, 1)
+                                        .SetOnClick(() => SaveFrameRemoveIcon(1))
+                                        .SetTransitionColors(new Color(0.2f, 0.2f, 0.2f, 1.0f), new Color(0.0f, 0.6f, 1.0f, 1.0f), new Color(0.222f, 0.667f, 1.0f, 1.0f), new Color(0.0f, 0.6f, 1.0f, 1.0f), new Color(0.5f, 0.5f, 0.5f, 1.0f), 1.0f, 0.1f)
+                                        .Element("Image")
+                                            .SetRectTransform(0, 0, 0, 0,  0.5f, 0.5f,  0, 0, 1, 1)
+                                            .Component_Image(iconEmpty.Sprite, Color.white, Image.Type.Sliced, Vector4.zero)
+                                        .Keep(out saveFrameIconImages[1])
+                                        .Done
+                                    .Done
+                                    .Element_Button("Icon 3 Button", iconBlack.Sprite, Color.white, Vector4.zero, Image.Type.Simple)
+                                        .SetRectTransform(0, -(132 + 4 + 132), 132, -(132 + 4), 0, 1, 0, 1, 0, 1)
+                                        .SetOnClick(() => SaveFrameRemoveIcon(2))
+                                        .SetTransitionColors(new Color(0.2f, 0.2f, 0.2f, 1.0f), new Color(0.0f, 0.6f, 1.0f, 1.0f), new Color(0.222f, 0.667f, 1.0f, 1.0f), new Color(0.0f, 0.6f, 1.0f, 1.0f), new Color(0.5f, 0.5f, 0.5f, 1.0f), 1.0f, 0.1f)
+                                        .Element("Image")
+                                            .SetRectTransform(0, 0, 0, 0,  0.5f, 0.5f,  0, 0, 1, 1)
+                                            .Component_Image(iconEmpty.Sprite, Color.white, Image.Type.Sliced, Vector4.zero)
+                                            .Keep(out saveFrameIconImages[2])
+                                        .Done
+                                    .Done
+                                    .Element_Button("Icon 4 Button", iconBlack.Sprite, Color.white, Vector4.zero, Image.Type.Simple)
+                                        .SetRectTransform(132 + 4, -(132 + 4 + 132), 132 + 4 + 132, -(132 + 4), 0, 1, 0, 1, 0, 1)
+                                        .SetOnClick(() => SaveFrameRemoveIcon(3))
+                                        .SetTransitionColors(new Color(0.2f, 0.2f, 0.2f, 1.0f), new Color(0.0f, 0.6f, 1.0f, 1.0f), new Color(0.222f, 0.667f, 1.0f, 1.0f), new Color(0.0f, 0.6f, 1.0f, 1.0f), new Color(0.5f, 0.5f, 0.5f, 1.0f), 1.0f, 0.1f)
+                                        .Element("Image")
+                                            .SetRectTransform(0, 0, 0, 0,  0.5f, 0.5f,  0, 0, 1, 1)
+                                            .Component_Image(iconEmpty.Sprite, Color.white, Image.Type.Sliced, Vector4.zero)
+                                            .Keep(out saveFrameIconImages[3])
+                                        .Done
+                                    .Done
+                                    .Element("Preview")
+                                        .SetRectTransform(132 + 4 + 132 + 10 + 64, -(132 + 5), 132 + 4 + 132 + 10 + 64, -(132 + 5),  0, 1,  0, 1, 0, 1)
+                                        .Keep(out saveFramePreviewContainer)
+                                    .Done
+                                .Done
+                                .Element("Name Row")
+                                    .Layout()
+                                        .MinHeight(40)
+                                        .FlexibleHeight(0)
+                                    .Done
+                                    .Do(builder =>
+                                    {
+                                        var gameObject = UnityEngine.Object.Instantiate(prefabBlueprintNameInputField.Prefab, builder.GameObject.transform);
+                                        saveFrameNameInputField = gameObject.GetComponentInChildren<TMP_InputField>();
+                                        if (saveFrameNameInputField == null) throw new Exception("TextMeshPro Input field not found.");
+                                        saveFrameNameInputField.text = "";
+                                        saveFrameNameInputField.onValueChanged.AddListener(new Action<string>((string value) =>
+                                        {
+                                            if (saveFramePreviewLabel != null) saveFramePreviewLabel.text = value;
+                                        }));
+                                        EventSystem.current.SetSelectedGameObject(saveFrameNameInputField.gameObject, null);
+                                    })
+                                .Done
+                                .Element("Row Buttons")
+                                    .Layout()
+                                        .MinHeight(40)
+                                        .FlexibleHeight(0)
+                                    .Done
+                                    .SetHorizontalLayout(new RectOffset(0, 0, 0, 0), 5.0f, TextAnchor.UpperLeft, false, true, true, false, true, false, false)
+                                    .Element_TextButton("Button Confirm", "Save Blueprint")
+                                        .Updater<Button>(guiUpdaters, () => !string.IsNullOrWhiteSpace(saveFrameNameInputField?.text))
+                                        .SetOnClick(FinishSaveBlueprint)
+                                    .Done
+                                    .Element_TextButton("Button Cancel", "Cancel")
+                                        .SetOnClick(HideSaveFrame)
+                                    .Done
+                                .Done
+                                .Element("Material Report")
+                                    .AutoSize(ContentSizeFitter.FitMode.Unconstrained, ContentSizeFitter.FitMode.PreferredSize)
+                                    .Component_Text("", "OpenSansSemibold SDF", 14.0f, Color.white, TextAlignmentOptions.TopLeft)
+                                    .Keep(out saveFrameMaterialReportText)
+                                .Done
+                            .Done
+                        .Done
+                    .Done
+                .End();
+
+                FillSaveGrid();
+            }
+
+            if (CurrentBlueprint != null)
+            {
+                if (saveFrameNameInputField != null) saveFrameNameInputField.text = CurrentBlueprint.Name;
+
+                for (int i = 0; i < 4; i++) saveFrameIconItemTemplates[i] = null;
+                CurrentBlueprint.IconItemTemplates.CopyTo(saveFrameIconItemTemplates, 0);
+                saveFrameIconCount = CurrentBlueprint.IconItemTemplates.Length;
+            }
+
+            FillSavePreview();
+            FillSaveFrameIcons();
+            FillSaveMaterialReport();
+
+            saveFrame.SetActive(true);
+            GlobalStateManager.addCursorRequirement();
+        }
+
+        private void FillSaveMaterialReport()
+        {
+            int totalItemCount = 0;
+            var materialReportBuilder = new System.Text.StringBuilder();
+            foreach (var kv in CurrentBlueprint.ShoppingList)
+            {
+                var itemCount = kv.Value.count;
+                if (itemCount > 0)
+                {
+                    totalItemCount += itemCount;
+                    var name = kv.Value.name;
+                    materialReportBuilder.AppendLine($"<color=#CCCCCC>{name}:</color> {itemCount}");
+                }
+            }
+
+            if (totalItemCount > 0)
+            {
+                materialReportBuilder.AppendLine($"<color=#CCCCCC>Total:</color> {totalItemCount}");
+            }
+
+            saveFrameMaterialReportText.text = materialReportBuilder.ToString();
+        }
+
+        private void FillSavePreview()
+        {
+            saveFramePreviewIconImages[0] = saveFramePreviewIconImages[1] = saveFramePreviewIconImages[2] = saveFramePreviewIconImages[3] = null;
+
+            switch (saveFrameIconCount)
+            {
+                case 0:
+                    {
+                        DestroyAllTransformChildren(saveFramePreviewContainer.transform);
+                        var gameObject = UnityEngine.Object.Instantiate(prefabBlueprintButtonDefaultIcon.Prefab, saveFramePreviewContainer.transform);
+                        saveFramePreviewLabel = gameObject.GetComponentInChildren<TextMeshProUGUI>();
+                        if (saveFramePreviewLabel == null) throw new ArgumentNullException(nameof(saveFramePreviewLabel));
+                    }
                     break;
 
-                case BoxMode.Blueprint:
-                    valid = true;
-                    from = RepeatBlueprintMin;
-                    to = RepeatBlueprintMax;
+                case 1:
+                    {
+                        DestroyAllTransformChildren(saveFramePreviewContainer.transform);
+                        var gameObject = UnityEngine.Object.Instantiate(prefabBlueprintButton1Icon.Prefab, saveFramePreviewContainer.transform);
+                        saveFramePreviewLabel = gameObject.GetComponentInChildren<TextMeshProUGUI>();
+                        if (saveFramePreviewLabel == null) throw new ArgumentNullException(nameof(saveFramePreviewLabel));
+                        saveFramePreviewIconImages[0] = gameObject.transform.FindChild("Icon1")?.GetComponent<Image>();
+                    }
+                    break;
+
+                case 2:
+                    {
+                        DestroyAllTransformChildren(saveFramePreviewContainer.transform);
+                        var gameObject = UnityEngine.Object.Instantiate(prefabBlueprintButton2Icon.Prefab, saveFramePreviewContainer.transform);
+                        saveFramePreviewLabel = gameObject.GetComponentInChildren<TextMeshProUGUI>();
+                        if (saveFramePreviewLabel == null) throw new ArgumentNullException(nameof(saveFramePreviewLabel));
+                        saveFramePreviewIconImages[0] = gameObject.transform.FindChild("Icon1")?.GetComponent<Image>();
+                        saveFramePreviewIconImages[1] = gameObject.transform.FindChild("Icon2")?.GetComponent<Image>();
+                    }
+                    break;
+
+                case 3:
+                    {
+                        DestroyAllTransformChildren(saveFramePreviewContainer.transform);
+                        var gameObject = UnityEngine.Object.Instantiate(prefabBlueprintButton3Icon.Prefab, saveFramePreviewContainer.transform);
+                        saveFramePreviewLabel = gameObject.GetComponentInChildren<TextMeshProUGUI>();
+                        if (saveFramePreviewLabel == null) throw new ArgumentNullException(nameof(saveFramePreviewLabel));
+                        saveFramePreviewIconImages[0] = gameObject.transform.FindChild("Icon1")?.GetComponent<Image>();
+                        saveFramePreviewIconImages[1] = gameObject.transform.FindChild("Icon2")?.GetComponent<Image>();
+                        saveFramePreviewIconImages[2] = gameObject.transform.FindChild("Icon3")?.GetComponent<Image>();
+                    }
+                    break;
+
+                case 4:
+                    {
+                        DestroyAllTransformChildren(saveFramePreviewContainer.transform);
+                        var gameObject = UnityEngine.Object.Instantiate(prefabBlueprintButton4Icon.Prefab, saveFramePreviewContainer.transform);
+                        saveFramePreviewLabel = gameObject.GetComponentInChildren<TextMeshProUGUI>();
+                        if (saveFramePreviewLabel == null) throw new ArgumentNullException(nameof(saveFramePreviewLabel));
+                        saveFramePreviewIconImages[0] = gameObject.transform.FindChild("Icon1")?.GetComponent<Image>();
+                        saveFramePreviewIconImages[1] = gameObject.transform.FindChild("Icon2")?.GetComponent<Image>();
+                        saveFramePreviewIconImages[2] = gameObject.transform.FindChild("Icon3")?.GetComponent<Image>();
+                        saveFramePreviewIconImages[3] = gameObject.transform.FindChild("Icon4")?.GetComponent<Image>();
+                    }
+                    break;
+
+                default:
                     break;
             }
 
-            if (valid)
+            if (saveFramePreviewLabel != null && saveFrameNameInputField != null)
             {
-                GameRoot.addLockstepEvent(new Character.BulkDemolishBuildingEvent(GameRoot.getClientCharacter().usernameHash, from, to - from + Vector3Int.one));
+                saveFramePreviewLabel.text = saveFrameNameInputField.text;
+            }
+
+            for (int i = 0; i < saveFrameIconCount; i++)
+            {
+                if (saveFramePreviewIconImages[i] != null)
+                {
+                    saveFramePreviewIconImages[i].sprite = saveFrameIconItemTemplates[i]?.icon ?? iconEmpty.Sprite;
+                }
             }
         }
 
-        private static void InsertRailMiners(ItemTemplate railMinerItemTemplate)
+        private void FillSaveGrid()
+        {
+            if (saveGridObject == null) return;
+
+            DestroyAllTransformChildren(saveGridObject.transform);
+
+            foreach (var kv in ItemTemplateManager.getAllItemTemplates())
+            {
+                var itemTemplate = kv.Value;
+                if (!itemTemplate.includeInBuild) continue;
+                if (itemTemplate.isHiddenItem) continue;
+
+                var gameObject = UnityEngine.Object.Instantiate(prefabBlueprintButton1Icon.Prefab, saveGridObject.transform);
+
+                var label = gameObject.transform.FindChild("Label")?.GetComponent<TextMeshProUGUI>();
+                if (label != null) label.text = "";
+
+                var iconImage = gameObject.transform.FindChild("Icon1")?.GetComponent<Image>();
+                if (iconImage != null) iconImage.sprite = itemTemplate.icon;
+
+                var button = gameObject.GetComponentInChildren<Button>();
+                if (button != null)
+                {
+                    button.onClick.AddListener(new Action(() => SaveFrameAddIcon(itemTemplate)));
+                }
+            }
+        }
+
+        private void FillSaveFrameIcons()
+        {
+            for (int i = 0; i < saveFrameIconCount; i++)
+            {
+                if (saveFrameIconImages[i] != null)
+                {
+                    saveFrameIconImages[i].sprite = saveFrameIconItemTemplates[i]?.icon_256 ?? iconEmpty.Sprite;
+                }
+            }
+            for (int i = saveFrameIconCount; i < 4; i++)
+            {
+                if (saveFrameIconImages[i] != null)
+                {
+                    saveFrameIconImages[i].sprite = iconEmpty.Sprite;
+                }
+            }
+        }
+
+        private void SaveFrameAddIcon(ItemTemplate itemTemplate)
+        {
+            if (itemTemplate == null) throw new ArgumentNullException(nameof(itemTemplate));
+            if (saveFrameIconCount >= 4) return;
+
+            saveFrameIconItemTemplates[saveFrameIconCount] = itemTemplate;
+            saveFrameIconCount++;
+
+            FillSavePreview();
+            FillSaveFrameIcons();
+        }
+
+        private void SaveFrameRemoveIcon(int iconIndex)
+        {
+            if (iconIndex >= saveFrameIconCount) return;
+
+            for (int i = iconIndex; i < 3; i++) saveFrameIconItemTemplates[i] = saveFrameIconItemTemplates[i + 1];
+            saveFrameIconItemTemplates[3] = null;
+            saveFrameIconCount--;
+
+            FillSavePreview();
+            FillSaveFrameIcons();
+        }
+
+        private static void DestroyAllTransformChildren(Transform transform)
+        {
+            for (int i = transform.childCount - 1; i >= 0; i--)
+            {
+                Transform child = transform.GetChild(i);
+                child.SetParent(null, false);
+                UnityEngine.Object.Destroy(child.gameObject);
+            }
+        }
+
+        private void BeginLoadBlueprint()
+        {
+            HideBlueprintFrame();
+            ShowLibraryFrame();
+        }
+
+        internal void HideLibraryFrame()
+        {
+            if (libraryFrame == null || !libraryFrame.activeSelf) return;
+
+            libraryFrame.SetActive(false);
+            GlobalStateManager.removeCursorRequirement();
+        }
+
+        internal void ShowLibraryFrame()
+        {
+            if (libraryFrame != null && libraryFrame.activeSelf) return;
+
+            if (libraryFrame == null)
+            {
+                foreach (var graphic in UIRaycastTooltipManager.singleton.tooltipRectTransform.GetComponentsInChildren<Graphic>())
+                {
+                    graphic.raycastTarget = false;
+                }
+
+                var renderSize = GameRoot.getDefaultCanvas().GetComponent<Canvas>().renderingDisplaySize;
+                float halfWidth = (renderSize.x - 300.0f) * 0.5f;
+                float halfHeight = (renderSize.y - 300.0f) * 0.5f;
+
+                ulong usernameHash = GameRoot.getClientCharacter().usernameHash;
+                UIBuilder.BeginWith(GameRoot.getDefaultCanvas())
+                    .Element_Panel("Library Frame", "corner_cut_outline", new Color(0.133f, 0.133f, 0.133f, 1.0f), new Vector4(13, 10, 8, 13))
+                        .Keep(out libraryFrame)
+                        .SetRectTransform(-halfWidth, -halfHeight, halfWidth, halfHeight,  0.5f, 0.5f,  0.5f, 0.5f, 0.5f, 0.5f)
+                        .Element_Header("HeaderBar", "corner_cut_outline", new Color(0.0f, 0.6f, 1.0f, 1.0f), new Vector4(13, 3, 8, 13))
+                            .SetRectTransform(0.0f, -60.0f, 0.0f, 0.0f, 0.5f, 1.0f, 0.0f, 1.0f, 1.0f, 1.0f)
+                            .Element("Heading")
+                                .SetRectTransform(0.0f, 0.0f, -60.0f, 0.0f, 0.0f, 0.5f, 0.0f, 0.0f, 1.0f, 1.0f)
+                                .Component_Text("Blueprints", "OpenSansSemibold SDF", 34.0f, Color.white)
+                            .Done
+                            .Element_Button("Button Close", "corner_cut_fully_inset", Color.white, new Vector4(13.0f, 1.0f, 4.0f, 13.0f))
+                                .SetOnClick(HideLibraryFrame)
+                                .SetRectTransform(-60.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.5f, 1.0f, 0.0f, 1.0f, 1.0f)
+                                .SetTransitionColors(new Color(1.0f, 1.0f, 1.0f, 1.0f), new Color(1.0f, 0.25f, 0.0f, 1.0f), new Color(1.0f, 0.0f, 0.0f, 1.0f), new Color(1.0f, 0.25f, 0.0f, 1.0f), new Color(0.5f, 0.5f, 0.5f, 1.0f), 1.0f, 0.1f)
+                                .Element("Image")
+                                    .SetRectTransform(5.0f, 5.0f, -5.0f, -5.0f, 0.5f, 0.5f, 0.0f, 0.0f, 1.0f, 1.0f)
+                                    .Component_Image("cross", Color.white, Image.Type.Sliced, Vector4.zero)
+                                .Done
+                            .Done
+                        .Done
+                        .Element("Content")
+                            .SetRectTransform(0.0f, 0.0f, 0.0f, -60.0f,  0.5f, 0.5f,  0.0f, 0.0f, 1.0f, 1.0f)
+                            .Element("Padding")
+                                .SetRectTransform(10.0f, 10.0f, -10.0f, -10.0f,  0.5f, 0.5f,  0.0f, 0.0f, 1.0f, 1.0f)
+                                .Do(builder =>
+                                {
+                                    var gameObject = UnityEngine.Object.Instantiate(prefabGridScrollView.Prefab, builder.GameObject.transform);
+                                    var grid = gameObject.GetComponentInChildren<GridLayoutGroup>();
+                                    if (grid == null) throw new Exception("Grid not found.");
+                                    libraryGridObject = grid.gameObject;
+                                })
+                            .Done
+                        .Done
+                    .Done
+                .End();
+            }
+
+            FillLibraryGrid();
+
+            libraryFrame.SetActive(true);
+            GlobalStateManager.addCursorRequirement();
+        }
+
+        private void FillLibraryGrid()
+        {
+            if (libraryGridObject == null) return;
+
+            DestroyAllTransformChildren(libraryGridObject.transform);
+
+            var prefabs = new GameObject[5]
+            {
+                prefabBlueprintButtonDefaultIcon.Prefab, prefabBlueprintButton1Icon.Prefab, prefabBlueprintButton2Icon.Prefab, prefabBlueprintButton3Icon.Prefab, prefabBlueprintButton4Icon.Prefab
+            };
+
+            var builder = UIBuilder.BeginWith(libraryGridObject);
+            foreach (var path in Directory.GetFiles(Plugin.BlueprintFolder, $"*.{Plugin.BlueprintExtension}"))
+            {
+                if (Blueprint.TryLoadFileHeader(path, out var header, out var name))
+                {
+                    var iconItemTemplates = new List<ItemTemplate>();
+                    if (header.icon1 != 0)
+                    {
+                        var template = ItemTemplateManager.getItemTemplate(header.icon1);
+                        if (template != null && template.icon != null) iconItemTemplates.Add(template);
+                    }
+                    if (header.icon2 != 0)
+                    {
+                        var template = ItemTemplateManager.getItemTemplate(header.icon2);
+                        if (template != null && template.icon != null) iconItemTemplates.Add(template);
+                    }
+                    if (header.icon3 != 0)
+                    {
+                        var template = ItemTemplateManager.getItemTemplate(header.icon3);
+                        if (template != null && template.icon != null) iconItemTemplates.Add(template);
+                    }
+                    if (header.icon4 != 0)
+                    {
+                        var template = ItemTemplateManager.getItemTemplate(header.icon4);
+                        if (template != null && template.icon != null) iconItemTemplates.Add(template);
+                    }
+
+                    int iconCount = iconItemTemplates.Count;
+
+                    var gameObject = UnityEngine.Object.Instantiate(prefabs[iconCount], libraryGridObject.transform);
+
+                    var label = gameObject.transform.FindChild("Label")?.GetComponent<TextMeshProUGUI>();
+                    if (label != null) label.text = name;
+
+                    var iconImages = new Image[] {
+                        gameObject.transform.FindChild("Icon1")?.GetComponent<Image>(),
+                        gameObject.transform.FindChild("Icon2")?.GetComponent<Image>(),
+                        gameObject.transform.FindChild("Icon3")?.GetComponent<Image>(),
+                        gameObject.transform.FindChild("Icon4")?.GetComponent<Image>()
+                    };
+
+                    for (int iconIndex = 0; iconIndex < iconCount; iconIndex++)
+                    {
+                        iconImages[iconIndex].sprite = iconItemTemplates[iconIndex].icon;
+                    }
+
+                    var button = gameObject.GetComponentInChildren<Button>();
+                    if (button != null)
+                    {
+                        button.onClick.AddListener(new Action(() =>
+                        {
+                            ActionManager.AddQueuedEvent(() =>
+                            {
+                                HideLibraryFrame();
+                                ClearBlueprintPlaceholders();
+                                LoadBlueprintFromFile(path);
+                                SelectMode(modePlace);
+                            });
+                        }));
+                    }
+                }
+            }
+        }
+
+        private void DestroyArea(bool doBuildings, bool doBlocks, bool doTerrain, bool doDecor)
+        {
+            Vector3Int from, to;
+            if (TryGetSelectedArea(out from, out to))
+            {
+                //GameRoot.addLockstepEvent(new Character.BulkDemolishBuildingEvent(GameRoot.getClientCharacter().usernameHash, from, to - from + Vector3Int.one));
+
+                ulong characterHash = GameRoot.getClientCharacter().usernameHash;
+
+                if (doBuildings || doDecor)
+                {
+                    AABB3D aabb = ObjectPoolManager.aabb3ds.getObject();
+                    aabb.reinitialize(from.x, from.y, from.z, to.x - from.x + 1, to.y - from.y + 1, to.z - from.z + 1);
+                    StreamingSystem.getBuildableObjectGOQuadtreeArray().queryAABB3D(aabb, bogoQueryResult, false);
+                    if (bogoQueryResult.Count > 0)
+                    {
+                        foreach (var bogo in bogoQueryResult)
+                        {
+                            if (bogo.template.type == BuildableObjectTemplate.BuildableObjectType.WorldDecorMineAble || bogo.template.type == BuildableObjectTemplate.BuildableObjectType.WorldDecorGrowing)
+                            {
+                                if (doDecor)
+                                {
+                                    ActionManager.AddQueuedEvent(() => GameRoot.addLockstepEvent(new Character.DemolishBuildingEvent(characterHash, bogo.relatedEntityId, -2, 0)));
+                                }
+                            }
+                            else if (doBuildings)
+                            {
+                                ActionManager.AddQueuedEvent(() => GameRoot.addLockstepEvent(new Character.DemolishBuildingEvent(characterHash, bogo.relatedEntityId, -2, 0)));
+                            }
+                        }
+                    }
+                    ObjectPoolManager.aabb3ds.returnObject(aabb); aabb = null;
+                }
+
+                if (doBlocks || doTerrain)
+                {
+                    ulong chunkIndex;
+                    uint blockIndex;
+                    int blocksRemoved = 0;
+                    for (int wz = from.z; wz <= to.z; ++wz)
+                    {
+                        for (int wy = from.y; wy <= to.y; ++wy)
+                        {
+                            for (int wx = from.x; wx <= to.x; ++wx)
+                            {
+                                ChunkManager.getChunkIdxAndTerrainArrayIdxFromWorldCoords(wx, wy, wz, out chunkIndex, out blockIndex);
+                                var terrainData = ChunkManager.chunks_getTerrainData(chunkIndex, blockIndex);
+
+                                if (terrainData >= GameRoot.BUILDING_PART_ARRAY_IDX_START && doBlocks)
+                                {
+                                    ulong entityId = 0;
+                                    ChunkManager.chunks_getBuildingPartBlock(chunkIndex, blockIndex, ref entityId);
+                                    ActionManager.AddQueuedEvent(() => GameRoot.addLockstepEvent(new Character.DemolishBuildingEvent(characterHash, entityId, -2, 0)));
+                                    ++blocksRemoved;
+                                }
+                                else if (terrainData > 0 && terrainData < GameRoot.BUILDING_PART_ARRAY_IDX_START && doTerrain)
+                                {
+                                    var worldPos = new Vector3Int(wx, wy, wz);
+                                    ActionManager.AddQueuedEvent(() => GameRoot.addLockstepEvent(new Character.RemoveTerrainEvent(characterHash, worldPos, ulong.MaxValue)));
+                                    ++blocksRemoved;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        private void DemolishArea(bool doBuildings, bool doBlocks, bool doTerrain, bool doDecor)
+        {
+            Vector3Int from, to;
+            if (TryGetSelectedArea(out from, out to))
+            {
+                //GameRoot.addLockstepEvent(new Character.BulkDemolishBuildingEvent(GameRoot.getClientCharacter().usernameHash, from, to - from + Vector3Int.one));
+
+                ulong characterHash = GameRoot.getClientCharacter().usernameHash;
+
+                if (doBuildings || doDecor)
+                {
+                    AABB3D aabb = ObjectPoolManager.aabb3ds.getObject();
+                    aabb.reinitialize(from.x, from.y, from.z, to.x - from.x + 1, to.y - from.y + 1, to.z - from.z + 1);
+                    StreamingSystem.getBuildableObjectGOQuadtreeArray().queryAABB3D(aabb, bogoQueryResult, false);
+                    if (bogoQueryResult.Count > 0)
+                    {
+                        foreach (var bogo in bogoQueryResult)
+                        {
+                            if (bogo.template.type == BuildableObjectTemplate.BuildableObjectType.WorldDecorMineAble || bogo.template.type == BuildableObjectTemplate.BuildableObjectType.WorldDecorGrowing)
+                            {
+                                if (doDecor)
+                                {
+                                    ActionManager.AddQueuedEvent(() =>
+                                    {
+                                        GameRoot.addLockstepEvent(new Character.RemoveWorldDecorEvent(characterHash, bogo.relatedEntityId, 0));
+                                    });
+                                }
+                            }
+                            else if (doBuildings)
+                            {
+                                ActionManager.AddQueuedEvent(() =>
+                                {
+                                    GameRoot.addLockstepEvent(new Character.DemolishBuildingEvent(characterHash, bogo.relatedEntityId, bogo.placeholderId, 0));
+                                });
+                            }
+                        }
+                    }
+                    ObjectPoolManager.aabb3ds.returnObject(aabb); aabb = null;
+                }
+
+                if (doBlocks || doTerrain)
+                {
+                    ulong chunkIndex;
+                    uint blockIndex;
+                    int blocksRemoved = 0;
+                    for (int wz = from.z; wz <= to.z; ++wz)
+                    {
+                        for (int wy = from.y; wy <= to.y; ++wy)
+                        {
+                            for (int wx = from.x; wx <= to.x; ++wx)
+                            {
+                                ChunkManager.getChunkIdxAndTerrainArrayIdxFromWorldCoords(wx, wy, wz, out chunkIndex, out blockIndex);
+                                var terrainData = ChunkManager.chunks_getTerrainData(chunkIndex, blockIndex);
+
+                                if (terrainData >= GameRoot.BUILDING_PART_ARRAY_IDX_START && doBlocks)
+                                {
+                                    var worldPos = new Vector3Int(wx, wy, wz);
+                                    ulong entityId = 0;
+                                    ChunkManager.chunks_getBuildingPartBlock(chunkIndex, blockIndex, ref entityId);
+                                    ActionManager.AddQueuedEvent(() => GameRoot.addLockstepEvent(new Character.DemolishBuildingEvent(characterHash, entityId, 0, 0)));
+                                    ++blocksRemoved;
+                                }
+                                else if (terrainData > 0 && terrainData < GameRoot.BUILDING_PART_ARRAY_IDX_START && doTerrain)
+                                {
+                                    var worldPos = new Vector3Int(wx, wy, wz);
+                                    ActionManager.AddQueuedEvent(() => GameRoot.addLockstepEvent(new Character.RemoveTerrainEvent(characterHash, worldPos, 0)));
+                                    ++blocksRemoved;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        private bool TryGetSelectedArea(out Vector3Int from, out Vector3Int to)
+        {
+            switch (boxMode)
+            {
+                case BoxMode.Selection:
+                    from = DragMin;
+                    to = DragMax;
+                    return true;
+
+                case BoxMode.Blueprint:
+                    from = RepeatBlueprintMin;
+                    to = RepeatBlueprintMax;
+                    return true;
+            }
+
+            from = Vector3Int.zero;
+            to = Vector3Int.zero;
+            return false;
+        }
+
+        private void InsertRailMiners(ItemTemplate railMinerItemTemplate)
         {
             AudioManager.playUISoundEffect(ResourceDB.resourceLinker.audioClip_recipeCopyTool_paste);
 
@@ -1278,28 +1683,30 @@ namespace Duplicationer
             return false;
         }
 
-        internal static void UpdateBlueprintPositionText()
+        internal void UpdateBlueprintPositionText()
         {
             if (textPositionX != null) textPositionX.text = string.Format("Position X: {0}", CurrentBlueprintAnchor.x);
             if (textPositionY != null) textPositionY.text = string.Format("Position Y: {0}", CurrentBlueprintAnchor.y);
             if (textPositionZ != null) textPositionZ.text = string.Format("Position Z: {0}", CurrentBlueprintAnchor.z);
         }
 
-        internal static void LoadIconSprites()
+        internal void LoadIconSprites()
         {
-            iconCopy = ResourceExt.LoadSprite("copy.png");
-            iconMoveVertical = ResourceExt.LoadSprite("move-vertical.png");
-            iconMove = ResourceExt.LoadSprite("move.png");
-            iconPanel = ResourceExt.LoadSprite("panel.png");
-            iconPaste = ResourceExt.LoadSprite("paste.png");
-            iconPlace = ResourceExt.LoadSprite("place.png");
-            iconRepeat = ResourceExt.LoadSprite("repeat.png");
-            iconResizeVertical = ResourceExt.LoadSprite("resize-vertical.png");
-            iconResize = ResourceExt.LoadSprite("resize.png");
-            iconSelectArea = ResourceExt.LoadSprite("select-area.png");
+            iconBlack = new LazyIconSprite(Plugin.bundleMain, "black");
+            iconEmpty = new LazyIconSprite(Plugin.bundleMain, "empty");
+            iconCopy = new LazyIconSprite(Plugin.bundleMain, "copy");
+            iconMoveVertical = new LazyIconSprite(Plugin.bundleMain, "move-vertical");
+            iconMove = new LazyIconSprite(Plugin.bundleMain, "move");
+            iconPanel = new LazyIconSprite(Plugin.bundleMain, "panel");
+            iconPaste = new LazyIconSprite(Plugin.bundleMain, "paste");
+            iconPlace = new LazyIconSprite(Plugin.bundleMain, "place");
+            iconRepeat = new LazyIconSprite(Plugin.bundleMain, "repeat");
+            iconResizeVertical = new LazyIconSprite(Plugin.bundleMain, "resize-vertical");
+            iconResize = new LazyIconSprite(Plugin.bundleMain, "resize");
+            iconSelectArea = new LazyIconSprite(Plugin.bundleMain, "select-area");
         }
 
-        private static List<ItemTemplate> GetRailMinerTemplates()
+        private List<ItemTemplate> GetRailMinerTemplates()
         {
             if (railMinerTemplates == null)
             {
@@ -1317,42 +1724,106 @@ namespace Duplicationer
             return railMinerTemplates;
         }
 
-        private enum Mode
+        private void OnGameInitializationDone()
         {
-            Place,
-            MoveIdle,
-            MoveXPos,
-            MoveXNeg,
-            MoveYPos,
-            MoveYNeg,
-            MoveZPos,
-            MoveZNeg,
-            VerticalMoveIdle,
-            VerticalMove,
-            RepeatIdle,
-            RepeatXPos,
-            RepeatXNeg,
-            RepeatYPos,
-            RepeatYNeg,
-            RepeatZPos,
-            RepeatZNeg,
-            DragAreaIdle,
-            DragAreaStart,
-            DragAreaVerticalUp,
-            DragAreaVerticalDown,
-            DragFacesIdle,
-            DragFacesXPos,
-            DragFacesXNeg,
-            DragFacesYPos,
-            DragFacesYNeg,
-            DragFacesZPos,
-            DragFacesZNeg,
-            DragFacesVerticalIdle,
-            DragFacesVerticalPos,
-            DragFacesVerticalNeg
+            CurrentBlueprintStatusText = "";
+
+            IsBlueprintActive = false;
+            CurrentBlueprintAnchor = Vector3Int.zero;
+            buildingPlaceholders.Clear();
+            terrainPlaceholders.Clear();
+            buildingPlaceholderUpdateIndex = 0;
+            terrainPlaceholderUpdateIndex = 0;
+
+            activeConstructionTaskGroups.Clear();
+
+            bogoQueryResult.Clear();
         }
 
-        private enum BoxMode
+        internal List<MinecartDepotGO> GetExistingMinecartDepots(Vector3Int targetPosition, Vector3Int repeatFrom, Vector3Int repeatTo)
+        {
+            existingMinecartDepots.Clear();
+            for (int y = repeatFrom.y; y <= repeatTo.y; ++y)
+            {
+                for (int z = repeatFrom.z; z <= repeatTo.z; ++z)
+                {
+                    for (int x = repeatFrom.x; x <= repeatTo.x; ++x)
+                    {
+                        CurrentBlueprint.GetExistingMinecartDepots(targetPosition + new Vector3Int(x, y, z) * CurrentBlueprintSize, existingMinecartDepots);
+                    }
+                }
+            }
+
+            return existingMinecartDepots;
+        }
+
+        internal bool HasExistingMinecartDepots(Vector3Int targetPosition, Vector3Int repeatFrom, Vector3Int repeatTo)
+        {
+            for (int y = repeatFrom.y; y <= repeatTo.y; ++y)
+            {
+                for (int z = repeatFrom.z; z <= repeatTo.z; ++z)
+                {
+                    for (int x = repeatFrom.x; x <= repeatTo.x; ++x)
+                    {
+                        if (CurrentBlueprint.HasExistingMinecartDepots(targetPosition + new Vector3Int(x, y, z) * CurrentBlueprintSize)) return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        public void SetPlaceholderOpacity(float alpha)
+        {
+            placeholderRenderGroup.SetAlpha(alpha);
+
+            for (int i = 0; i < BlueprintPlaceholder.stateColours.Length; i++)
+            {
+                BlueprintPlaceholder.stateColours[i].a = alpha;
+            }
+        }
+
+        internal void LoadBlueprintFromFile(string path)
+        {
+            CurrentBlueprint = Blueprint.LoadFromFile(path);
+        }
+
+        //public enum Mode
+        //{
+        //    Place,
+        //    MoveIdle,
+        //    MoveXPos,
+        //    MoveXNeg,
+        //    MoveYPos,
+        //    MoveYNeg,
+        //    MoveZPos,
+        //    MoveZNeg,
+        //    VerticalMoveIdle,
+        //    VerticalMove,
+        //    RepeatIdle,
+        //    RepeatXPos,
+        //    RepeatXNeg,
+        //    RepeatYPos,
+        //    RepeatYNeg,
+        //    RepeatZPos,
+        //    RepeatZNeg,
+        //    DragAreaIdle,
+        //    DragAreaStart,
+        //    DragAreaVerticalUp,
+        //    DragAreaVerticalDown,
+        //    DragFacesIdle,
+        //    DragFacesXPos,
+        //    DragFacesXNeg,
+        //    DragFacesYPos,
+        //    DragFacesYNeg,
+        //    DragFacesZPos,
+        //    DragFacesZNeg,
+        //    DragFacesVerticalIdle,
+        //    DragFacesVerticalPos,
+        //    DragFacesVerticalNeg
+        //}
+
+        internal enum BoxMode
         {
             None,
             Selection,
