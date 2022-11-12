@@ -198,7 +198,8 @@ namespace Duplicationer
 
                     new CustomRadialMenuOption(
                         "Confirm Paste", iconPaste.Sprite, "",
-                        () => {
+                        () =>
+                        {
                             isDragArrowVisible = false;
                             PlaceBlueprintMultiple(CurrentBlueprintAnchor, repeatFrom, repeatTo);
                             AudioManager.playUISoundEffect(ResourceDB.resourceLinker.audioClip_recipeCopyTool_paste);
@@ -965,15 +966,11 @@ namespace Duplicationer
 
             if (saveFrame == null)
             {
-                var renderSize = GameRoot.getDefaultCanvas().GetComponent<Canvas>().renderingDisplaySize;
-                float halfWidth = (renderSize.x - 300.0f) * 0.5f;
-                float halfHeight = (renderSize.y - 300.0f) * 0.5f;
-
                 ulong usernameHash = GameRoot.getClientCharacter().usernameHash;
                 UIBuilder.BeginWith(GameRoot.getDefaultCanvas())
                     .Element_Panel("Save Frame", "corner_cut_outline", new Color(0.133f, 0.133f, 0.133f, 1.0f), new Vector4(13, 10, 8, 13))
                         .Keep(out saveFrame)
-                        .SetRectTransform(-halfWidth, -halfHeight, halfWidth, halfHeight, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f)
+                        .SetRectTransform(100, 100, -100, -100, 0.5f, 0.5f, 0, 0, 1, 1)
                         .Element_Header("HeaderBar", "corner_cut_outline", new Color(0.0f, 0.6f, 1.0f, 1.0f), new Vector4(13, 3, 8, 13))
                             .SetRectTransform(0.0f, -60.0f, 0.0f, 0.0f, 0.5f, 1.0f, 0.0f, 1.0f, 1.0f, 1.0f)
                             .Element("Heading")
@@ -1025,7 +1022,7 @@ namespace Duplicationer
                                         .SetOnClick(() => SaveFrameRemoveIcon(0))
                                         .SetTransitionColors(new Color(0.2f, 0.2f, 0.2f, 1.0f), new Color(0.0f, 0.6f, 1.0f, 1.0f), new Color(0.222f, 0.667f, 1.0f, 1.0f), new Color(0.0f, 0.6f, 1.0f, 1.0f), new Color(0.5f, 0.5f, 0.5f, 1.0f), 1.0f, 0.1f)
                                         .Element("Image")
-                                            .SetRectTransform(0, 0, 0, 0,  0.5f, 0.5f,  0, 0, 1, 1)
+                                            .SetRectTransform(0, 0, 0, 0, 0.5f, 0.5f, 0, 0, 1, 1)
                                             .Component_Image(iconEmpty.Sprite, Color.white, Image.Type.Sliced, Vector4.zero)
                                             .Keep(out saveFrameIconImages[0])
                                         .Done
@@ -1035,7 +1032,7 @@ namespace Duplicationer
                                         .SetOnClick(() => SaveFrameRemoveIcon(1))
                                         .SetTransitionColors(new Color(0.2f, 0.2f, 0.2f, 1.0f), new Color(0.0f, 0.6f, 1.0f, 1.0f), new Color(0.222f, 0.667f, 1.0f, 1.0f), new Color(0.0f, 0.6f, 1.0f, 1.0f), new Color(0.5f, 0.5f, 0.5f, 1.0f), 1.0f, 0.1f)
                                         .Element("Image")
-                                            .SetRectTransform(0, 0, 0, 0,  0.5f, 0.5f,  0, 0, 1, 1)
+                                            .SetRectTransform(0, 0, 0, 0, 0.5f, 0.5f, 0, 0, 1, 1)
                                             .Component_Image(iconEmpty.Sprite, Color.white, Image.Type.Sliced, Vector4.zero)
                                         .Keep(out saveFrameIconImages[1])
                                         .Done
@@ -1045,7 +1042,7 @@ namespace Duplicationer
                                         .SetOnClick(() => SaveFrameRemoveIcon(2))
                                         .SetTransitionColors(new Color(0.2f, 0.2f, 0.2f, 1.0f), new Color(0.0f, 0.6f, 1.0f, 1.0f), new Color(0.222f, 0.667f, 1.0f, 1.0f), new Color(0.0f, 0.6f, 1.0f, 1.0f), new Color(0.5f, 0.5f, 0.5f, 1.0f), 1.0f, 0.1f)
                                         .Element("Image")
-                                            .SetRectTransform(0, 0, 0, 0,  0.5f, 0.5f,  0, 0, 1, 1)
+                                            .SetRectTransform(0, 0, 0, 0, 0.5f, 0.5f, 0, 0, 1, 1)
                                             .Component_Image(iconEmpty.Sprite, Color.white, Image.Type.Sliced, Vector4.zero)
                                             .Keep(out saveFrameIconImages[2])
                                         .Done
@@ -1055,13 +1052,13 @@ namespace Duplicationer
                                         .SetOnClick(() => SaveFrameRemoveIcon(3))
                                         .SetTransitionColors(new Color(0.2f, 0.2f, 0.2f, 1.0f), new Color(0.0f, 0.6f, 1.0f, 1.0f), new Color(0.222f, 0.667f, 1.0f, 1.0f), new Color(0.0f, 0.6f, 1.0f, 1.0f), new Color(0.5f, 0.5f, 0.5f, 1.0f), 1.0f, 0.1f)
                                         .Element("Image")
-                                            .SetRectTransform(0, 0, 0, 0,  0.5f, 0.5f,  0, 0, 1, 1)
+                                            .SetRectTransform(0, 0, 0, 0, 0.5f, 0.5f, 0, 0, 1, 1)
                                             .Component_Image(iconEmpty.Sprite, Color.white, Image.Type.Sliced, Vector4.zero)
                                             .Keep(out saveFrameIconImages[3])
                                         .Done
                                     .Done
                                     .Element("Preview")
-                                        .SetRectTransform(132 + 4 + 132 + 10 + 64, -(132 + 5), 132 + 4 + 132 + 10 + 64, -(132 + 5),  0, 1,  0, 1, 0, 1)
+                                        .SetRectTransform(132 + 4 + 132 + 10 + 64, -(132 + 5), 132 + 4 + 132 + 10 + 64, -(132 + 5), 0, 1, 0, 1, 0, 1)
                                         .Keep(out saveFramePreviewContainer)
                                     .Done
                                 .Done
@@ -1334,15 +1331,11 @@ namespace Duplicationer
                     graphic.raycastTarget = false;
                 }
 
-                var renderSize = GameRoot.getDefaultCanvas().GetComponent<Canvas>().renderingDisplaySize;
-                float halfWidth = (renderSize.x - 300.0f) * 0.5f;
-                float halfHeight = (renderSize.y - 300.0f) * 0.5f;
-
                 ulong usernameHash = GameRoot.getClientCharacter().usernameHash;
                 UIBuilder.BeginWith(GameRoot.getDefaultCanvas())
                     .Element_Panel("Library Frame", "corner_cut_outline", new Color(0.133f, 0.133f, 0.133f, 1.0f), new Vector4(13, 10, 8, 13))
                         .Keep(out libraryFrame)
-                        .SetRectTransform(-halfWidth, -halfHeight, halfWidth, halfHeight,  0.5f, 0.5f,  0.5f, 0.5f, 0.5f, 0.5f)
+                        .SetRectTransform(100, 100, -100, -100, 0.5f, 0.5f, 0, 0, 1, 1)
                         .Element_Header("HeaderBar", "corner_cut_outline", new Color(0.0f, 0.6f, 1.0f, 1.0f), new Vector4(13, 3, 8, 13))
                             .SetRectTransform(0.0f, -60.0f, 0.0f, 0.0f, 0.5f, 1.0f, 0.0f, 1.0f, 1.0f, 1.0f)
                             .Element("Heading")
@@ -1360,9 +1353,9 @@ namespace Duplicationer
                             .Done
                         .Done
                         .Element("Content")
-                            .SetRectTransform(0.0f, 0.0f, 0.0f, -60.0f,  0.5f, 0.5f,  0.0f, 0.0f, 1.0f, 1.0f)
+                            .SetRectTransform(0.0f, 0.0f, 0.0f, -60.0f, 0.5f, 0.5f, 0.0f, 0.0f, 1.0f, 1.0f)
                             .Element("Padding")
-                                .SetRectTransform(10.0f, 10.0f, -10.0f, -10.0f,  0.5f, 0.5f,  0.0f, 0.0f, 1.0f, 1.0f)
+                                .SetRectTransform(10.0f, 10.0f, -10.0f, -10.0f, 0.5f, 0.5f, 0.0f, 0.0f, 1.0f, 1.0f)
                                 .Do(builder =>
                                 {
                                     var gameObject = UnityEngine.Object.Instantiate(prefabGridScrollView.Prefab, builder.GameObject.transform);
