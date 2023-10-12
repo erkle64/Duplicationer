@@ -73,10 +73,10 @@ namespace Duplicationer
                             var roundedOffset = Mathf.RoundToInt(offset / dragStep) * dragStep;
                             if (Mathf.Abs(roundedOffset) >= dragStep)
                             {
-                                var offsetVector = Vector3Int.up * roundedOffset;
+                                var offsetVector = new Vector3Int(0, 1, 0) * roundedOffset;
                                 tool.MoveBlueprint(tool.CurrentBlueprintAnchor + offsetVector);
 
-                                tool.dragFaceRay.origin += Vector3Int.up * roundedOffset;
+                                tool.dragFaceRay.origin += new Vector3Int(0, 1, 0) * roundedOffset;
                             }
                         }
                     }

@@ -19,8 +19,7 @@ namespace Duplicationer
             get
             {
                 if (prefab != null) return prefab;
-                if (Plugin.bundleMain == null) throw new ArgumentNullException(nameof(Plugin.bundleMain));
-                prefab = Plugin.bundleMain.LoadAsset<GameObject>(assetPath);
+                prefab = DuplicationerPlugin.GetAsset<GameObject>(assetPath);
                 if (prefab == null) throw new FileLoadException(assetPath);
                 return prefab;
             }

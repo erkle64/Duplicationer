@@ -1,6 +1,7 @@
 ﻿using System;
 using Unfoundry;
 using UnityEngine;
+using UnityEngine.ProBuilder;
 
 namespace Duplicationer
 {
@@ -45,7 +46,7 @@ namespace Duplicationer
                     Vector3Int targetCoord, targetNormal;
                     if (CustomHandheldMode.GetTargetCube(-0.01f, out targetPoint, out targetCoord, out targetNormal))
                     {
-                        if (InputHelpers.IsAltHeld) targetCoord += Vector3Int.RoundToInt(GameRoot.SnappedToNearestAxis(targetNormal));
+                        if (InputHelpers.IsAltHeld) targetCoord += Vector3Int.RoundToInt(Plugin.SnappedToNearestAxis(targetNormal));
 
                         tool.boxMode = BlueprintToolCHM.BoxMode.Selection;
                         tool.selectionFrom = tool.selectionTo = targetCoord;
@@ -123,7 +124,7 @@ namespace Duplicationer
                             if (roundedOffset < clampedOffset)
                             {
                                 mode = Mode.Down;
-                                tool.dragFaceRay.direction = -tool.dragFaceRay.direction;
+                                tool.dragFaceRay = new Ray(tool.dragFaceRay.origin, -tool.dragFaceRay.direction);
                                 tool.dragFaceRay.origin += Vector3.up * (clampedOffset - 1);
 
                                 max.y += clampedOffset;
@@ -159,7 +160,7 @@ namespace Duplicationer
                             if (roundedOffset < clampedOffset)
                             {
                                 mode = Mode.Up;
-                                tool.dragFaceRay.direction = -tool.dragFaceRay.direction;
+                                tool.dragFaceRay = new Ray(tool.dragFaceRay.origin, -tool.dragFaceRay.direction);
                                 tool.dragFaceRay.origin += Vector3.down * (clampedOffset - 1);
 
                                 min.y -= clampedOffset;

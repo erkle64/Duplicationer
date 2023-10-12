@@ -21,14 +21,14 @@ namespace Duplicationer
 
         private PlaceholderPattern(GameObject source)
         {
-            UnhollowerBaseLib.Il2CppArrayBase<MeshFilter> meshFilters = source.GetComponentsInChildren<MeshFilter>(true);
+            var meshFilters = source.GetComponentsInChildren<MeshFilter>(true);
 
             Entries = new Entry[meshFilters.Sum((meshFilter) => meshFilter.name == "Impostor" ? 0 : 1)];
 
             var localToWorldMatrix = source.transform.localToWorldMatrix;
             var worldToLocalMatrix = source.transform.worldToLocalMatrix;
             int index = 0;
-            for (int i = 0; i < meshFilters.Count; i++)
+            for (int i = 0; i < meshFilters.Length; i++)
             {
                 MeshFilter meshFilter = meshFilters[i];
                 if (meshFilter.name == "Impostor") continue;

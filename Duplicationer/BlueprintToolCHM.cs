@@ -6,9 +6,10 @@ using UnityEngine.EventSystems;
 using Unfoundry;
 using System;
 using System.IO;
-using BepInEx;
 using System.Xml.Linq;
 using System.Linq;
+using HarmonyLib;
+using UnityEngine.Events;
 
 namespace Duplicationer
 {
@@ -49,8 +50,8 @@ namespace Duplicationer
         internal Vector3Int repeatFrom = Vector3Int.zero;
         internal Vector3Int repeatTo = Vector3Int.zero;
         public Vector3Int RepeatCount => repeatTo - repeatFrom + Vector3Int.one;
-        public Vector3Int RepeatBlueprintMin => BlueprintMin + CurrentBlueprintSize * repeatFrom;
-        public Vector3Int RepeatBlueprintMax => BlueprintMax + CurrentBlueprintSize * repeatTo;
+        public Vector3Int RepeatBlueprintMin => BlueprintMin + new Vector3Int(CurrentBlueprintSize.x * repeatFrom.x, CurrentBlueprintSize.y * repeatFrom.y, CurrentBlueprintSize.z * repeatFrom.z);
+        public Vector3Int RepeatBlueprintMax => BlueprintMax + new Vector3Int(CurrentBlueprintSize.x * repeatTo.x, CurrentBlueprintSize.y * repeatTo.y, CurrentBlueprintSize.z * repeatTo.z);
 
         internal Plane dragPlane = default;
         internal Vector3Int selectionFrom = Vector3Int.zero;
@@ -68,13 +69,13 @@ namespace Duplicationer
 
         public bool IsBlueprintFrameOpen => duplicationerFrame != null && duplicationerFrame.activeSelf;
         private GameObject duplicationerFrame = null;
-        private GameObject railMinerRow = null;
+        //private GameObject railMinerRow = null;
         private TextMeshProUGUI textMaterialReport = null;
         private TextMeshProUGUI textPositionX = null;
         private TextMeshProUGUI textPositionY = null;
         private TextMeshProUGUI textPositionZ = null;
         private float nextUpdateTimeCountTexts = 0.0f;
-        private float nextUpdateTimeRailMiners = 0.0f;
+        //private float nextUpdateTimeRailMiners = 0.0f;
 
         public bool IsSaveFrameOpen => saveFrame != null && saveFrame.activeSelf;
         private GameObject saveFrame = null;
@@ -94,13 +95,13 @@ namespace Duplicationer
 
         public bool IsAnyFrameOpen => IsBlueprintFrameOpen || IsSaveFrameOpen || IsLibraryFrameOpen;
 
-        private List<ItemTemplate> railMinerTemplates = null;
+        //private List<ItemTemplate> railMinerTemplates = null;
 
         private int NudgeX => CurrentBlueprint != null && InputHelpers.IsAltHeld ? CurrentBlueprint.SizeX : 1;
         private int NudgeY => CurrentBlueprint != null && InputHelpers.IsAltHeld ? CurrentBlueprint.SizeY : 1;
         private int NudgeZ => CurrentBlueprint != null && InputHelpers.IsAltHeld ? CurrentBlueprint.SizeZ : 1;
 
-        private static Il2CppSystem.Collections.Generic.List<BuildableObjectGO> bogoQueryResult = new Il2CppSystem.Collections.Generic.List<BuildableObjectGO>(0);
+        private static List<BuildableObjectGO> bogoQueryResult = new List<BuildableObjectGO>(0);
 
         private List<UIBuilder.GenericUpdateDelegate> guiUpdaters = new List<UIBuilder.GenericUpdateDelegate>();
 
@@ -109,13 +110,13 @@ namespace Duplicationer
         public static int MaxBuildingValidationsPerFrame { get; internal set; } = 4;
         public static int MaxTerrainValidationsPerFrame { get; internal set; } = 20;
 
-        private LazyPrefab prefabGridScrollView = new LazyPrefab("Assets/Prefabs/GridScrollView.prefab");
-        private LazyPrefab prefabBlueprintNameInputField = new LazyPrefab("Assets/Prefabs/BlueprintNameInputField.prefab");
-        private LazyPrefab prefabBlueprintButtonDefaultIcon = new LazyPrefab("Assets/Prefabs/BlueprintButtonDefaultIcon.prefab");
-        private LazyPrefab prefabBlueprintButton1Icon = new LazyPrefab("Assets/Prefabs/BlueprintButton1Icon.prefab");
-        private LazyPrefab prefabBlueprintButton2Icon = new LazyPrefab("Assets/Prefabs/BlueprintButton2Icon.prefab");
-        private LazyPrefab prefabBlueprintButton3Icon = new LazyPrefab("Assets/Prefabs/BlueprintButton3Icon.prefab");
-        private LazyPrefab prefabBlueprintButton4Icon = new LazyPrefab("Assets/Prefabs/BlueprintButton4Icon.prefab");
+        private LazyPrefab prefabGridScrollView = new LazyPrefab("GridScrollView");
+        private LazyPrefab prefabBlueprintNameInputField = new LazyPrefab("BlueprintNameInputField");
+        private LazyPrefab prefabBlueprintButtonDefaultIcon = new LazyPrefab("BlueprintButtonDefaultIcon");
+        private LazyPrefab prefabBlueprintButton1Icon = new LazyPrefab("BlueprintButton1Icon");
+        private LazyPrefab prefabBlueprintButton2Icon = new LazyPrefab("BlueprintButton2Icon");
+        private LazyPrefab prefabBlueprintButton3Icon = new LazyPrefab("BlueprintButton3Icon");
+        private LazyPrefab prefabBlueprintButton4Icon = new LazyPrefab("BlueprintButton4Icon");
 
         private static Material placeholderMaterial = null;
         private static Material placeholderPrepassMaterial = null;
@@ -139,7 +140,7 @@ namespace Duplicationer
             var material = new Material(ResourceDB.material_placeholder_green);
             material.renderQueue = 3001;
             material.SetFloat("_Opacity", 0.25f);
-            material.SetColor("_Color", Color.blue.AlphaMultiplied(0.25f));
+            material.SetColor("_Color", new Color(0.0f, 0.0f, 1.0f, 0.25f));
             return material;
         });
 
@@ -169,7 +170,7 @@ namespace Duplicationer
             modePlace.Connect(modeSelectArea, modeMove);
             modeSelectArea.Connect(modeResize);
 
-            SetPlaceholderOpacity(Plugin.configPreviewAlpha.Value);
+            SetPlaceholderOpacity(DuplicationerPlugin.configPreviewAlpha);
         }
 
         public override void Enter()
@@ -342,7 +343,7 @@ namespace Duplicationer
                 for (int i = 0; i < count; i++)
                 {
                     var placeholder = terrainPlaceholders[terrainPlaceholderUpdateIndex];
-                    var worldPos = Vector3Int.FloorToInt(placeholder.Position);
+                    var worldPos = new Vector3Int(Mathf.FloorToInt(placeholder.Position.x), Mathf.FloorToInt(placeholder.Position.y), Mathf.FloorToInt(placeholder.Position.z));
                     var localPos = worldPos - CurrentBlueprintAnchor;
 
                     bool positionClear = true;
@@ -423,23 +424,23 @@ namespace Duplicationer
                 {
                     if (placeholderMaterial == null)
                     {
-                        placeholderMaterial = Plugin.bundleMain.LoadAsset<Material>("Assets/PlaceholderMaterial.mat");
+                        placeholderMaterial = DuplicationerPlugin.GetAsset<Material>("PlaceholderMaterial");
                         UnityEngine.Object.DontDestroyOnLoad(placeholderMaterial);
                     }
 
                     if (placeholderPrepassMaterial == null)
                     {
-                        placeholderPrepassMaterial = Plugin.bundleMain.LoadAsset<Material>("Assets/PlaceholderPrepassMaterial.mat");
+                        placeholderPrepassMaterial = DuplicationerPlugin.GetAsset<Material>("PlaceholderPrepassMaterial");
                         UnityEngine.Object.DontDestroyOnLoad(placeholderPrepassMaterial);
                     }
 
                     if (placeholderSolidMaterial == null)
                     {
-                        placeholderSolidMaterial = Plugin.bundleMain.LoadAsset<Material>("Assets/PlaceholderSolidMaterial.mat");
+                        placeholderSolidMaterial = DuplicationerPlugin.GetAsset<Material>("PlaceholderSolidMaterial");
                         UnityEngine.Object.DontDestroyOnLoad(placeholderSolidMaterial);
                     }
 
-                    float alpha = Plugin.configPreviewAlpha.Value;
+                    float alpha = DuplicationerPlugin.configPreviewAlpha;
                     if (alpha > 0.0f)
                     {
                         if (alpha < 1.0f)
@@ -460,27 +461,27 @@ namespace Duplicationer
                 }
             }
 
-            if (IsBlueprintLoaded && IsBlueprintActive && Input.GetKeyDown(Plugin.PasteBlueprintKey) && InputHelpers.IsKeyboardInputAllowed)
+            if (IsBlueprintLoaded && IsBlueprintActive && Input.GetKeyDown(DuplicationerPlugin.PasteBlueprintKey) && InputHelpers.IsKeyboardInputAllowed)
             {
                 PlaceBlueprintMultiple(CurrentBlueprintAnchor, repeatFrom, repeatTo);
                 AudioManager.playUISoundEffect(ResourceDB.resourceLinker.audioClip_recipeCopyTool_paste);
             }
 
-            if (Input.GetKeyDown(Plugin.TogglePanelKey) && InputHelpers.IsKeyboardInputAllowed)
+            if (Input.GetKeyDown(DuplicationerPlugin.TogglePanelKey) && InputHelpers.IsKeyboardInputAllowed)
             {
                 if (IsBlueprintFrameOpen) HideBlueprintFrame();
                 else ShowBlueprintFrame();
             }
 
-            if (Input.GetKeyDown(Plugin.SaveBlueprintKey) && InputHelpers.IsKeyboardInputAllowed)
-            {
-                if (IsBlueprintLoaded) BeginSaveBlueprint();
-            }
+            //if (Input.GetKeyDown(DuplicationerPlugin.SaveBlueprintKey) && InputHelpers.IsKeyboardInputAllowed)
+            //{
+            //    if (IsBlueprintLoaded) BeginSaveBlueprint();
+            //}
 
-            if (Input.GetKeyDown(Plugin.LoadBlueprintKey) && InputHelpers.IsKeyboardInputAllowed)
-            {
-                BeginLoadBlueprint();
-            }
+            //if (Input.GetKeyDown(DuplicationerPlugin.LoadBlueprintKey) && InputHelpers.IsKeyboardInputAllowed)
+            //{
+            //    BeginLoadBlueprint();
+            //}
 
             CurrentMode?.Update(this);
 
@@ -505,22 +506,22 @@ namespace Duplicationer
                     break;
             }
 
-            if (railMinerRow != null)
-            {
-                if (boxMode == BoxMode.Blueprint)
-                {
-                    if (Time.time >= nextUpdateTimeRailMiners)
-                    {
-                        nextUpdateTimeRailMiners = Time.time + 0.5f;
-                        bool hasDepots = HasExistingMinecartDepots(CurrentBlueprintAnchor, repeatFrom, repeatTo);
-                        railMinerRow.SetActive(hasDepots);
-                    }
-                }
-                else
-                {
-                    railMinerRow.SetActive(false);
-                }
-            }
+            //if (railMinerRow != null)
+            //{
+            //    if (boxMode == BoxMode.Blueprint)
+            //    {
+            //        if (Time.time >= nextUpdateTimeRailMiners)
+            //        {
+            //            nextUpdateTimeRailMiners = Time.time + 0.5f;
+            //            bool hasDepots = HasExistingMinecartDepots(CurrentBlueprintAnchor, repeatFrom, repeatTo);
+            //            railMinerRow.SetActive(hasDepots);
+            //        }
+            //    }
+            //    else
+            //    {
+            //        railMinerRow.SetActive(false);
+            //    }
+            //}
 
             if (isDragArrowVisible)
             {
@@ -578,7 +579,7 @@ namespace Duplicationer
                 {
                     for (int x = repeatFrom.x; x <= repeatTo.x; ++x)
                     {
-                        PlaceBlueprint(targetPosition + new Vector3Int(x, y, z) * CurrentBlueprintSize);
+                        PlaceBlueprint(targetPosition + new Vector3Int(x * CurrentBlueprintSize.x, y * CurrentBlueprintSize.y, z * CurrentBlueprintSize.z));
                     }
                 }
             }
@@ -589,7 +590,7 @@ namespace Duplicationer
             if (CurrentBlueprint == null) throw new ArgumentNullException(nameof(CurrentBlueprint));
 
             ulong usernameHash = GameRoot.getClientCharacter().usernameHash;
-            Plugin.log.LogMessage(string.Format("Placing blueprint at {0}", targetPosition.ToString()));
+            Debug.Log(string.Format("Placing blueprint at {0}", targetPosition.ToString()));
             AABB3D aabb = ObjectPoolManager.aabb3ds.getObject();
             var modularBaseCoords = new Dictionary<ulong, Vector3Int>();
             var constructionTaskGroup = new ConstructionTaskGroup((ConstructionTaskGroup taskGroup) => { activeConstructionTaskGroups.Remove(taskGroup); });
@@ -672,7 +673,7 @@ namespace Duplicationer
                         {
                             if (inventoryPtr != 0)
                             {
-                                var inventoryCount = InventoryManager.inventoryManagerPtr_countByItemTemplate(inventoryPtr, templateId, IOBool.iotrue);
+                                var inventoryCount = InventoryManager.inventoryManager_countByItemTemplateByPtr(inventoryPtr, templateId, IOBool.iotrue);
 
                                 materialReportBuilder.AppendLine($"<color=#CCCCCC>{name}:</color> {itemCount * repeatCount} <color=#FFFFAA>({inventoryCount})</color>");
                             }
@@ -716,9 +717,13 @@ namespace Duplicationer
 
             if (duplicationerFrame == null)
             {
-                foreach (var graphic in UIRaycastTooltipManager.singleton.tooltipRectTransform.GetComponentsInChildren<Graphic>())
+                var graphics = Traverse.Create(typeof(UIRaycastTooltipManager))?.Field("singleton")?.GetValue<UIRaycastTooltipManager>()?.tooltipRectTransform?.GetComponentsInChildren<Graphic>();
+                if (graphics != null)
                 {
-                    graphic.raycastTarget = false;
+                    foreach (var graphic in graphics)
+                    {
+                        graphic.raycastTarget = false;
+                    }
                 }
 
                 ulong usernameHash = GameRoot.getClientCharacter().usernameHash;
@@ -758,21 +763,21 @@ namespace Duplicationer
                                     .Component_Text("", "OpenSansSemibold SDF", 14.0f, Color.white, TextAlignmentOptions.TopLeft)
                                     .Keep(out textMaterialReport)
                                 .Done
-                                .Element("Rail Miner Row")
-                                    .Keep(out railMinerRow)
-                                    .AutoSize(ContentSizeFitter.FitMode.Unconstrained, ContentSizeFitter.FitMode.PreferredSize)
-                                    .SetHorizontalLayout(new RectOffset(0, 0, 0, 0), 5.0f, TextAnchor.UpperLeft, false, true, true, false, true, false, false)
-                                    .Do((builder) =>
-                                    {
-                                        foreach (var template in GetRailMinerTemplates())
-                                        {
-                                            builder.Element_ImageButton("Button Rail Miner", template.icon_identifier)
-                                                .Component_Tooltip($"Insert and launch\n{template.name}")
-                                                .SetOnClick(() => { InsertRailMiners(template); })
-                                            .End(false);
-                                        }
-                                    })
-                                .Done
+                                //.Element("Rail Miner Row")
+                                //    .Keep(out railMinerRow)
+                                //    .AutoSize(ContentSizeFitter.FitMode.Unconstrained, ContentSizeFitter.FitMode.PreferredSize)
+                                //    .SetHorizontalLayout(new RectOffset(0, 0, 0, 0), 5.0f, TextAnchor.UpperLeft, false, true, true, false, true, false, false)
+                                //    .Do((builder) =>
+                                //    {
+                                //        foreach (var template in GetRailMinerTemplates())
+                                //        {
+                                //            builder.Element_ImageButton("Button Rail Miner", template.icon_identifier)
+                                //                .Component_Tooltip($"Insert and launch\n{template.name}")
+                                //                .SetOnClick(() => { InsertRailMiners(template); })
+                                //            .End(false);
+                                //        }
+                                //    })
+                                //.Done
                                 .Element("Demolish Row")
                                     .Updater(guiUpdaters, () => boxMode != BoxMode.None && CurrentMode != modeSelectArea)
                                     .SetHorizontalLayout(new RectOffset(0, 0, 0, 0), 5.0f, TextAnchor.UpperLeft, false, true, true, false, true, false, false)
@@ -840,10 +845,10 @@ namespace Duplicationer
                                             .Keep(out textPositionX)
                                         .Done
                                         .Element_ImageButton("Button Decrease", "icons8-chevron-left-filled-100_white", 28, 28, 90.0f)
-                                            .SetOnClick(() => { MoveBlueprint(CurrentBlueprintAnchor + Vector3Int.left * NudgeX); })
+                                            .SetOnClick(() => { MoveBlueprint(CurrentBlueprintAnchor + new Vector3Int(-1, 0, 0) * NudgeX); })
                                         .Done
                                         .Element_ImageButton("Button Increase", "icons8-chevron-left-filled-100_white", 28, 28, 270.0f)
-                                            .SetOnClick(() => { MoveBlueprint(CurrentBlueprintAnchor + Vector3Int.right * NudgeX); })
+                                            .SetOnClick(() => { MoveBlueprint(CurrentBlueprintAnchor + new Vector3Int(1, 0, 0) * NudgeX); })
                                         .Done
                                     .Done
                                     .Element("Row Position Y")
@@ -857,10 +862,10 @@ namespace Duplicationer
                                             .Keep(out textPositionY)
                                         .Done
                                         .Element_ImageButton("Button Decrease", "icons8-chevron-left-filled-100_white", 28, 28, 90.0f)
-                                            .SetOnClick(() => { MoveBlueprint(CurrentBlueprintAnchor + Vector3Int.down * NudgeY); })
+                                            .SetOnClick(() => { MoveBlueprint(CurrentBlueprintAnchor + new Vector3Int(0, -1, 0) * NudgeY); })
                                         .Done
                                         .Element_ImageButton("Button Increase", "icons8-chevron-left-filled-100_white", 28, 28, 270.0f)
-                                            .SetOnClick(() => { MoveBlueprint(CurrentBlueprintAnchor + Vector3Int.up * NudgeY); })
+                                            .SetOnClick(() => { MoveBlueprint(CurrentBlueprintAnchor + new Vector3Int(0, 1, 0) * NudgeY); })
                                         .Done
                                     .Done
                                     .Element("Row Position Z")
@@ -874,10 +879,10 @@ namespace Duplicationer
                                             .Keep(out textPositionZ)
                                         .Done
                                         .Element_ImageButton("Button Decrease", "icons8-chevron-left-filled-100_white", 28, 28, 90.0f)
-                                            .SetOnClick(() => { MoveBlueprint(CurrentBlueprintAnchor + Vector3Int.back * NudgeZ); })
+                                            .SetOnClick(() => { MoveBlueprint(CurrentBlueprintAnchor + new Vector3Int(0, 0, -1) * NudgeZ); })
                                         .Done
                                         .Element_ImageButton("Button Increase", "icons8-chevron-left-filled-100_white", 28, 28, 270.0f)
-                                            .SetOnClick(() => { MoveBlueprint(CurrentBlueprintAnchor + Vector3Int.forward * NudgeZ); })
+                                            .SetOnClick(() => { MoveBlueprint(CurrentBlueprintAnchor + new Vector3Int(0, 0, 1) * NudgeZ); })
                                         .Done
                                     .Done
                                 .Done
@@ -885,7 +890,7 @@ namespace Duplicationer
                                     .SetHorizontalLayout(new RectOffset(0, 0, 0, 0), 5.0f, TextAnchor.UpperLeft, false, true, true, false, true, false, false)
                                     .Element_Label("Preview Opacity Label", "Preview Opacity", 150, 1)
                                     .Done
-                                    .Element_Slider("Preview Opacity Slider", Plugin.configPreviewAlpha.Value, 0.0f, 1.0f, (value) => { Plugin.configPreviewAlpha.Value = value; SetPlaceholderOpacity(value); })
+                                    .Element_Slider("Preview Opacity Slider", DuplicationerPlugin.configPreviewAlpha, 0.0f, 1.0f, (value) => { DuplicationerPlugin.configPreviewAlpha = value; SetPlaceholderOpacity(value); })
                                         .Layout()
                                             .MinWidth(200)
                                             .MinHeight(40)
@@ -893,18 +898,18 @@ namespace Duplicationer
                                         .Done
                                     .Done
                                 .Done
-                                .Element("Row Files")
-                                    .SetHorizontalLayout(new RectOffset(0, 0, 0, 0), 5.0f, TextAnchor.UpperLeft, false, true, true, false, true, false, false)
-                                    .Element_ImageTextButton("Button Save", "Save", "download", Color.white, 28, 28)
-                                        .Component_Tooltip("Save current blueprint")
-                                        .SetOnClick(BeginSaveBlueprint)
-                                        .Updater<Button>(guiUpdaters, () => IsBlueprintLoaded)
-                                    .Done
-                                    .Element_ImageTextButton("Button Load", "Load", "upload", Color.white, 28, 28)
-                                        .Component_Tooltip("Load blueprint from library")
-                                        .SetOnClick(BeginLoadBlueprint)
-                                    .Done
-                                .Done
+                                //.Element("Row Files")
+                                //    .SetHorizontalLayout(new RectOffset(0, 0, 0, 0), 5.0f, TextAnchor.UpperLeft, false, true, true, false, true, false, false)
+                                //    .Element_ImageTextButton("Button Save", "Save", "download", Color.white, 28, 28)
+                                //        .Component_Tooltip("Save current blueprint")
+                                //        .SetOnClick(BeginSaveBlueprint)
+                                //        .Updater<Button>(guiUpdaters, () => IsBlueprintLoaded)
+                                //    .Done
+                                //    .Element_ImageTextButton("Button Load", "Load", "upload", Color.white, 28, 28)
+                                //        .Component_Tooltip("Load blueprint from library")
+                                //        .SetOnClick(BeginLoadBlueprint)
+                                //    .Done
+                                //.Done
                                 .Element("Row Confirm Buttons")
                                     .SetHorizontalLayout(new RectOffset(0, 0, 0, 0), 5.0f, TextAnchor.UpperLeft, false, true, true, false, true, false, false)
                                     .Element_TextButton("Button Paste", "Confirm/Paste")
@@ -942,11 +947,11 @@ namespace Duplicationer
             if (string.IsNullOrWhiteSpace(name)) return;
 
             string filenameBase = PathHelpers.MakeValidFileName(name);
-            string path = Path.Combine(Plugin.BlueprintFolder, $"{filenameBase}.{Plugin.BlueprintExtension}");
+            string path = Path.Combine(DuplicationerPlugin.BlueprintFolder, $"{filenameBase}.{DuplicationerPlugin.BlueprintExtension}");
             int nextIndex = 1;
-            while (File.Exists(path)) path = Path.Combine(Plugin.BlueprintFolder, $"{filenameBase}{nextIndex++}.{Plugin.BlueprintExtension}");
+            while (File.Exists(path)) path = Path.Combine(DuplicationerPlugin.BlueprintFolder, $"{filenameBase}{nextIndex++}.{DuplicationerPlugin.BlueprintExtension}");
 
-            Plugin.log.LogMessage((string)$"Saving blueprint '{name}' to '{path}'");
+            Debug.Log((string)$"Saving blueprint '{name}' to '{path}'");
             CurrentBlueprint.Save(path, name, saveFrameIconItemTemplates.Take(saveFrameIconCount).ToArray());
 
             HideSaveFrame();
@@ -1073,7 +1078,7 @@ namespace Duplicationer
                                         saveFrameNameInputField = gameObject.GetComponentInChildren<TMP_InputField>();
                                         if (saveFrameNameInputField == null) throw new Exception("TextMeshPro Input field not found.");
                                         saveFrameNameInputField.text = "";
-                                        saveFrameNameInputField.onValueChanged.AddListener(new Action<string>((string value) =>
+                                        saveFrameNameInputField.onValueChanged.AddListener(new UnityAction<string>((string value) =>
                                         {
                                             if (saveFramePreviewLabel != null) saveFramePreviewLabel.text = value;
                                         }));
@@ -1168,7 +1173,7 @@ namespace Duplicationer
                         var gameObject = UnityEngine.Object.Instantiate(prefabBlueprintButton1Icon.Prefab, saveFramePreviewContainer.transform);
                         saveFramePreviewLabel = gameObject.GetComponentInChildren<TextMeshProUGUI>();
                         if (saveFramePreviewLabel == null) throw new ArgumentNullException(nameof(saveFramePreviewLabel));
-                        saveFramePreviewIconImages[0] = gameObject.transform.FindChild("Icon1")?.GetComponent<Image>();
+                        saveFramePreviewIconImages[0] = gameObject.transform.Find("Icon1")?.GetComponent<Image>();
                     }
                     break;
 
@@ -1178,8 +1183,8 @@ namespace Duplicationer
                         var gameObject = UnityEngine.Object.Instantiate(prefabBlueprintButton2Icon.Prefab, saveFramePreviewContainer.transform);
                         saveFramePreviewLabel = gameObject.GetComponentInChildren<TextMeshProUGUI>();
                         if (saveFramePreviewLabel == null) throw new ArgumentNullException(nameof(saveFramePreviewLabel));
-                        saveFramePreviewIconImages[0] = gameObject.transform.FindChild("Icon1")?.GetComponent<Image>();
-                        saveFramePreviewIconImages[1] = gameObject.transform.FindChild("Icon2")?.GetComponent<Image>();
+                        saveFramePreviewIconImages[0] = gameObject.transform.Find("Icon1")?.GetComponent<Image>();
+                        saveFramePreviewIconImages[1] = gameObject.transform.Find("Icon2")?.GetComponent<Image>();
                     }
                     break;
 
@@ -1189,9 +1194,9 @@ namespace Duplicationer
                         var gameObject = UnityEngine.Object.Instantiate(prefabBlueprintButton3Icon.Prefab, saveFramePreviewContainer.transform);
                         saveFramePreviewLabel = gameObject.GetComponentInChildren<TextMeshProUGUI>();
                         if (saveFramePreviewLabel == null) throw new ArgumentNullException(nameof(saveFramePreviewLabel));
-                        saveFramePreviewIconImages[0] = gameObject.transform.FindChild("Icon1")?.GetComponent<Image>();
-                        saveFramePreviewIconImages[1] = gameObject.transform.FindChild("Icon2")?.GetComponent<Image>();
-                        saveFramePreviewIconImages[2] = gameObject.transform.FindChild("Icon3")?.GetComponent<Image>();
+                        saveFramePreviewIconImages[0] = gameObject.transform.Find("Icon1")?.GetComponent<Image>();
+                        saveFramePreviewIconImages[1] = gameObject.transform.Find("Icon2")?.GetComponent<Image>();
+                        saveFramePreviewIconImages[2] = gameObject.transform.Find("Icon3")?.GetComponent<Image>();
                     }
                     break;
 
@@ -1201,10 +1206,10 @@ namespace Duplicationer
                         var gameObject = UnityEngine.Object.Instantiate(prefabBlueprintButton4Icon.Prefab, saveFramePreviewContainer.transform);
                         saveFramePreviewLabel = gameObject.GetComponentInChildren<TextMeshProUGUI>();
                         if (saveFramePreviewLabel == null) throw new ArgumentNullException(nameof(saveFramePreviewLabel));
-                        saveFramePreviewIconImages[0] = gameObject.transform.FindChild("Icon1")?.GetComponent<Image>();
-                        saveFramePreviewIconImages[1] = gameObject.transform.FindChild("Icon2")?.GetComponent<Image>();
-                        saveFramePreviewIconImages[2] = gameObject.transform.FindChild("Icon3")?.GetComponent<Image>();
-                        saveFramePreviewIconImages[3] = gameObject.transform.FindChild("Icon4")?.GetComponent<Image>();
+                        saveFramePreviewIconImages[0] = gameObject.transform.Find("Icon1")?.GetComponent<Image>();
+                        saveFramePreviewIconImages[1] = gameObject.transform.Find("Icon2")?.GetComponent<Image>();
+                        saveFramePreviewIconImages[2] = gameObject.transform.Find("Icon3")?.GetComponent<Image>();
+                        saveFramePreviewIconImages[3] = gameObject.transform.Find("Icon4")?.GetComponent<Image>();
                     }
                     break;
 
@@ -1235,21 +1240,21 @@ namespace Duplicationer
             foreach (var kv in ItemTemplateManager.getAllItemTemplates())
             {
                 var itemTemplate = kv.Value;
-                if (!itemTemplate.includeInBuild) continue;
+                //if (!itemTemplate.includeInBuild) continue;
                 if (itemTemplate.isHiddenItem) continue;
 
                 var gameObject = UnityEngine.Object.Instantiate(prefabBlueprintButton1Icon.Prefab, saveGridObject.transform);
 
-                var label = gameObject.transform.FindChild("Label")?.GetComponent<TextMeshProUGUI>();
+                var label = gameObject.transform.Find("Label")?.GetComponent<TextMeshProUGUI>();
                 if (label != null) label.text = "";
 
-                var iconImage = gameObject.transform.FindChild("Icon1")?.GetComponent<Image>();
+                var iconImage = gameObject.transform.Find("Icon1")?.GetComponent<Image>();
                 if (iconImage != null) iconImage.sprite = itemTemplate.icon;
 
                 var button = gameObject.GetComponentInChildren<Button>();
                 if (button != null)
                 {
-                    button.onClick.AddListener(new Action(() => SaveFrameAddIcon(itemTemplate)));
+                    button.onClick.AddListener(new UnityAction(() => SaveFrameAddIcon(itemTemplate)));
                 }
             }
         }
@@ -1326,9 +1331,13 @@ namespace Duplicationer
 
             if (libraryFrame == null)
             {
-                foreach (var graphic in UIRaycastTooltipManager.singleton.tooltipRectTransform.GetComponentsInChildren<Graphic>())
+                var graphics = Traverse.Create(typeof(UIRaycastTooltipManager))?.Field("singleton")?.GetValue<UIRaycastTooltipManager>()?.tooltipRectTransform?.GetComponentsInChildren<Graphic>();
+                if (graphics != null)
                 {
-                    graphic.raycastTarget = false;
+                    foreach (var graphic in graphics)
+                    {
+                        graphic.raycastTarget = false;
+                    }
                 }
 
                 ulong usernameHash = GameRoot.getClientCharacter().usernameHash;
@@ -1387,7 +1396,7 @@ namespace Duplicationer
             };
 
             var builder = UIBuilder.BeginWith(libraryGridObject);
-            foreach (var path in Directory.GetFiles(Plugin.BlueprintFolder, $"*.{Plugin.BlueprintExtension}"))
+            foreach (var path in Directory.GetFiles(DuplicationerPlugin.BlueprintFolder, $"*.{DuplicationerPlugin.BlueprintExtension}"))
             {
                 if (Blueprint.TryLoadFileHeader(path, out var header, out var name))
                 {
@@ -1417,14 +1426,14 @@ namespace Duplicationer
 
                     var gameObject = UnityEngine.Object.Instantiate(prefabs[iconCount], libraryGridObject.transform);
 
-                    var label = gameObject.transform.FindChild("Label")?.GetComponent<TextMeshProUGUI>();
+                    var label = gameObject.transform.Find("Label")?.GetComponent<TextMeshProUGUI>();
                     if (label != null) label.text = name;
 
                     var iconImages = new Image[] {
-                        gameObject.transform.FindChild("Icon1")?.GetComponent<Image>(),
-                        gameObject.transform.FindChild("Icon2")?.GetComponent<Image>(),
-                        gameObject.transform.FindChild("Icon3")?.GetComponent<Image>(),
-                        gameObject.transform.FindChild("Icon4")?.GetComponent<Image>()
+                        gameObject.transform.Find("Icon1")?.GetComponent<Image>(),
+                        gameObject.transform.Find("Icon2")?.GetComponent<Image>(),
+                        gameObject.transform.Find("Icon3")?.GetComponent<Image>(),
+                        gameObject.transform.Find("Icon4")?.GetComponent<Image>()
                     };
 
                     for (int iconIndex = 0; iconIndex < iconCount; iconIndex++)
@@ -1435,7 +1444,7 @@ namespace Duplicationer
                     var button = gameObject.GetComponentInChildren<Button>();
                     if (button != null)
                     {
-                        button.onClick.AddListener(new Action(() =>
+                        button.onClick.AddListener(new UnityAction(() =>
                         {
                             ActionManager.AddQueuedEvent(() =>
                             {
@@ -1468,7 +1477,7 @@ namespace Duplicationer
                     {
                         foreach (var bogo in bogoQueryResult)
                         {
-                            if (bogo.template.type == BuildableObjectTemplate.BuildableObjectType.WorldDecorMineAble || bogo.template.type == BuildableObjectTemplate.BuildableObjectType.WorldDecorGrowing)
+                            if (bogo.template.type == BuildableObjectTemplate.BuildableObjectType.WorldDecorMineAble)
                             {
                                 if (doDecor)
                                 {
@@ -1536,7 +1545,7 @@ namespace Duplicationer
                     {
                         foreach (var bogo in bogoQueryResult)
                         {
-                            if (bogo.template.type == BuildableObjectTemplate.BuildableObjectType.WorldDecorMineAble || bogo.template.type == BuildableObjectTemplate.BuildableObjectType.WorldDecorGrowing)
+                            if (bogo.template.type == BuildableObjectTemplate.BuildableObjectType.WorldDecorMineAble)
                             {
                                 if (doDecor)
                                 {
@@ -1613,68 +1622,68 @@ namespace Duplicationer
             return false;
         }
 
-        private void InsertRailMiners(ItemTemplate railMinerItemTemplate)
-        {
-            AudioManager.playUISoundEffect(ResourceDB.resourceLinker.audioClip_recipeCopyTool_paste);
+        //private void InsertRailMiners(ItemTemplate railMinerItemTemplate)
+        //{
+        //    AudioManager.playUISoundEffect(ResourceDB.resourceLinker.audioClip_recipeCopyTool_paste);
 
-            MinecartDepotPollingUpdateData data = default;
-            ulong playerInventoryPtr = (GameRoot.getClientCharacter().inventoryId != 0) ? InventoryManager.inventoryManager_getInventoryPtr(GameRoot.getClientCharacter().inventoryId) : 0;
-            if (playerInventoryPtr != 0)
-            {
-                uint inventorySlotCount = InventoryManager.inventoryManager_getInventorySlotCount(playerInventoryPtr);
-                int slotIndex = (int)inventorySlotCount;
+        //    MinecartDepotPollingUpdateData data = default;
+        //    ulong playerInventoryPtr = (GameRoot.getClientCharacter().inventoryId != 0) ? InventoryManager.inventoryManager_getInventoryPtr(GameRoot.getClientCharacter().inventoryId) : 0;
+        //    if (playerInventoryPtr != 0)
+        //    {
+        //        uint inventorySlotCount = InventoryManager.inventoryManager_getInventorySlotCountByPtr(playerInventoryPtr);
+        //        int slotIndex = (int)inventorySlotCount;
 
-                var inventoryCount = InventoryManager.inventoryManagerPtr_countByItemTemplate(playerInventoryPtr, railMinerItemTemplate.id, IOBool.iotrue);
-                if (inventoryCount > 0)
-                {
-                    var depots = GetExistingMinecartDepots(CurrentBlueprintAnchor, repeatFrom, repeatTo);
-                    foreach (var depot in depots)
-                    {
-                        if (!AdvanceToNextValidSlot(railMinerItemTemplate, playerInventoryPtr, ref slotIndex, inventorySlotCount)) return;
+        //        var inventoryCount = InventoryManager.inventoryManager_countByItemTemplateByPtr(playerInventoryPtr, railMinerItemTemplate.id, IOBool.iotrue);
+        //        if (inventoryCount > 0)
+        //        {
+        //            var depots = GetExistingMinecartDepots(CurrentBlueprintAnchor, repeatFrom, repeatTo);
+        //            foreach (var depot in depots)
+        //            {
+        //                if (!AdvanceToNextValidSlot(railMinerItemTemplate, playerInventoryPtr, ref slotIndex, inventorySlotCount)) return;
 
-                        MinecartDepotGO.minecartDepotEntity_queryPollingData(depot.relatedEntityId, ref data);
-                        if (data.transitionState == 0 || data.transitionState == 3 && data.inventorySlot_railMiner.itemCount == 0)
-                        {
-                            var character = GameRoot.getClientCharacter();
+        //                MinecartDepotGO.minecartDepotEntity_queryPollingData(depot.relatedEntityId, ref data);
+        //                if (data.transitionState == 0 || data.transitionState == 3 && data.inventorySlot_railMiner.itemCount == 0)
+        //                {
+        //                    var character = GameRoot.getClientCharacter();
 
-                            ulong depotInventoryId = 0;
-                            ulong depotInventoryPtr = 0;
-                            if (BuildingManager.buildingManager_getInventoryAccessors(depot.relatedEntityId, 1, ref depotInventoryId, ref depotInventoryPtr) == IOBool.iotrue && depotInventoryId > 0)
-                            {
-                                GameRoot.addLockstepEvent(new ItemQuickMoveEvent(character, depotInventoryId, character.inventoryId, (uint)slotIndex));
-                                GameRoot.addLockstepEvent(new MinecartDepotTransitionEvent(depot.relatedEntityId));
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        //                    ulong depotInventoryId = 0;
+        //                    //ulong depotInventoryPtr = 0;
+        //                    if (BuildingManager.buildingManager_getInventoryAccessors(depot.relatedEntityId, 1, ref depotInventoryId) == IOBool.iotrue && depotInventoryId > 0)
+        //                    {
+        //                        GameRoot.addLockstepEvent(new ItemQuickMoveEvent(character, depotInventoryId, character.inventoryId, (uint)slotIndex));
+        //                        GameRoot.addLockstepEvent(new MinecartDepotTransitionEvent(depot.relatedEntityId));
+        //                    }
+        //                }
+        //            }
+        //        }
+        //    }
+        //}
 
-        private static bool AdvanceToNextValidSlot(ItemTemplate railMinerItemTemplate, ulong playerInventoryPtr, ref int slotIndex, uint inventorySlotCount)
-        {
-            ushort itemTemplateRunningIdx = 0;
-            uint itemCount = 0;
-            ushort lockedTemplateRunningIdx = 0;
-            IOBool isLocked = default;
+        //private static bool AdvanceToNextValidSlot(ItemTemplate railMinerItemTemplate, ulong playerInventoryPtr, ref int slotIndex, uint inventorySlotCount)
+        //{
+        //    ushort itemTemplateRunningIdx = 0;
+        //    uint itemCount = 0;
+        //    ushort lockedTemplateRunningIdx = 0;
+        //    IOBool isLocked = default;
 
-            for (--slotIndex; slotIndex >= 0; --slotIndex)
-            {
-                InventoryManager.inventoryManager_getSingleSlotData(playerInventoryPtr, (uint)slotIndex, ref itemTemplateRunningIdx, ref itemCount, ref lockedTemplateRunningIdx, ref isLocked, IOBool.iofalse);
-                if (itemCount > 0)
-                {
-                    var playerInventorySlotItemTemplate = GameRoot.RunningIdxTable_itemTemplates_all.getDataByRunningIdx(itemTemplateRunningIdx);
-                    if (playerInventorySlotItemTemplate != null)
-                    {
-                        if (playerInventorySlotItemTemplate.id == railMinerItemTemplate.id)
-                        {
-                            return true;
-                        }
-                    }
-                }
-            }
+        //    for (--slotIndex; slotIndex >= 0; --slotIndex)
+        //    {
+        //        InventoryManager.inventoryManager_getSingleSlotDataByPtr(playerInventoryPtr, (uint)slotIndex, ref itemTemplateRunningIdx, ref itemCount, ref lockedTemplateRunningIdx, ref isLocked, IOBool.iofalse);
+        //        if (itemCount > 0)
+        //        {
+        //            var playerInventorySlotItemTemplate = GameRoot.RunningIdxTable_itemTemplates_all.getDataByRunningIdx(itemTemplateRunningIdx);
+        //            if (playerInventorySlotItemTemplate != null)
+        //            {
+        //                if (playerInventorySlotItemTemplate.id == railMinerItemTemplate.id)
+        //                {
+        //                    return true;
+        //                }
+        //            }
+        //        }
+        //    }
 
-            return false;
-        }
+        //    return false;
+        //}
 
         internal void UpdateBlueprintPositionText()
         {
@@ -1685,37 +1694,37 @@ namespace Duplicationer
 
         internal void LoadIconSprites()
         {
-            iconBlack = new LazyIconSprite(Plugin.bundleMain, "black");
-            iconEmpty = new LazyIconSprite(Plugin.bundleMain, "empty");
-            iconCopy = new LazyIconSprite(Plugin.bundleMain, "copy");
-            iconMoveVertical = new LazyIconSprite(Plugin.bundleMain, "move-vertical");
-            iconMove = new LazyIconSprite(Plugin.bundleMain, "move");
-            iconPanel = new LazyIconSprite(Plugin.bundleMain, "panel");
-            iconPaste = new LazyIconSprite(Plugin.bundleMain, "paste");
-            iconPlace = new LazyIconSprite(Plugin.bundleMain, "place");
-            iconRepeat = new LazyIconSprite(Plugin.bundleMain, "repeat");
-            iconResizeVertical = new LazyIconSprite(Plugin.bundleMain, "resize-vertical");
-            iconResize = new LazyIconSprite(Plugin.bundleMain, "resize");
-            iconSelectArea = new LazyIconSprite(Plugin.bundleMain, "select-area");
+            iconBlack = new LazyIconSprite(DuplicationerPlugin.bundleMainAssets, "black");
+            iconEmpty = new LazyIconSprite(DuplicationerPlugin.bundleMainAssets, "empty");
+            iconCopy = new LazyIconSprite(DuplicationerPlugin.bundleMainAssets, "copy");
+            iconMoveVertical = new LazyIconSprite(DuplicationerPlugin.bundleMainAssets, "move-vertical");
+            iconMove = new LazyIconSprite(DuplicationerPlugin.bundleMainAssets, "move");
+            iconPanel = new LazyIconSprite(DuplicationerPlugin.bundleMainAssets, "panel");
+            iconPaste = new LazyIconSprite(DuplicationerPlugin.bundleMainAssets, "paste");
+            iconPlace = new LazyIconSprite(DuplicationerPlugin.bundleMainAssets, "place");
+            iconRepeat = new LazyIconSprite(DuplicationerPlugin.bundleMainAssets, "repeat");
+            iconResizeVertical = new LazyIconSprite(DuplicationerPlugin.bundleMainAssets, "resize-vertical");
+            iconResize = new LazyIconSprite(DuplicationerPlugin.bundleMainAssets, "resize");
+            iconSelectArea = new LazyIconSprite(DuplicationerPlugin.bundleMainAssets, "select-area");
         }
 
-        private List<ItemTemplate> GetRailMinerTemplates()
-        {
-            if (railMinerTemplates == null)
-            {
-                railMinerTemplates = new List<ItemTemplate>();
-                foreach (var kv in ItemTemplateManager.getAllItemTemplates())
-                {
-                    var itemTemplate = kv.Value;
-                    if ((itemTemplate.flags & ItemTemplate.ItemTemplateFlags.RAIL_MINER) != 0)
-                    {
-                        railMinerTemplates.Add(itemTemplate);
-                    }
-                }
-            }
+        //private List<ItemTemplate> GetRailMinerTemplates()
+        //{
+        //    if (railMinerTemplates == null)
+        //    {
+        //        railMinerTemplates = new List<ItemTemplate>();
+        //        foreach (var kv in ItemTemplateManager.getAllItemTemplates())
+        //        {
+        //            var itemTemplate = kv.Value;
+        //            if ((itemTemplate.flags & ItemTemplate.ItemTemplateFlags.RAIL_MINER) != 0)
+        //            {
+        //                railMinerTemplates.Add(itemTemplate);
+        //            }
+        //        }
+        //    }
 
-            return railMinerTemplates;
-        }
+        //    return railMinerTemplates;
+        //}
 
         private void OnGameInitializationDone()
         {
@@ -1742,7 +1751,7 @@ namespace Duplicationer
                 {
                     for (int x = repeatFrom.x; x <= repeatTo.x; ++x)
                     {
-                        CurrentBlueprint.GetExistingMinecartDepots(targetPosition + new Vector3Int(x, y, z) * CurrentBlueprintSize, existingMinecartDepots);
+                        CurrentBlueprint.GetExistingMinecartDepots(targetPosition + new Vector3Int(x * CurrentBlueprintSize.x, y * CurrentBlueprintSize.y, z * CurrentBlueprintSize.z), existingMinecartDepots);
                     }
                 }
             }
@@ -1758,7 +1767,7 @@ namespace Duplicationer
                 {
                     for (int x = repeatFrom.x; x <= repeatTo.x; ++x)
                     {
-                        if (CurrentBlueprint.HasExistingMinecartDepots(targetPosition + new Vector3Int(x, y, z) * CurrentBlueprintSize)) return true;
+                        if (CurrentBlueprint.HasExistingMinecartDepots(targetPosition + new Vector3Int(x * CurrentBlueprintSize.x, y * CurrentBlueprintSize.y, z * CurrentBlueprintSize.z))) return true;
                     }
                 }
             }

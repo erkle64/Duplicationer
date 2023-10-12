@@ -1,4 +1,6 @@
-﻿using Newtonsoft.Json;
+﻿using HarmonyLib;
+using Newtonsoft.Json;
+using Rewired.Utils.Libraries.TinyJson;
 using System;
 using System.Collections.Generic;
 using System.Configuration;
@@ -8,7 +10,6 @@ using System.Text;
 using Unfoundry;
 using UnityEngine;
 using static Duplicationer.BlueprintManager;
-using static Il2CppSystem.Globalization.CultureInfo;
 
 namespace Duplicationer
 {
@@ -33,7 +34,7 @@ namespace Duplicationer
         private BlueprintData data;
         private int[] minecartDepotIndices;
 
-        private static Il2CppSystem.Collections.Generic.List<BuildableObjectGO> bogoQueryResult = new Il2CppSystem.Collections.Generic.List<BuildableObjectGO>(0);
+        private static List<BuildableObjectGO> bogoQueryResult = new List<BuildableObjectGO>(0);
         private static List<ConstructionTaskGroup.ConstructionTask> dependenciesTemp = new List<ConstructionTaskGroup.ConstructionTask>();
         private static Dictionary<ConstructionTaskGroup.ConstructionTask, List<ulong>> genericDependencies = new Dictionary<ConstructionTaskGroup.ConstructionTask, List<ulong>>();
 
@@ -110,8 +111,6 @@ namespace Duplicationer
                     {
                         case BuildableObjectTemplate.BuildableObjectType.BuildingPart:
                         case BuildableObjectTemplate.BuildableObjectType.WorldDecorMineAble:
-                        case BuildableObjectTemplate.BuildableObjectType.ElevatorStructure:
-                        case BuildableObjectTemplate.BuildableObjectType.WorldDecorGrowing:
                             break;
 
                         default:
@@ -139,7 +138,7 @@ namespace Duplicationer
 
                 buildingDataArray[buildingIndex].originalEntityId = bogo.relatedEntityId;
                 buildingDataArray[buildingIndex].templateName = bogo.template.name;
-                buildingDataArray[buildingIndex].templateId = generalData.buildableObjectTempalteId;
+                buildingDataArray[buildingIndex].templateId = generalData.buildableObjectTemplateId;
                 buildingDataArray[buildingIndex].worldX = generalData.pos.x - from.x;
                 buildingDataArray[buildingIndex].worldY = generalData.pos.y - from.y;
                 buildingDataArray[buildingIndex].worldZ = generalData.pos.z - from.z;
@@ -161,36 +160,36 @@ namespace Duplicationer
                     buildingDataArray[buildingIndex].orientationUnlockedW = 1.0f;
                 }
 
-                var bogoType = bogo.GetIl2CppType();
+                var bogoType = bogo.GetType();
 
                 customData.Clear();
-                if (UnhollowerRuntimeLib.Il2CppType.Of<ProducerGO>().IsAssignableFrom(bogoType))
+                if (typeof(ProducerGO).IsAssignableFrom(bogoType))
                 {
-                    var assembler = bogo.Cast<ProducerGO>();
+                    var assembler = (ProducerGO)bogo;
                     customData.Add(new BlueprintData.BuildableObjectData.CustomData("craftingRecipeId", assembler.getLastPolledRecipeId()));
                 }
-                if (UnhollowerRuntimeLib.Il2CppType.Of<LoaderGO>().IsAssignableFrom(bogoType))
+                if (typeof(LoaderGO).IsAssignableFrom(bogoType))
                 {
-                    var loader = bogo.Cast<LoaderGO>();
+                    var loader = (LoaderGO)bogo;
                     customData.Add(new BlueprintData.BuildableObjectData.CustomData("isInputLoader", loader.isInputLoader() ? "true" : "false"));
                     if (bogo.template.loader_isFilter)
                     {
-                        customData.Add(new BlueprintData.BuildableObjectData.CustomData("loaderFilterTemplateId", loader._cache_lastSetFilterTemplateId));
+                        customData.Add(new BlueprintData.BuildableObjectData.CustomData("loaderFilterTemplateId", loader.getLastSetFilterTemplate()));
                     }
                 }
-                if (UnhollowerRuntimeLib.Il2CppType.Of<PipeLoaderGO>().IsAssignableFrom(bogoType))
+                if (typeof(PipeLoaderGO).IsAssignableFrom(bogoType))
                 {
-                    var loader = bogo.Cast<PipeLoaderGO>();
+                    var loader = (PipeLoaderGO)bogo;
                     customData.Add(new BlueprintData.BuildableObjectData.CustomData("isInputLoader", loader.isInputLoader() ? "true" : "false"));
-                    customData.Add(new BlueprintData.BuildableObjectData.CustomData("pipeLoaderFilterTemplateId", loader._cache_lastSetFilterTemplateId));
+                    customData.Add(new BlueprintData.BuildableObjectData.CustomData("pipeLoaderFilterTemplateId", loader.getLastSetFilterTemplate()));
                 }
-                if (UnhollowerRuntimeLib.Il2CppType.Of<ConveyorBalancerGO>().IsAssignableFrom(bogoType))
+                if (typeof(ConveyorBalancerGO).IsAssignableFrom(bogoType))
                 {
-                    var balancer = bogo.Cast<ConveyorBalancerGO>();
+                    var balancer = (ConveyorBalancerGO)bogo;
                     customData.Add(new BlueprintData.BuildableObjectData.CustomData("balancerInputPriority", balancer.getInputPriority()));
                     customData.Add(new BlueprintData.BuildableObjectData.CustomData("balancerOutputPriority", balancer.getOutputPriority()));
                 }
-                if (UnhollowerRuntimeLib.Il2CppType.Of<SignGO>().IsAssignableFrom(bogoType))
+                if (typeof(SignGO).IsAssignableFrom(bogoType))
                 {
                     var signTextLength = SignGO.signEntity_getSignTextLength(bogo.relatedEntityId);
                     var signText = new byte[signTextLength];
@@ -204,7 +203,7 @@ namespace Duplicationer
                     customData.Add(new BlueprintData.BuildableObjectData.CustomData("signTextMinSize", textMinSize));
                     customData.Add(new BlueprintData.BuildableObjectData.CustomData("signTextMaxSize", textMaxSize));
                 }
-                if (UnhollowerRuntimeLib.Il2CppType.Of<BlastFurnaceBaseGO>().IsAssignableFrom(bogoType))
+                if (typeof(BlastFurnaceBaseGO).IsAssignableFrom(bogoType))
                 {
                     BlastFurnacePollingUpdateData data = default;
                     if (BlastFurnaceBaseGO.blastFurnaceEntity_queryPollingData(bogo.relatedEntityId, ref data) == IOBool.iotrue)
@@ -228,71 +227,71 @@ namespace Duplicationer
                     }
                 }
 
-                void HandleParenting<T>(T module) where T : BuildableObjectGO
-                {
-                    var searchPos = (Vector3Int)generalData.pos;
-                    var pbogo = quadTree.queryPointXYZ(BuildableEntity.getWorldPositionByLocalOffset(bogo.template, bogo.aabb, module.template.modularBuildingLocalSearchAnchor, bogo.buildOrientation, bogo.transform.rotation));
-                    int nodeIndex = 0;
-                    int matchIndex = -1;
-                    foreach (var node in pbogo.template.modularBuildingConnectionNodes)
-                    {
-                        foreach (var nodeData in node.nodeData)
-                        {
-                            if (nodeData.botId == bogo.template.id)
-                            {
-                                var nodePos = BuildableEntity.getWorldPositionByLocalOffset(pbogo.template, pbogo.aabb, nodeData.positionData.offset, pbogo.buildOrientation, pbogo.transform.rotation);
-                                if (nodePos == searchPos)
-                                {
-                                    matchIndex = nodeIndex;
-                                    break;
-                                }
-                            }
-                        }
-                        if (matchIndex >= 0) break;
-                        ++nodeIndex;
-                    }
-                    if (matchIndex >= 0)
-                    {
-                        customData.Add(new BlueprintData.BuildableObjectData.CustomData("modularNodeIndex", matchIndex));
-                        customData.Add(new BlueprintData.BuildableObjectData.CustomData("modularParentId", pbogo.relatedEntityId));
-                    }
-                }
+                //void HandleParenting<T>(T module) where T : BuildableObjectGO
+                //{
+                //    var searchPos = (Vector3Int)generalData.pos;
+                //    var pbogo = quadTree.queryPointXYZ(BuildableEntity.getWorldPositionByLocalOffset(bogo.template, bogo.aabb, module.template.modularBuildingLocalSearchAnchor, bogo.buildOrientation, bogo.transform.rotation));
+                //    int nodeIndex = 0;
+                //    int matchIndex = -1;
+                //    foreach (var node in pbogo.template.modularBuildingConnectionNodes)
+                //    {
+                //        foreach (var nodeData in node.nodeData)
+                //        {
+                //            if (nodeData.botId == bogo.template.id)
+                //            {
+                //                var nodePos = BuildableEntity.getWorldPositionByLocalOffset(pbogo.template, pbogo.aabb, nodeData.positionData.offset, pbogo.buildOrientation, pbogo.transform.rotation);
+                //                if (nodePos == searchPos)
+                //                {
+                //                    matchIndex = nodeIndex;
+                //                    break;
+                //                }
+                //            }
+                //        }
+                //        if (matchIndex >= 0) break;
+                //        ++nodeIndex;
+                //    }
+                //    if (matchIndex >= 0)
+                //    {
+                //        customData.Add(new BlueprintData.BuildableObjectData.CustomData("modularNodeIndex", matchIndex));
+                //        customData.Add(new BlueprintData.BuildableObjectData.CustomData("modularParentId", pbogo.relatedEntityId));
+                //    }
+                //}
 
-                if (UnhollowerRuntimeLib.Il2CppType.Of<ModularGO_Module>().IsAssignableFrom(bogoType))
-                {
-                    var modularModule = bogo.Cast<ModularGO_Module>();
-                    HandleParenting(modularModule);
-                }
-                if (UnhollowerRuntimeLib.Il2CppType.Of<ModularGO_ModuleWithInteractable>().IsAssignableFrom(bogoType))
-                {
-                    var modularModule = bogo.Cast<ModularGO_ModuleWithInteractable>();
-                    HandleParenting(modularModule);
+                //if (typeof(ModularGO_Module).IsAssignableFrom(bogoType))
+                //{
+                //    var modularModule = bogo.Cast<ModularGO_Module>();
+                //    HandleParenting(modularModule);
+                //}
+                //if (typeof(ModularGO_ModuleWithInteractable).IsAssignableFrom(bogoType))
+                //{
+                //    var modularModule = bogo.Cast<ModularGO_ModuleWithInteractable>();
+                //    HandleParenting(modularModule);
 
-                    int interactableCount = 0;
-                    var interactables = modularModule.GetInteractableObjects(ref interactableCount);
-                    if (interactableCount > 0)
-                    {
-                        customData.Add(new BlueprintData.BuildableObjectData.CustomData("interactableCount", interactableCount));
-                        for (int j = 0; j < interactableCount; ++j)
-                        {
-                            var interactable = interactables[j];
-                            if (interactable.eventType == InteractableObject.InteractableEventType.NoEvent)
-                            {
-                                ulong filterTemplateId = 0;
-                                BuildableEntity.buildableEntity_getFilterTemplate(bogo.relatedEntityId, 0, ref filterTemplateId, interactable.filterIdx);
-                                if (filterTemplateId > 0) customData.Add(new BlueprintData.BuildableObjectData.CustomData("itemFilter", $"{interactable.filterIdx}={filterTemplateId}"));
+                //    int interactableCount = 0;
+                //    var interactables = modularModule.GetInteractableObjects(ref interactableCount);
+                //    if (interactableCount > 0)
+                //    {
+                //        customData.Add(new BlueprintData.BuildableObjectData.CustomData("interactableCount", interactableCount));
+                //        for (int j = 0; j < interactableCount; ++j)
+                //        {
+                //            var interactable = interactables[j];
+                //            if (interactable.eventType == InteractableObject.InteractableEventType.NoEvent)
+                //            {
+                //                ulong filterTemplateId = 0;
+                //                BuildableEntity.buildableEntity_getFilterTemplate(bogo.relatedEntityId, 0, ref filterTemplateId, interactable.filterIdx);
+                //                if (filterTemplateId > 0) customData.Add(new BlueprintData.BuildableObjectData.CustomData("itemFilter", $"{interactable.filterIdx}={filterTemplateId}"));
 
-                                BuildableEntity.buildableEntity_getFilterTemplate(bogo.relatedEntityId, 1, ref filterTemplateId, interactable.filterIdx);
-                                if (filterTemplateId > 0) customData.Add(new BlueprintData.BuildableObjectData.CustomData("elementFilter", $"{interactable.filterIdx}={filterTemplateId}"));
-                            }
-                        }
-                    }
-                }
-                if (UnhollowerRuntimeLib.Il2CppType.Of<ModularGO_ModuleWithScreenPanel>().IsAssignableFrom(bogoType))
-                {
-                    var modularModule = bogo.Cast<ModularGO_ModuleWithScreenPanel>();
-                    HandleParenting(modularModule);
-                }
+                //                BuildableEntity.buildableEntity_getFilterTemplate(bogo.relatedEntityId, 1, ref filterTemplateId, interactable.filterIdx);
+                //                if (filterTemplateId > 0) customData.Add(new BlueprintData.BuildableObjectData.CustomData("elementFilter", $"{interactable.filterIdx}={filterTemplateId}"));
+                //            }
+                //        }
+                //    }
+                //}
+                //if (typeof(ModularGO_ModuleWithScreenPanel).IsAssignableFrom(bogoType))
+                //{
+                //    var modularModule = bogo.Cast<ModularGO_ModuleWithScreenPanel>();
+                //    HandleParenting(modularModule);
+                //}
 
                 buildingDataArray[buildingIndex].customData = customData.ToArray();
 
@@ -480,33 +479,35 @@ namespace Duplicationer
             this.name = name;
             this.iconItemTemplates = iconItemTemplates;
 
-            var json = JsonConvert.SerializeObject(data);
+            //var json = Utf8Json.JsonSerializer.Serialize(data);
+            ////var json = JsonConvert.SerializeObject(data);
 
-            ulong dataSize;
-            var compressed = SaveManager.compressByteArray(Encoding.UTF8.GetBytes(json), out dataSize);
-            //File.WriteAllBytes(path, compressed.Take((int)dataSize).ToArray());
+            //ulong dataSize;
+            //var compressed = SaveManager.compressByteArray(json, out dataSize);
+            ////var compressed = SaveManager.compressByteArray(Encoding.UTF8.GetBytes(json), out dataSize);
+            ////File.WriteAllBytes(path, compressed.Take((int)dataSize).ToArray());
 
-            var writer = new BinaryWriter(new FileStream(path, FileMode.Create, FileAccess.Write));
+            //var writer = new BinaryWriter(new FileStream(path, FileMode.Create, FileAccess.Write));
 
-            writer.Write(FileMagicNumber);
-            writer.Write(LatestBlueprintVersion);
+            //writer.Write(FileMagicNumber);
+            //writer.Write(LatestBlueprintVersion);
 
-            for (int i = 0; i < iconItemTemplates.Length; i++)
-            {
-                var template = iconItemTemplates[i];
-                writer.Write(template.id);
-            }
-            for (int i = iconItemTemplates.Length; i < 4; i++)
-            {
-                writer.Write(0ul);
-            }
+            //for (int i = 0; i < iconItemTemplates.Length; i++)
+            //{
+            //    var template = iconItemTemplates[i];
+            //    writer.Write(template.id);
+            //}
+            //for (int i = iconItemTemplates.Length; i < 4; i++)
+            //{
+            //    writer.Write(0ul);
+            //}
 
-            writer.Write(name);
+            //writer.Write(name);
 
-            writer.Write(compressed.Take((int)dataSize).ToArray());
+            //writer.Write(compressed.Take((int)dataSize).ToArray());
 
-            writer.Close();
-            writer.Dispose();
+            //writer.Close();
+            //writer.Dispose();
         }
 
         public void Place(Vector3Int anchorPosition, ConstructionTaskGroup constructionTaskGroup) => Place(GameRoot.getClientUsernameHash(), anchorPosition, constructionTaskGroup);
@@ -630,30 +631,30 @@ namespace Duplicationer
                     }
                 }
 
-                if (HasCustomData(buildingIndex, "interactableCount"))
-                {
-                    var elementFilters = new List<string>();
-                    GetCustomDataList(buildingIndex, "elementFilter", elementFilters);
-                    foreach (var elementFilter in elementFilters)
-                    {
-                        var parts = elementFilter.Split('=');
-                        if (parts.Length == 2)
-                        {
-                            var filterIdx = Convert.ToUInt32(parts[0]);
-                            var elementFilterTemplateId = Convert.ToUInt64(parts[1]);
-                            if (string.IsNullOrEmpty(template.modularBuildingPipeConnectionData[(int)filterIdx].modularBuildingFixedElementTemplateFilter))
-                            {
-                                postBuildActions.Add((ConstructionTaskGroup taskGroup, ConstructionTaskGroup.ConstructionTask task) =>
-                                {
-                                    if (task.entityId > 0)
-                                    {
-                                        GameRoot.addLockstepEvent(new SetFilterEvent(usernameHash, task.entityId, elementFilterTemplateId, 1, filterIdx));
-                                    }
-                                });
-                            }
-                        }
-                    }
-                }
+                //if (HasCustomData(buildingIndex, "interactableCount"))
+                //{
+                //    var elementFilters = new List<string>();
+                //    GetCustomDataList(buildingIndex, "elementFilter", elementFilters);
+                //    foreach (var elementFilter in elementFilters)
+                //    {
+                //        var parts = elementFilter.Split('=');
+                //        if (parts.Length == 2)
+                //        {
+                //            var filterIdx = Convert.ToUInt32(parts[0]);
+                //            var elementFilterTemplateId = Convert.ToUInt64(parts[1]);
+                //            if (string.IsNullOrEmpty(template.modularBuildingPipeConnectionData[(int)filterIdx].modularBuildingFixedElementTemplateFilter))
+                //            {
+                //                postBuildActions.Add((ConstructionTaskGroup taskGroup, ConstructionTaskGroup.ConstructionTask task) =>
+                //                {
+                //                    if (task.entityId > 0)
+                //                    {
+                //                        GameRoot.addLockstepEvent(new SetFilterEvent(usernameHash, task.entityId, elementFilterTemplateId, 1, filterIdx));
+                //                    }
+                //                });
+                //            }
+                //        }
+                //    }
+                //}
 
                 var powerlineEntityIds = new List<ulong>();
                 GetCustomDataList(buildingIndex, "powerline", powerlineEntityIds);
@@ -744,7 +745,7 @@ namespace Duplicationer
 
                     var dependency = constructionTaskGroup.GetTask(parentId);
                     if (dependency != null) dependenciesTemp.Add(dependency);
-                    else Plugin.log.LogWarning((string)$"Entity id {parentId} not found in blueprint");
+                    else Debug.LogWarning((string)$"Entity id {parentId} not found in blueprint");
                 }
 
                 var powerlineEntityIds = new List<ulong>();
@@ -753,7 +754,7 @@ namespace Duplicationer
                 {
                     var dependency = constructionTaskGroup.GetTask(powerlineEntityId);
                     if (dependency != null) dependenciesTemp.Add(dependency);
-                    else Plugin.log.LogWarning((string)$"Entity id {powerlineEntityId} not found in blueprint");
+                    else Debug.LogWarning((string)$"Entity id {powerlineEntityId} not found in blueprint");
                 }
 
                 if (dependenciesTemp.Count > 0)
@@ -792,7 +793,7 @@ namespace Duplicationer
                                     var partTemplate = ItemTemplateManager.getBuildingPartTemplate(GameRoot.BuildingPartIdxLookupTable.table[blockId]);
                                     if (partTemplate != null && partTemplate.parentItemTemplate != null)
                                     {
-                                        //Plugin.log.LogMessage((string)$"Place building part {partTemplate.parentItemTemplate.name} at ({worldPos.x}, {worldPos.y}, {worldPos.z})");
+                                        //Debug.Log((string)$"Place building part {partTemplate.parentItemTemplate.name} at ({worldPos.x}, {worldPos.y}, {worldPos.z})");
 
                                         ActionManager.AddQueuedEvent(() =>
                                         {
@@ -816,7 +817,7 @@ namespace Duplicationer
                                         var itemTemplate = blockTemplate.parentBOT.parentItemTemplate;
                                         if (itemTemplate != null)
                                         {
-                                            //Plugin.log.LogMessage((string)$"Place terrain {itemTemplate.name} at ({worldPos.x}, {worldPos.y}, {worldPos.z})");
+                                            //Debug.Log((string)$"Place terrain {itemTemplate.name} at ({worldPos.x}, {worldPos.y}, {worldPos.z})");
 
                                             ActionManager.AddQueuedEvent(() =>
                                             {
@@ -825,12 +826,12 @@ namespace Duplicationer
                                         }
                                         else
                                         {
-                                            Plugin.log.LogWarning((string)$"No item template for terrain index {blockId}");
+                                            Debug.LogWarning((string)$"No item template for terrain index {blockId}");
                                         }
                                     }
                                     else
                                     {
-                                        Plugin.log.LogWarning((string)$"No block template for terrain index {blockId}");
+                                        Debug.LogWarning((string)$"No block template for terrain index {blockId}");
                                     }
                                 }
                             }
@@ -910,7 +911,7 @@ namespace Duplicationer
                 var template = ItemTemplateManager.getBuildableObjectTemplate(buildableObjectData.templateId);
                 foreach (var wbogo in bogoQueryResult)
                 {
-                    if (wbogo.renderMode != 1)
+                    if (Traverse.Create(wbogo).Field("renderMode").GetValue<int>() != 1)
                     {
                         bool match = true;
 
@@ -934,7 +935,7 @@ namespace Duplicationer
                         }
                         else
                         {
-                            Plugin.log.LogWarning("data not found");
+                            Debug.LogWarning("data not found");
                             match = false;
                         }
 
@@ -1023,7 +1024,7 @@ namespace Duplicationer
                     BuildingManager.getWidthFromOrientation(template, (BuildingManager.BuildOrientation)buildableObjectData.orientationY, out wx, out wy, out wz);
 
                 var position = new Vector3(buildableObjectData.worldX + wx * 0.5f, buildableObjectData.worldY + (template.canBeRotatedAroundXAxis ? wy * 0.5f : 0.0f), buildableObjectData.worldZ + wz * 0.5f) + anchorPosition;
-                var rotation = template.canBeRotatedAroundXAxis ? buildableObjectData.orientationUnlocked : Quaternion.EulerRotation(0, buildableObjectData.orientationY * Mathf.PI * 0.5f, 0.0f);
+                var rotation = template.canBeRotatedAroundXAxis ? buildableObjectData.orientationUnlocked : Quaternion.Euler(0, buildableObjectData.orientationY * 90.0f, 0.0f);
                 var orientation = (BuildingManager.BuildOrientation)buildableObjectData.orientationY;
 
                 var baseTransform = Matrix4x4.TRS(position, rotation, Vector3.one);
@@ -1061,7 +1062,7 @@ namespace Duplicationer
                             else
                             {
                                 template = ItemTemplateManager.getBuildingPartTemplate(GameRoot.BuildingPartIdxLookupTable.table[id]);
-                                if (template == null) Plugin.log.LogWarning((string)$"Template not found for terrain index {id}-{GameRoot.BUILDING_PART_ARRAY_IDX_START} with id {GameRoot.BuildingPartIdxLookupTable.table[id]} at ({worldPos.x}, {worldPos.y}, {worldPos.z})");
+                                if (template == null) Debug.LogWarning((string)$"Template not found for terrain index {id}-{GameRoot.BUILDING_PART_ARRAY_IDX_START} with id {GameRoot.BuildingPartIdxLookupTable.table[id]} at ({worldPos.x}, {worldPos.y}, {worldPos.z})");
                             }
 
                             if (template != null)
@@ -1110,7 +1111,7 @@ namespace Duplicationer
                         var bogo = StreamingSystem.getBuildableObjectGOByEntityId(depotEntityId);
                         if (bogo != null)
                         {
-                            var depot = bogo.TryCast<MinecartDepotGO>();
+                            var depot = (MinecartDepotGO)bogo;
                             if (depot != null) existingMinecartDepots.Add(depot);
                         }
                     }
@@ -1144,7 +1145,7 @@ namespace Duplicationer
                         var bogo = StreamingSystem.getBuildableObjectGOByEntityId(depotEntityId);
                         if (bogo != null)
                         {
-                            var depot = bogo.TryCast<MinecartDepotGO>();
+                            var depot = (MinecartDepotGO)bogo;
                             if (depot != null) return true;
                         }
                     }

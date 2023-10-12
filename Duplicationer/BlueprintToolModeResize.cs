@@ -95,13 +95,13 @@ namespace Duplicationer
                             if (InputHelpers.IsAltHeld)
                             {
                                 mode = Mode.XPos + (faceIndex ^ 1);
-                                tool.dragFaceRay.direction = -normal;
+                                tool.dragFaceRay = new Ray(tool.dragFaceRay.origin, -normal);
                                 tool.dragArrowOffset = -0.5f;
                             }
                             else
                             {
                                 mode = Mode.XPos + faceIndex;
-                                tool.dragFaceRay.direction = normal;
+                                tool.dragFaceRay = new Ray(tool.dragFaceRay.origin, normal);
                                 tool.dragArrowOffset = 0.5f;
                             }
                         }
