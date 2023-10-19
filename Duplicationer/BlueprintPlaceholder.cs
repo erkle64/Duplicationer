@@ -7,6 +7,7 @@ namespace Duplicationer
 {
     public class BlueprintPlaceholder {
         public int Index { get; private set; }
+        public Vector3Int RepeatIndex { get; private set; }
         public BuildableObjectTemplate Template { get; private set; }
         public Vector3 Position { get; private set; }
         public Quaternion Rotation { get; private set; }
@@ -47,9 +48,10 @@ namespace Duplicationer
             null
         };
 
-        public BlueprintPlaceholder(int index, BuildableObjectTemplate template, Vector3 position, Quaternion rotation, BuildingManager.BuildOrientation orientation, BatchRenderingHandle[] batchRenderingHandles, State state = State.Untested)
+        public BlueprintPlaceholder(int index, Vector3Int repeatIndex, BuildableObjectTemplate template, Vector3 position, Quaternion rotation, BuildingManager.BuildOrientation orientation, BatchRenderingHandle[] batchRenderingHandles, State state = State.Untested)
         {
             Index = index;
+            RepeatIndex = repeatIndex;
             Template = template;
             Position = position;
             Rotation = rotation;

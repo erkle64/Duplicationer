@@ -1060,6 +1060,7 @@ namespace Duplicationer
                 {
                     for (int rx = repeatFrom.x; rx <= repeatTo.x; ++rx)
                     {
+                        var repeatIndex = new Vector3Int(rx, ry, rz);
                         var repeatAnchorPosition = anchorPosition + new Vector3Int(rx * repeatStepSize.x, ry * repeatStepSize.y, rz * repeatStepSize.z);
 
                         for (int buildingIndex = 0; buildingIndex < data.buildableObjects.Length; buildingIndex++)
@@ -1088,7 +1089,7 @@ namespace Duplicationer
                                 handles[i] = placeholderRenderGroup.AddSimplePlaceholderTransform(entry.mesh, transform, BlueprintPlaceholder.stateColours[1]);
                             }
 
-                            buildingPlaceholders.Add(new BlueprintPlaceholder(buildingIndex, template, position, rotation, orientation, handles));
+                            buildingPlaceholders.Add(new BlueprintPlaceholder(buildingIndex, repeatIndex, template, position, rotation, orientation, handles));
                         }
 
                         int blockIndex = 0;
@@ -1128,7 +1129,7 @@ namespace Duplicationer
                                                 handles[i] = placeholderRenderGroup.AddSimplePlaceholderTransform(entry.mesh, transform, BlueprintPlaceholder.stateColours[1]);
                                             }
 
-                                            terrainPlaceholders.Add(new BlueprintPlaceholder(blockIndex, template, worldPos, Quaternion.identity, BuildingManager.BuildOrientation.xPos, handles));
+                                            terrainPlaceholders.Add(new BlueprintPlaceholder(blockIndex, repeatIndex, template, worldPos, Quaternion.identity, BuildingManager.BuildOrientation.xPos, handles));
                                         }
                                     }
                                     blockIndex++;

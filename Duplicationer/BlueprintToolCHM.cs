@@ -289,7 +289,8 @@ namespace Duplicationer
                     var placeholder = buildingPlaceholders[buildingPlaceholderUpdateIndex];
                     var buildableObjectData = CurrentBlueprint.GetBuildableObjectData(placeholder.Index);
 
-                    var worldPos = new Vector3Int(buildableObjectData.worldX + CurrentBlueprintAnchor.x, buildableObjectData.worldY + CurrentBlueprintAnchor.y, buildableObjectData.worldZ + CurrentBlueprintAnchor.z);
+                    var repeatOffset = new Vector3Int(placeholder.RepeatIndex.x * CurrentBlueprintSize.x, placeholder.RepeatIndex.y * CurrentBlueprintSize.y, placeholder.RepeatIndex.z * CurrentBlueprintSize.z);
+                    var worldPos = new Vector3Int(buildableObjectData.worldX + CurrentBlueprintAnchor.x + repeatOffset.x, buildableObjectData.worldY + CurrentBlueprintAnchor.y + repeatOffset.y, buildableObjectData.worldZ + CurrentBlueprintAnchor.z + repeatOffset.z);
                     int wx, wy, wz;
                     if (placeholder.Template.canBeRotatedAroundXAxis)
                         BuildingManager.getWidthFromUnlockedOrientation(placeholder.Template, buildableObjectData.orientationUnlocked, out wx, out wy, out wz);
