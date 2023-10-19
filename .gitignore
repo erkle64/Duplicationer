@@ -1,4 +1,10 @@
-/Duplicationer/bin
+/Packages
 /Duplicationer/obj
-/packages
+/Duplicationer/bin
+/Libraries
 .vs
+/MigrationBackup
+/Libraries
+/publicized_assemblies
+/Licenses
+/AssemblyPublicizer.exe

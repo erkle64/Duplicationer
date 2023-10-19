@@ -1,15 +1,12 @@
 ﻿using HarmonyLib;
 using Newtonsoft.Json;
-using Rewired.Utils.Libraries.TinyJson;
 using System;
 using System.Collections.Generic;
-using System.Configuration;
 using System.IO;
 using System.Linq;
 using System.Text;
 using Unfoundry;
 using UnityEngine;
-using static Duplicationer.BlueprintManager;
 
 namespace Duplicationer
 {
@@ -339,176 +336,176 @@ namespace Duplicationer
             shoppingList[template.id] = shoppingListEntry;
         }
 
-        public static bool TryLoadFileHeader(string path, out FileHeader header, out string name)
-        {
-            header = new FileHeader();
-            name = "";
+        //public static bool TryLoadFileHeader(string path, out FileHeader header, out string name)
+        //{
+        //    header = new FileHeader();
+        //    name = "";
 
-            var headerSize = System.Runtime.InteropServices.Marshal.SizeOf(typeof(FileHeader));
-            var allBytes = File.ReadAllBytes(path);
-            if (allBytes.Length < headerSize) return false;
+        //    var headerSize = System.Runtime.InteropServices.Marshal.SizeOf(typeof(FileHeader));
+        //    var allBytes = File.ReadAllBytes(path);
+        //    if (allBytes.Length < headerSize) return false;
 
-            var reader = new BinaryReader(new MemoryStream(allBytes, false));
+        //    var reader = new BinaryReader(new MemoryStream(allBytes, false));
 
-            header.magic = reader.ReadUInt32();
-            if (header.magic != FileMagicNumber) return false;
+        //    header.magic = reader.ReadUInt32();
+        //    if (header.magic != FileMagicNumber) return false;
 
-            header.version = reader.ReadUInt32();
+        //    header.version = reader.ReadUInt32();
 
-            header.icon1 = reader.ReadUInt64();
-            header.icon2 = reader.ReadUInt64();
-            header.icon3 = reader.ReadUInt64();
-            header.icon4 = reader.ReadUInt64();
+        //    header.icon1 = reader.ReadUInt64();
+        //    header.icon2 = reader.ReadUInt64();
+        //    header.icon3 = reader.ReadUInt64();
+        //    header.icon4 = reader.ReadUInt64();
 
-            name = reader.ReadString();
+        //    name = reader.ReadString();
 
-            reader.Close();
-            reader.Dispose();
+        //    reader.Close();
+        //    reader.Dispose();
 
-            return true;
-        }
+        //    return true;
+        //}
 
-        public static Blueprint LoadFromFile(string path)
-        {
-            if (!File.Exists(path)) return null;
+        //public static Blueprint LoadFromFile(string path)
+        //{
+        //    if (!File.Exists(path)) return null;
 
-            var shoppingList = new Dictionary<ulong, ShoppingListData>();
-            var minecartDepotIndices = new List<int>();
+        //    var shoppingList = new Dictionary<ulong, ShoppingListData>();
+        //    var minecartDepotIndices = new List<int>();
 
-            var headerSize = System.Runtime.InteropServices.Marshal.SizeOf(typeof(FileHeader));
-            var allBytes = File.ReadAllBytes(path);
-            if (allBytes.Length < headerSize) throw new FileLoadException(path);
+        //    var headerSize = System.Runtime.InteropServices.Marshal.SizeOf(typeof(FileHeader));
+        //    var allBytes = File.ReadAllBytes(path);
+        //    if (allBytes.Length < headerSize) throw new FileLoadException(path);
 
-            var reader = new BinaryReader(new MemoryStream(allBytes, false));
+        //    var reader = new BinaryReader(new MemoryStream(allBytes, false));
 
-            var magic = reader.ReadUInt32();
-            if (magic != FileMagicNumber) throw new FileLoadException(path);
+        //    var magic = reader.ReadUInt32();
+        //    if (magic != FileMagicNumber) throw new FileLoadException(path);
 
-            var version = reader.ReadUInt32();
+        //    var version = reader.ReadUInt32();
 
-            var iconItemTemplates = new List<ItemTemplate>();
-            for (int i = 0; i < 4; ++i)
-            {
-                var iconItemTemplateId = reader.ReadUInt64();
-                if (iconItemTemplateId != 0)
-                {
-                    var template = ItemTemplateManager.getItemTemplate(iconItemTemplateId);
-                    if (template != null) iconItemTemplates.Add(template);
-                }
-            }
+        //    var iconItemTemplates = new List<ItemTemplate>();
+        //    for (int i = 0; i < 4; ++i)
+        //    {
+        //        var iconItemTemplateId = reader.ReadUInt64();
+        //        if (iconItemTemplateId != 0)
+        //        {
+        //            var template = ItemTemplateManager.getItemTemplate(iconItemTemplateId);
+        //            if (template != null) iconItemTemplates.Add(template);
+        //        }
+        //    }
 
-            var name = reader.ReadString();
+        //    var name = reader.ReadString();
 
-            ulong dataSize;
-            var rawData = SaveManager.decompressByteArray(reader.ReadBytes(allBytes.Length - headerSize), out dataSize);
-            var blueprintData = LoadDataFromString(Encoding.UTF8.GetString(rawData.Take((int)dataSize).ToArray()), shoppingList, minecartDepotIndices);
+        //    ulong dataSize;
+        //    var rawData = SaveManager.decompressByteArray(reader.ReadBytes(allBytes.Length - headerSize), out dataSize);
+        //    var blueprintData = LoadDataFromString(Encoding.UTF8.GetString(rawData.Take((int)dataSize).ToArray()), shoppingList, minecartDepotIndices);
 
-            reader.Close();
-            reader.Dispose();
+        //    reader.Close();
+        //    reader.Dispose();
 
-            return new Blueprint(name, blueprintData, minecartDepotIndices.ToArray(), shoppingList, iconItemTemplates.ToArray());
-        }
+        //    return new Blueprint(name, blueprintData, minecartDepotIndices.ToArray(), shoppingList, iconItemTemplates.ToArray());
+        //}
 
-        private static BlueprintData LoadDataFromString(string blueprint, Dictionary<ulong, ShoppingListData> shoppingList, List<int> minecartDepotIndices)
-        {
-            var blueprintData = JsonConvert.DeserializeObject<BlueprintData>(blueprint);
+        //private static BlueprintData LoadDataFromString(string blueprint, Dictionary<ulong, ShoppingListData> shoppingList, List<int> minecartDepotIndices)
+        //{
+        //    var blueprintData = JsonConvert.DeserializeObject<BlueprintData>(blueprint);
 
-            var powerlineEntityIds = new List<ulong>();
-            int buildingIndex = 0;
-            foreach (var buildingData in blueprintData.buildableObjects)
-            {
-                var buildingTemplate = ItemTemplateManager.getBuildableObjectTemplate(buildingData.templateId);
-                if (buildingTemplate != null && buildingTemplate.parentItemTemplate != null)
-                {
-                    if (buildingTemplate.type == BuildableObjectTemplate.BuildableObjectType.MinecartDepot)
-                    {
-                        minecartDepotIndices.Add(buildingIndex);
-                    }
+        //    var powerlineEntityIds = new List<ulong>();
+        //    int buildingIndex = 0;
+        //    foreach (var buildingData in blueprintData.buildableObjects)
+        //    {
+        //        var buildingTemplate = ItemTemplateManager.getBuildableObjectTemplate(buildingData.templateId);
+        //        if (buildingTemplate != null && buildingTemplate.parentItemTemplate != null)
+        //        {
+        //            if (buildingTemplate.type == BuildableObjectTemplate.BuildableObjectType.MinecartDepot)
+        //            {
+        //                minecartDepotIndices.Add(buildingIndex);
+        //            }
 
-                    AddToShoppingList(shoppingList, buildingTemplate.parentItemTemplate);
-                }
+        //            AddToShoppingList(shoppingList, buildingTemplate.parentItemTemplate);
+        //        }
 
-                powerlineEntityIds.Clear();
-                GetCustomDataList(ref blueprintData, buildingIndex, "powerline", powerlineEntityIds);
-                if (powerlineEntityIds.Count > 0) AddToShoppingList(shoppingList, PowerlineItemTemplate, powerlineEntityIds.Count);
+        //        powerlineEntityIds.Clear();
+        //        GetCustomDataList(ref blueprintData, buildingIndex, "powerline", powerlineEntityIds);
+        //        if (powerlineEntityIds.Count > 0) AddToShoppingList(shoppingList, PowerlineItemTemplate, powerlineEntityIds.Count);
 
-                ++buildingIndex;
-            }
+        //        ++buildingIndex;
+        //    }
 
-            int blockIndex = 0;
-            for (int z = 0; z < blueprintData.blocks.sizeZ; ++z)
-            {
-                for (int y = 0; y < blueprintData.blocks.sizeY; ++y)
-                {
-                    for (int x = 0; x < blueprintData.blocks.sizeX; ++x)
-                    {
-                        var blockId = blueprintData.blocks.ids[blockIndex++];
-                        if (blockId >= GameRoot.BUILDING_PART_ARRAY_IDX_START)
-                        {
-                            var partTemplate = ItemTemplateManager.getBuildingPartTemplate(GameRoot.BuildingPartIdxLookupTable.table[blockId]);
-                            if (partTemplate != null)
-                            {
-                                var itemTemplate = partTemplate.parentItemTemplate;
-                                if (itemTemplate != null)
-                                {
-                                    AddToShoppingList(shoppingList, itemTemplate);
-                                }
-                            }
-                        }
-                        else if (blockId > 0)
-                        {
-                            var blockTemplate = ItemTemplateManager.getTerrainBlockTemplateByByteIdx(blockId);
-                            if (blockTemplate != null && blockTemplate.parentBOT != null)
-                            {
-                                var itemTemplate = blockTemplate.parentBOT.parentItemTemplate;
-                                if (itemTemplate != null)
-                                {
-                                    AddToShoppingList(shoppingList, itemTemplate);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+        //    int blockIndex = 0;
+        //    for (int z = 0; z < blueprintData.blocks.sizeZ; ++z)
+        //    {
+        //        for (int y = 0; y < blueprintData.blocks.sizeY; ++y)
+        //        {
+        //            for (int x = 0; x < blueprintData.blocks.sizeX; ++x)
+        //            {
+        //                var blockId = blueprintData.blocks.ids[blockIndex++];
+        //                if (blockId >= GameRoot.BUILDING_PART_ARRAY_IDX_START)
+        //                {
+        //                    var partTemplate = ItemTemplateManager.getBuildingPartTemplate(GameRoot.BuildingPartIdxLookupTable.table[blockId]);
+        //                    if (partTemplate != null)
+        //                    {
+        //                        var itemTemplate = partTemplate.parentItemTemplate;
+        //                        if (itemTemplate != null)
+        //                        {
+        //                            AddToShoppingList(shoppingList, itemTemplate);
+        //                        }
+        //                    }
+        //                }
+        //                else if (blockId > 0)
+        //                {
+        //                    var blockTemplate = ItemTemplateManager.getTerrainBlockTemplateByByteIdx(blockId);
+        //                    if (blockTemplate != null && blockTemplate.parentBOT != null)
+        //                    {
+        //                        var itemTemplate = blockTemplate.parentBOT.parentItemTemplate;
+        //                        if (itemTemplate != null)
+        //                        {
+        //                            AddToShoppingList(shoppingList, itemTemplate);
+        //                        }
+        //                    }
+        //                }
+        //            }
+        //        }
+        //    }
 
-            return blueprintData;
-        }
+        //    return blueprintData;
+        //}
 
-        public void Save(string path, string name, ItemTemplate[] iconItemTemplates)
-        {
-            this.name = name;
-            this.iconItemTemplates = iconItemTemplates;
+        //public void Save(string path, string name, ItemTemplate[] iconItemTemplates)
+        //{
+        //    this.name = name;
+        //    this.iconItemTemplates = iconItemTemplates;
 
-            //var json = Utf8Json.JsonSerializer.Serialize(data);
-            ////var json = JsonConvert.SerializeObject(data);
+        //    //var json = Utf8Json.JsonSerializer.Serialize(data);
+        //    ////var json = JsonConvert.SerializeObject(data);
 
-            //ulong dataSize;
-            //var compressed = SaveManager.compressByteArray(json, out dataSize);
-            ////var compressed = SaveManager.compressByteArray(Encoding.UTF8.GetBytes(json), out dataSize);
-            ////File.WriteAllBytes(path, compressed.Take((int)dataSize).ToArray());
+        //    //ulong dataSize;
+        //    //var compressed = SaveManager.compressByteArray(json, out dataSize);
+        //    ////var compressed = SaveManager.compressByteArray(Encoding.UTF8.GetBytes(json), out dataSize);
+        //    ////File.WriteAllBytes(path, compressed.Take((int)dataSize).ToArray());
 
-            //var writer = new BinaryWriter(new FileStream(path, FileMode.Create, FileAccess.Write));
+        //    //var writer = new BinaryWriter(new FileStream(path, FileMode.Create, FileAccess.Write));
 
-            //writer.Write(FileMagicNumber);
-            //writer.Write(LatestBlueprintVersion);
+        //    //writer.Write(FileMagicNumber);
+        //    //writer.Write(LatestBlueprintVersion);
 
-            //for (int i = 0; i < iconItemTemplates.Length; i++)
-            //{
-            //    var template = iconItemTemplates[i];
-            //    writer.Write(template.id);
-            //}
-            //for (int i = iconItemTemplates.Length; i < 4; i++)
-            //{
-            //    writer.Write(0ul);
-            //}
+        //    //for (int i = 0; i < iconItemTemplates.Length; i++)
+        //    //{
+        //    //    var template = iconItemTemplates[i];
+        //    //    writer.Write(template.id);
+        //    //}
+        //    //for (int i = iconItemTemplates.Length; i < 4; i++)
+        //    //{
+        //    //    writer.Write(0ul);
+        //    //}
 
-            //writer.Write(name);
+        //    //writer.Write(name);
 
-            //writer.Write(compressed.Take((int)dataSize).ToArray());
+        //    //writer.Write(compressed.Take((int)dataSize).ToArray());
 
-            //writer.Close();
-            //writer.Dispose();
-        }
+        //    //writer.Close();
+        //    //writer.Dispose();
+        //}
 
         public void Place(Vector3Int anchorPosition, ConstructionTaskGroup constructionTaskGroup) => Place(GameRoot.getClientUsernameHash(), anchorPosition, constructionTaskGroup);
         public void Place(Character character, Vector3Int anchorPosition, ConstructionTaskGroup constructionTaskGroup) => Place(character.usernameHash, anchorPosition, constructionTaskGroup);
@@ -798,7 +795,19 @@ namespace Duplicationer
                                         ActionManager.AddQueuedEvent(() =>
                                         {
                                             //BuildingManager.client_tryBuild(worldPos, BuildingManager.BuildOrientation.xPos, partTemplate.parentItemTemplate);
-                                            GameRoot.addLockstepEvent(new BuildEntityEvent(usernameHash, partTemplate.parentItemTemplate.id, 0, worldPos, 0, Quaternion.identity, 1, 0, false));
+                                            int mode = 0;
+                                            if (partTemplate.parentItemTemplate.toggleableModes != null && partTemplate.parentItemTemplate.toggleableModes.Length != 0 && partTemplate.parentItemTemplate.toggleableModeType == ItemTemplate.ItemTemplateToggleableModeTypes.MultipleBuildings)
+                                            {
+                                                for (int index = 0; index < partTemplate.parentItemTemplate.toggleableModes.Length; ++index)
+                                                {
+                                                    if (partTemplate.parentItemTemplate.toggleableModes[index].buildableObjectTemplate == partTemplate)
+                                                    {
+                                                        mode = index;
+                                                        break;
+                                                    }
+                                                }
+                                            }
+                                            GameRoot.addLockstepEvent(new BuildEntityEvent(usernameHash, partTemplate.parentItemTemplate.id, mode, worldPos, 0, Quaternion.identity, 1, 0, false));
                                         });
                                     }
                                 }
@@ -809,7 +818,19 @@ namespace Duplicationer
                                     {
                                         ActionManager.AddQueuedEvent(() =>
                                         {
-                                            GameRoot.addLockstepEvent(new BuildEntityEvent(usernameHash, blockTemplate.yieldItemOnDig_template.id, 0, worldPos, 0, Quaternion.identity, 1, 0, false));
+                                            int mode = 0;
+                                            if (blockTemplate.yieldItemOnDig_template.toggleableModes != null && blockTemplate.yieldItemOnDig_template.toggleableModes.Length != 0 && blockTemplate.yieldItemOnDig_template.toggleableModeType == ItemTemplate.ItemTemplateToggleableModeTypes.MultipleBuildings)
+                                            {
+                                                for (int index = 0; index < blockTemplate.yieldItemOnDig_template.toggleableModes.Length; ++index)
+                                                {
+                                                    if (blockTemplate.yieldItemOnDig_template.toggleableModes[index].buildableObjectTemplate == blockTemplate.parentBOT)
+                                                    {
+                                                        mode = index;
+                                                        break;
+                                                    }
+                                                }
+                                            }
+                                            GameRoot.addLockstepEvent(new BuildEntityEvent(usernameHash, blockTemplate.yieldItemOnDig_template.id, mode, worldPos, 0, Quaternion.identity, 1, 0, false));
                                         });
                                     }
                                     else if (blockTemplate != null && blockTemplate.parentBOT != null)
@@ -821,7 +842,19 @@ namespace Duplicationer
 
                                             ActionManager.AddQueuedEvent(() =>
                                             {
-                                                GameRoot.addLockstepEvent(new BuildEntityEvent(usernameHash, itemTemplate.id, 0, worldPos, 0, Quaternion.identity, 1, 0, false));
+                                                int mode = 0;
+                                                if (itemTemplate.toggleableModes != null && itemTemplate.toggleableModes.Length != 0 && itemTemplate.toggleableModeType == ItemTemplate.ItemTemplateToggleableModeTypes.MultipleBuildings)
+                                                {
+                                                    for (int index = 0; index < itemTemplate.toggleableModes.Length; ++index)
+                                                    {
+                                                        if (itemTemplate.toggleableModes[index].buildableObjectTemplate == blockTemplate.parentBOT)
+                                                        {
+                                                            mode = index;
+                                                            break;
+                                                        }
+                                                    }
+                                                }
+                                                GameRoot.addLockstepEvent(new BuildEntityEvent(usernameHash, itemTemplate.id, mode, worldPos, 0, Quaternion.identity, 1, 0, false));
                                             });
                                         }
                                         else
@@ -900,6 +933,14 @@ namespace Duplicationer
             if (z < 0 || z >= data.blocks.sizeZ) throw new IndexOutOfRangeException(nameof(z));
 
             return data.blocks.ids[x + (y + z * data.blocks.sizeY) * data.blocks.sizeX];
+        }
+
+        internal byte GetBlockId(int index) => GetBlockId(ref data, index);
+        internal static byte GetBlockId(ref BlueprintData data, int index)
+        {
+            if (index < 0 || index >= data.blocks.ids.Length) throw new IndexOutOfRangeException(nameof(index));
+
+            return data.blocks.ids[index];
         }
 
         internal static ulong CheckIfBuildingExists(AABB3D aabb, Vector3Int worldPos, BlueprintData.BuildableObjectData buildableObjectData)
@@ -1011,74 +1052,87 @@ namespace Duplicationer
             data = rotatedData;
         }
 
-        public void Show(Vector3Int anchorPosition, BatchRenderingGroup placeholderRenderGroup, List<BlueprintPlaceholder> buildingPlaceholders, List<BlueprintPlaceholder> terrainPlaceholders)
+        public void Show(Vector3Int anchorPosition, Vector3Int repeatFrom, Vector3Int repeatTo, Vector3Int repeatStepSize, BatchRenderingGroup placeholderRenderGroup, List<BlueprintPlaceholder> buildingPlaceholders, List<BlueprintPlaceholder> terrainPlaceholders)
         {
-            foreach (var buildableObjectData in data.buildableObjects)
+            for (int ry = repeatFrom.y; ry <= repeatTo.y; ++ry)
             {
-                var template = ItemTemplateManager.getBuildableObjectTemplate(buildableObjectData.templateId);
-
-                int wx, wy, wz;
-                if (template.canBeRotatedAroundXAxis)
-                    BuildingManager.getWidthFromUnlockedOrientation(template, buildableObjectData.orientationUnlocked, out wx, out wy, out wz);
-                else
-                    BuildingManager.getWidthFromOrientation(template, (BuildingManager.BuildOrientation)buildableObjectData.orientationY, out wx, out wy, out wz);
-
-                var position = new Vector3(buildableObjectData.worldX + wx * 0.5f, buildableObjectData.worldY + (template.canBeRotatedAroundXAxis ? wy * 0.5f : 0.0f), buildableObjectData.worldZ + wz * 0.5f) + anchorPosition;
-                var rotation = template.canBeRotatedAroundXAxis ? buildableObjectData.orientationUnlocked : Quaternion.Euler(0, buildableObjectData.orientationY * 90.0f, 0.0f);
-                var orientation = (BuildingManager.BuildOrientation)buildableObjectData.orientationY;
-
-                var baseTransform = Matrix4x4.TRS(position, rotation, Vector3.one);
-
-                var pattern = PlaceholderPattern.Instance(template.prefab);
-                var handles = new BatchRenderingHandle[pattern.Entries.Length];
-                for (int i = 0; i < pattern.Entries.Length; i++)
+                for (int rz = repeatFrom.z; rz <= repeatTo.z; ++rz)
                 {
-                    var entry = pattern.Entries[i];
-                    var transform = baseTransform * entry.relativeTransform;
-                    handles[i] = placeholderRenderGroup.AddSimplePlaceholderTransform(entry.mesh, transform, BlueprintPlaceholder.stateColours[1]);
-                }
-
-                buildingPlaceholders.Add(new BlueprintPlaceholder(template, position, rotation, orientation, handles));
-            }
-
-            int blockIndex = 0;
-            for (int z = 0; z < data.blocks.sizeZ; ++z)
-            {
-                for (int y = 0; y < data.blocks.sizeY; ++y)
-                {
-                    for (int x = 0; x < data.blocks.sizeX; ++x)
+                    for (int rx = repeatFrom.x; rx <= repeatTo.x; ++rx)
                     {
-                        var id = data.blocks.ids[blockIndex++];
-                        if (id > 0)
+                        var repeatAnchorPosition = anchorPosition + new Vector3Int(rx * repeatStepSize.x, ry * repeatStepSize.y, rz * repeatStepSize.z);
+
+                        for (int buildingIndex = 0; buildingIndex < data.buildableObjects.Length; buildingIndex++)
                         {
-                            var worldPos = new Vector3(x + anchorPosition.x + 0.5f, y + anchorPosition.y, z + anchorPosition.z + 0.5f);
+                            var buildableObjectData = data.buildableObjects[buildingIndex];
+                            var template = ItemTemplateManager.getBuildableObjectTemplate(buildableObjectData.templateId);
 
-                            BuildableObjectTemplate template = null;
-                            if (id < GameRoot.MAX_TERRAIN_COUNT)
-                            {
-                                var tbt = ItemTemplateManager.getTerrainBlockTemplateByByteIdx(id);
-                                if (tbt != null) template = tbt.parentBOT;
-                            }
+                            int wx, wy, wz;
+                            if (template.canBeRotatedAroundXAxis)
+                                BuildingManager.getWidthFromUnlockedOrientation(template, buildableObjectData.orientationUnlocked, out wx, out wy, out wz);
                             else
+                                BuildingManager.getWidthFromOrientation(template, (BuildingManager.BuildOrientation)buildableObjectData.orientationY, out wx, out wy, out wz);
+
+                            var position = new Vector3(buildableObjectData.worldX + wx * 0.5f, buildableObjectData.worldY + (template.canBeRotatedAroundXAxis ? wy * 0.5f : 0.0f), buildableObjectData.worldZ + wz * 0.5f) + repeatAnchorPosition;
+                            var rotation = template.canBeRotatedAroundXAxis ? buildableObjectData.orientationUnlocked : Quaternion.Euler(0, buildableObjectData.orientationY * 90.0f, 0.0f);
+                            var orientation = (BuildingManager.BuildOrientation)buildableObjectData.orientationY;
+
+                            var baseTransform = Matrix4x4.TRS(position, rotation, Vector3.one);
+
+                            var pattern = PlaceholderPattern.Instance(template.prefab);
+                            var handles = new BatchRenderingHandle[pattern.Entries.Length];
+                            for (int i = 0; i < pattern.Entries.Length; i++)
                             {
-                                template = ItemTemplateManager.getBuildingPartTemplate(GameRoot.BuildingPartIdxLookupTable.table[id]);
-                                if (template == null) Debug.LogWarning((string)$"Template not found for terrain index {id}-{GameRoot.BUILDING_PART_ARRAY_IDX_START} with id {GameRoot.BuildingPartIdxLookupTable.table[id]} at ({worldPos.x}, {worldPos.y}, {worldPos.z})");
+                                var entry = pattern.Entries[i];
+                                var transform = baseTransform * entry.relativeTransform;
+                                handles[i] = placeholderRenderGroup.AddSimplePlaceholderTransform(entry.mesh, transform, BlueprintPlaceholder.stateColours[1]);
                             }
 
-                            if (template != null)
+                            buildingPlaceholders.Add(new BlueprintPlaceholder(buildingIndex, template, position, rotation, orientation, handles));
+                        }
+
+                        int blockIndex = 0;
+                        for (int z = 0; z < data.blocks.sizeZ; ++z)
+                        {
+                            for (int y = 0; y < data.blocks.sizeY; ++y)
                             {
-                                var baseTransform = Matrix4x4.Translate(worldPos);
-
-                                var pattern = PlaceholderPattern.Instance(template.prefab);
-                                var handles = new BatchRenderingHandle[pattern.Entries.Length];
-                                for (int i = 0; i < pattern.Entries.Length; i++)
+                                for (int x = 0; x < data.blocks.sizeX; ++x)
                                 {
-                                    var entry = pattern.Entries[i];
-                                    var transform = baseTransform * entry.relativeTransform;
-                                    handles[i] = placeholderRenderGroup.AddSimplePlaceholderTransform(entry.mesh, transform, BlueprintPlaceholder.stateColours[1]);
-                                }
+                                    var id = data.blocks.ids[blockIndex];
+                                    if (id > 0)
+                                    {
+                                        var worldPos = new Vector3(x + repeatAnchorPosition.x + 0.5f, y + repeatAnchorPosition.y, z + repeatAnchorPosition.z + 0.5f);
 
-                                terrainPlaceholders.Add(new BlueprintPlaceholder(template, worldPos, Quaternion.identity, BuildingManager.BuildOrientation.xPos, handles));
+                                        BuildableObjectTemplate template = null;
+                                        if (id < GameRoot.MAX_TERRAIN_COUNT)
+                                        {
+                                            var tbt = ItemTemplateManager.getTerrainBlockTemplateByByteIdx(id);
+                                            if (tbt != null) template = tbt.parentBOT;
+                                        }
+                                        else
+                                        {
+                                            template = ItemTemplateManager.getBuildingPartTemplate(GameRoot.BuildingPartIdxLookupTable.table[id]);
+                                            if (template == null) Debug.LogWarning((string)$"Template not found for terrain index {id}-{GameRoot.BUILDING_PART_ARRAY_IDX_START} with id {GameRoot.BuildingPartIdxLookupTable.table[id]} at ({worldPos.x}, {worldPos.y}, {worldPos.z})");
+                                        }
+
+                                        if (template != null)
+                                        {
+                                            var baseTransform = Matrix4x4.Translate(worldPos);
+
+                                            var pattern = PlaceholderPattern.Instance(template.prefab);
+                                            var handles = new BatchRenderingHandle[pattern.Entries.Length];
+                                            for (int i = 0; i < pattern.Entries.Length; i++)
+                                            {
+                                                var entry = pattern.Entries[i];
+                                                var transform = baseTransform * entry.relativeTransform;
+                                                handles[i] = placeholderRenderGroup.AddSimplePlaceholderTransform(entry.mesh, transform, BlueprintPlaceholder.stateColours[1]);
+                                            }
+
+                                            terrainPlaceholders.Add(new BlueprintPlaceholder(blockIndex, template, worldPos, Quaternion.identity, BuildingManager.BuildOrientation.xPos, handles));
+                                        }
+                                    }
+                                    blockIndex++;
+                                }
                             }
                         }
                     }

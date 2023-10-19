@@ -1,7 +1,5 @@
-﻿using System;
-using Unfoundry;
+﻿using Unfoundry;
 using UnityEngine;
-using UnityEngine.ProBuilder;
 
 namespace Duplicationer
 {

@@ -1,38 +1,15 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
-<Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
-  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
   <PropertyGroup>
-    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
-    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
-    <ProjectGuid>{DF5BF99B-E1F4-48BA-8A9F-F84321530C83}</ProjectGuid>
-    <OutputType>Library</OutputType>
-    <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>Duplicationer</RootNamespace>
-    <AssemblyName>Duplicationer</AssemblyName>
-    <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
-    <FileAlignment>512</FileAlignment>
-    <Deterministic>true</Deterministic>
-    <TargetFrameworkProfile />
-    <NuGetPackageImportStamp>
-    </NuGetPackageImportStamp>
+	<GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <TargetFramework>net45</TargetFramework>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
-  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
-    <DebugSymbols>true</DebugSymbols>
-    <DebugType>full</DebugType>
-    <Optimize>false</Optimize>
-    <OutputPath>bin\Debug\</OutputPath>
-    <DefineConstants>DEBUG;TRACE</DefineConstants>
-    <ErrorReport>prompt</ErrorReport>
-    <WarningLevel>4</WarningLevel>
+  
+  <PropertyGroup>
+    <TargetFrameworkMonikerAssemblyAttributesPath>$(SolutionDir)Attributes\AssemblyAttributes.cs</TargetFrameworkMonikerAssemblyAttributesPath>
   </PropertyGroup>
-  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
-    <DebugType>pdbonly</DebugType>
-    <Optimize>true</Optimize>
-    <OutputPath>bin\Release\</OutputPath>
-    <DefineConstants>TRACE</DefineConstants>
-    <ErrorReport>prompt</ErrorReport>
-    <WarningLevel>4</WarningLevel>
-  </PropertyGroup>
+
   <ItemGroup>
     <Reference Include="0Harmony, Version=2.2.2.0, Culture=neutral, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
@@ -44,107 +21,21 @@
     <Reference Include="Channel3">
       <HintPath>G:\Games\Foundry\Foundry_Data\Managed\Channel3.dll</HintPath>
     </Reference>
-    <Reference Include="Main">
+    <Reference Include="Main, Version=0.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
       <HintPath>G:\Games\Foundry\Foundry_Data\Managed\Main.dll</HintPath>
-    </Reference>
-    <Reference Include="MessagePack.Annotations">
-      <HintPath>G:\Games\Foundry\Foundry_Data\Managed\MessagePack.Annotations.dll</HintPath>
-    </Reference>
-    <Reference Include="Mono.Security">
-      <HintPath>G:\Games\Foundry\Foundry_Data\Managed\Mono.Security.dll</HintPath>
-    </Reference>
-    <Reference Include="mscorlib">
-      <HintPath>G:\Games\Foundry\Foundry_Data\Managed\mscorlib.dll</HintPath>
-    </Reference>
-    <Reference Include="New UI Widgets">
-      <HintPath>G:\Games\Foundry\Foundry_Data\Managed\New UI Widgets.dll</HintPath>
-    </Reference>
-    <Reference Include="Newtonsoft.Json">
-      <HintPath>G:\Games\Foundry\Foundry_Data\Managed\Newtonsoft.Json.dll</HintPath>
-    </Reference>
-    <Reference Include="NGettext">
-      <HintPath>G:\Games\Foundry\Foundry_Data\Managed\NGettext.dll</HintPath>
-    </Reference>
-    <Reference Include="RayFireAssembly">
-      <HintPath>G:\Games\Foundry\Foundry_Data\Managed\RayFireAssembly.dll</HintPath>
-    </Reference>
-    <Reference Include="Rewired">
-      <HintPath>G:\Games\Foundry\Foundry_Data\Managed\Rewired.dll</HintPath>
-    </Reference>
-    <Reference Include="Rewired_Core">
-      <HintPath>G:\Games\Foundry\Foundry_Data\Managed\Rewired_Core.dll</HintPath>
-    </Reference>
-    <Reference Include="Rewired_Windows">
-      <HintPath>G:\Games\Foundry\Foundry_Data\Managed\Rewired_Windows.dll</HintPath>
-    </Reference>
-    <Reference Include="Rewired_Windows_Functions">
-      <HintPath>G:\Games\Foundry\Foundry_Data\Managed\Rewired_Windows_Functions.dll</HintPath>
-    </Reference>
-    <Reference Include="System.Configuration">
-      <HintPath>G:\Games\Foundry\Foundry_Data\Managed\System.Configuration.dll</HintPath>
-    </Reference>
-    <Reference Include="System.Core">
-      <HintPath>G:\Games\Foundry\Foundry_Data\Managed\System.Core.dll</HintPath>
     </Reference>
     <Reference Include="System">
       <HintPath>G:\Games\Foundry\Foundry_Data\Managed\System.dll</HintPath>
     </Reference>
-    <Reference Include="System.Net.Http">
-      <HintPath>G:\Games\Foundry\Foundry_Data\Managed\System.Net.Http.dll</HintPath>
+    <Reference Include="System.Core">
+      <HintPath>G:\Games\Foundry\Foundry_Data\Managed\System.Core.dll</HintPath>
     </Reference>
-    <Reference Include="System.Numerics">
-      <HintPath>G:\Games\Foundry\Foundry_Data\Managed\System.Numerics.dll</HintPath>
-    </Reference>
-    <Reference Include="System.Runtime.CompilerServices.Unsafe">
-      <HintPath>G:\Games\Foundry\Foundry_Data\Managed\System.Runtime.CompilerServices.Unsafe.dll</HintPath>
-    </Reference>
-    <Reference Include="System.Runtime.Serialization">
-      <HintPath>G:\Games\Foundry\Foundry_Data\Managed\System.Runtime.Serialization.dll</HintPath>
-    </Reference>
-    <Reference Include="System.ValueTuple, Version=4.0.2.0, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51, processorArchitecture=MSIL">
-      <HintPath>..\packages\System.ValueTuple.4.4.0\lib\net47\System.ValueTuple.dll</HintPath>
-    </Reference>
-    <Reference Include="System.Xml">
-      <HintPath>G:\Games\Foundry\Foundry_Data\Managed\System.Xml.dll</HintPath>
-    </Reference>
-    <Reference Include="System.Xml.Linq">
-      <HintPath>G:\Games\Foundry\Foundry_Data\Managed\System.Xml.Linq.dll</HintPath>
-    </Reference>
-    <Reference Include="ThirdParty">
-      <HintPath>G:\Games\Foundry\Foundry_Data\Managed\ThirdParty.dll</HintPath>
-    </Reference>
-    <Reference Include="UIExtensions">
-      <HintPath>G:\Games\Foundry\Foundry_Data\Managed\UIExtensions.dll</HintPath>
-    </Reference>
-    <Reference Include="Unity.Burst">
-      <HintPath>G:\Games\Foundry\Foundry_Data\Managed\Unity.Burst.dll</HintPath>
-    </Reference>
-    <Reference Include="Unity.Burst.Unsafe">
-      <HintPath>G:\Games\Foundry\Foundry_Data\Managed\Unity.Burst.Unsafe.dll</HintPath>
-    </Reference>
-    <Reference Include="Unity.Collections">
-      <HintPath>G:\Games\Foundry\Foundry_Data\Managed\Unity.Collections.dll</HintPath>
-    </Reference>
-    <Reference Include="Unity.Mathematics">
-      <HintPath>G:\Games\Foundry\Foundry_Data\Managed\Unity.Mathematics.dll</HintPath>
-    </Reference>
-    <Reference Include="Unity.Postprocessing.Runtime">
-      <HintPath>G:\Games\Foundry\Foundry_Data\Managed\Unity.Postprocessing.Runtime.dll</HintPath>
-    </Reference>
-    <Reference Include="Unity.ProBuilder">
-      <HintPath>G:\Games\Foundry\Foundry_Data\Managed\Unity.ProBuilder.dll</HintPath>
+    <Reference Include="Newtonsoft.Json">
+      <HintPath>G:\Games\Foundry\Foundry_Data\Managed\Newtonsoft.Json.dll</HintPath>
     </Reference>
     <Reference Include="Unity.TextMeshPro">
       <HintPath>G:\Games\Foundry\Foundry_Data\Managed\Unity.TextMeshPro.dll</HintPath>
-    </Reference>
-    <Reference Include="UnityEngine.AIModule">
-      <HintPath>G:\Games\Foundry\Foundry_Data\Managed\UnityEngine.AIModule.dll</HintPath>
-    </Reference>
-    <Reference Include="UnityEngine.AndroidJNIModule">
-      <HintPath>G:\Games\Foundry\Foundry_Data\Managed\UnityEngine.AndroidJNIModule.dll</HintPath>
-    </Reference>
-    <Reference Include="UnityEngine.AnimationModule">
-      <HintPath>G:\Games\Foundry\Foundry_Data\Managed\UnityEngine.AnimationModule.dll</HintPath>
     </Reference>
     <Reference Include="UnityEngine.AssetBundleModule">
       <HintPath>G:\Games\Foundry\Foundry_Data\Managed\UnityEngine.AssetBundleModule.dll</HintPath>
@@ -155,20 +46,8 @@
     <Reference Include="UnityEngine.CoreModule">
       <HintPath>G:\Games\Foundry\Foundry_Data\Managed\UnityEngine.CoreModule.dll</HintPath>
     </Reference>
-    <Reference Include="UnityEngine.DirectorModule">
-      <HintPath>G:\Games\Foundry\Foundry_Data\Managed\UnityEngine.DirectorModule.dll</HintPath>
-    </Reference>
-    <Reference Include="UnityEngine">
-      <HintPath>G:\Games\Foundry\Foundry_Data\Managed\UnityEngine.dll</HintPath>
-    </Reference>
-    <Reference Include="UnityEngine.GridModule">
-      <HintPath>G:\Games\Foundry\Foundry_Data\Managed\UnityEngine.GridModule.dll</HintPath>
-    </Reference>
     <Reference Include="UnityEngine.ImageConversionModule">
       <HintPath>G:\Games\Foundry\Foundry_Data\Managed\UnityEngine.ImageConversionModule.dll</HintPath>
-    </Reference>
-    <Reference Include="UnityEngine.IMGUIModule">
-      <HintPath>G:\Games\Foundry\Foundry_Data\Managed\UnityEngine.IMGUIModule.dll</HintPath>
     </Reference>
     <Reference Include="UnityEngine.InputLegacyModule">
       <HintPath>G:\Games\Foundry\Foundry_Data\Managed\UnityEngine.InputLegacyModule.dll</HintPath>
@@ -179,35 +58,8 @@
     <Reference Include="UnityEngine.JSONSerializeModule">
       <HintPath>G:\Games\Foundry\Foundry_Data\Managed\UnityEngine.JSONSerializeModule.dll</HintPath>
     </Reference>
-    <Reference Include="UnityEngine.ParticleSystemModule">
-      <HintPath>G:\Games\Foundry\Foundry_Data\Managed\UnityEngine.ParticleSystemModule.dll</HintPath>
-    </Reference>
-    <Reference Include="UnityEngine.PerformanceReportingModule">
-      <HintPath>G:\Games\Foundry\Foundry_Data\Managed\UnityEngine.PerformanceReportingModule.dll</HintPath>
-    </Reference>
-    <Reference Include="UnityEngine.Physics2DModule">
-      <HintPath>G:\Games\Foundry\Foundry_Data\Managed\UnityEngine.Physics2DModule.dll</HintPath>
-    </Reference>
     <Reference Include="UnityEngine.PhysicsModule">
       <HintPath>G:\Games\Foundry\Foundry_Data\Managed\UnityEngine.PhysicsModule.dll</HintPath>
-    </Reference>
-    <Reference Include="UnityEngine.ScreenCaptureModule">
-      <HintPath>G:\Games\Foundry\Foundry_Data\Managed\UnityEngine.ScreenCaptureModule.dll</HintPath>
-    </Reference>
-    <Reference Include="UnityEngine.SharedInternalsModule">
-      <HintPath>G:\Games\Foundry\Foundry_Data\Managed\UnityEngine.SharedInternalsModule.dll</HintPath>
-    </Reference>
-    <Reference Include="UnityEngine.SpriteShapeModule">
-      <HintPath>G:\Games\Foundry\Foundry_Data\Managed\UnityEngine.SpriteShapeModule.dll</HintPath>
-    </Reference>
-    <Reference Include="UnityEngine.StreamingModule">
-      <HintPath>G:\Games\Foundry\Foundry_Data\Managed\UnityEngine.StreamingModule.dll</HintPath>
-    </Reference>
-    <Reference Include="UnityEngine.SubsystemsModule">
-      <HintPath>G:\Games\Foundry\Foundry_Data\Managed\UnityEngine.SubsystemsModule.dll</HintPath>
-    </Reference>
-    <Reference Include="UnityEngine.TerrainModule">
-      <HintPath>G:\Games\Foundry\Foundry_Data\Managed\UnityEngine.TerrainModule.dll</HintPath>
     </Reference>
     <Reference Include="UnityEngine.TextCoreFontEngineModule">
       <HintPath>G:\Games\Foundry\Foundry_Data\Managed\UnityEngine.TextCoreFontEngineModule.dll</HintPath>
@@ -218,85 +70,22 @@
     <Reference Include="UnityEngine.TextRenderingModule">
       <HintPath>G:\Games\Foundry\Foundry_Data\Managed\UnityEngine.TextRenderingModule.dll</HintPath>
     </Reference>
-    <Reference Include="UnityEngine.TilemapModule">
-      <HintPath>G:\Games\Foundry\Foundry_Data\Managed\UnityEngine.TilemapModule.dll</HintPath>
-    </Reference>
     <Reference Include="UnityEngine.UI">
       <HintPath>G:\Games\Foundry\Foundry_Data\Managed\UnityEngine.UI.dll</HintPath>
-    </Reference>
-    <Reference Include="UnityEngine.UIElementsModule">
-      <HintPath>G:\Games\Foundry\Foundry_Data\Managed\UnityEngine.UIElementsModule.dll</HintPath>
-    </Reference>
-    <Reference Include="UnityEngine.UIElementsNativeModule">
-      <HintPath>G:\Games\Foundry\Foundry_Data\Managed\UnityEngine.UIElementsNativeModule.dll</HintPath>
     </Reference>
     <Reference Include="UnityEngine.UIModule">
       <HintPath>G:\Games\Foundry\Foundry_Data\Managed\UnityEngine.UIModule.dll</HintPath>
     </Reference>
-    <Reference Include="UnityEngine.UnityAnalyticsModule">
-      <HintPath>G:\Games\Foundry\Foundry_Data\Managed\UnityEngine.UnityAnalyticsModule.dll</HintPath>
+    <Reference Include="Unfoundry">
+      <HintPath>G:\Games\Foundry\Mods\A_Unfoundry\Unfoundry.dll</HintPath>
     </Reference>
-    <Reference Include="UnityEngine.UnityWebRequestModule">
-      <HintPath>G:\Games\Foundry\Foundry_Data\Managed\UnityEngine.UnityWebRequestModule.dll</HintPath>
-    </Reference>
-    <Reference Include="UnityEngine.UnityWebRequestTextureModule">
-      <HintPath>G:\Games\Foundry\Foundry_Data\Managed\UnityEngine.UnityWebRequestTextureModule.dll</HintPath>
-    </Reference>
-    <Reference Include="UnityEngine.VFXModule">
-      <HintPath>G:\Games\Foundry\Foundry_Data\Managed\UnityEngine.VFXModule.dll</HintPath>
-    </Reference>
-    <Reference Include="UnityEngine.VideoModule">
-      <HintPath>G:\Games\Foundry\Foundry_Data\Managed\UnityEngine.VideoModule.dll</HintPath>
-    </Reference>
-    <Reference Include="UnityEngine.VRModule">
-      <HintPath>G:\Games\Foundry\Foundry_Data\Managed\UnityEngine.VRModule.dll</HintPath>
-    </Reference>
-    <Reference Include="UnityEngine.WindModule">
-      <HintPath>G:\Games\Foundry\Foundry_Data\Managed\UnityEngine.WindModule.dll</HintPath>
-    </Reference>
-    <Reference Include="UnityEngine.XRModule">
-      <HintPath>G:\Games\Foundry\Foundry_Data\Managed\UnityEngine.XRModule.dll</HintPath>
+    <Reference Include="mscorlib">
+      <HintPath>G:\Games\Foundry\Foundry_Data\Managed\mscorlib.dll</HintPath>
     </Reference>
   </ItemGroup>
-  <ItemGroup>
-    <Compile Include="AssetBundleProxy.cs" />
-    <Compile Include="Blueprint.cs" />
-    <Compile Include="BlueprintManager.cs" />
-    <Compile Include="BlueprintPlaceholder.cs" />
-    <Compile Include="BlueprintToolMode.cs" />
-    <Compile Include="BlueprintToolModeMove.cs" />
-    <Compile Include="BlueprintToolModeMoveVertical.cs" />
-    <Compile Include="BlueprintToolModePlace.cs" />
-    <Compile Include="BlueprintToolModeRepeat.cs" />
-    <Compile Include="BlueprintToolModeResize.cs" />
-    <Compile Include="BlueprintToolModeResizeVertical.cs" />
-    <Compile Include="BlueprintToolModeSelectArea.cs" />
-    <Compile Include="BuildableObjectGOComparer.cs" />
-    <Compile Include="buildingPlaceholders.cs" />
-    <Compile Include="LazyPrefab.cs" />
-    <Compile Include="LazySprite.cs" />
-    <Compile Include="Plugin.cs" />
-    <Compile Include="BlueprintData.cs" />
-    <Compile Include="BlueprintToolCHM.cs" />
-    <Compile Include="PlaceholderPattern.cs" />
-    <Compile Include="Properties\AssemblyInfo.cs" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="packages.config" />
-    <EmbeddedResource Include="Resources\duplicationer.bundle" />
-  </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\..\Unfoundry\Unfoundry\Unfoundry.csproj">
-      <Project>{43ffcd1c-85a3-487d-9166-03c615684c15}</Project>
-      <Name>Unfoundry</Name>
-    </ProjectReference>
-  </ItemGroup>
-  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
-  <PropertyGroup>
-    <PostBuildEvent>copy /Y $(TargetPath) G:\Games\Foundry\Mods\Duplicationer</PostBuildEvent>
-  </PropertyGroup>
-  <PropertyGroup>
-    <PreBuildEvent>
-    </PreBuildEvent>
-  </PropertyGroup>
+
+  <Target Name="PostBuild" AfterTargets="PostBuildEvent">
+    <Exec Command="copy /Y $(TargetPath) G:\Games\Foundry\Mods\Duplicationer" />
+  </Target>
+
 </Project>

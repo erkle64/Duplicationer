@@ -6,6 +6,7 @@ using Unfoundry;
 namespace Duplicationer
 {
     public class BlueprintPlaceholder {
+        public int Index { get; private set; }
         public BuildableObjectTemplate Template { get; private set; }
         public Vector3 Position { get; private set; }
         public Quaternion Rotation { get; private set; }
@@ -46,8 +47,9 @@ namespace Duplicationer
             null
         };
 
-        public BlueprintPlaceholder(BuildableObjectTemplate template, Vector3 position, Quaternion rotation, BuildingManager.BuildOrientation orientation, BatchRenderingHandle[] batchRenderingHandles, State state = State.Untested)
+        public BlueprintPlaceholder(int index, BuildableObjectTemplate template, Vector3 position, Quaternion rotation, BuildingManager.BuildOrientation orientation, BatchRenderingHandle[] batchRenderingHandles, State state = State.Untested)
         {
+            Index = index;
             Template = template;
             Position = position;
             Rotation = rotation;
@@ -63,6 +65,15 @@ namespace Duplicationer
             foreach(var kv in stateCountsByTemplateId)
             {
                 yield return kv;
+            }
+        }
+
+        public static IEnumerable<KeyValuePair<ulong, int>> GetStateCounts(State state)
+        {
+            yield return new KeyValuePair<ulong, int>(0, stateCounts[(int)state - 1]);
+            foreach(var kv in stateCountsByTemplateId)
+            {
+                yield return new KeyValuePair<ulong, int>(kv.Key, kv.Value[(int)state - 1]);
             }
         }
 

@@ -286,8 +286,8 @@ namespace Duplicationer
                 if (buildingPlaceholderUpdateIndex >= buildingPlaceholders.Count) buildingPlaceholderUpdateIndex = 0;
                 for (int i = 0; i < count; i++)
                 {
-                    var buildableObjectData = CurrentBlueprint.GetBuildableObjectData(buildingPlaceholderUpdateIndex);
                     var placeholder = buildingPlaceholders[buildingPlaceholderUpdateIndex];
+                    var buildableObjectData = CurrentBlueprint.GetBuildableObjectData(placeholder.Index);
 
                     var worldPos = new Vector3Int(buildableObjectData.worldX + CurrentBlueprintAnchor.x, buildableObjectData.worldY + CurrentBlueprintAnchor.y, buildableObjectData.worldZ + CurrentBlueprintAnchor.z);
                     int wx, wy, wz;
@@ -311,12 +311,11 @@ namespace Duplicationer
                         case BuildingManager.CheckBuildableErrorCode.ModularBuilding_MissingFoundation:
                             positionClear = true;
                             break;
-                    }
 
-                    if (errorCode == BuildingManager.CheckBuildableErrorCode.BlockedByBuildableObject_Building)
-                    {
-                        aabb.reinitialize(worldPos.x, worldPos.y, worldPos.z, wx, wy, wz);
-                        if (Blueprint.CheckIfBuildingExists(aabb, worldPos, buildableObjectData) > 0) positionFilled = true;
+                        case BuildingManager.CheckBuildableErrorCode.BlockedByBuildableObject_Building:
+                            aabb.reinitialize(worldPos.x, worldPos.y, worldPos.z, wx, wy, wz);
+                            if (Blueprint.CheckIfBuildingExists(aabb, worldPos, buildableObjectData) > 0) positionFilled = true;
+                            break;
                     }
 
                     if (positionFilled)
@@ -344,7 +343,6 @@ namespace Duplicationer
                 {
                     var placeholder = terrainPlaceholders[terrainPlaceholderUpdateIndex];
                     var worldPos = new Vector3Int(Mathf.FloorToInt(placeholder.Position.x), Mathf.FloorToInt(placeholder.Position.y), Mathf.FloorToInt(placeholder.Position.z));
-                    var localPos = worldPos - CurrentBlueprintAnchor;
 
                     bool positionClear = true;
                     bool positionFilled = false;
@@ -358,7 +356,7 @@ namespace Duplicationer
                     {
                         ChunkManager.getChunkIdxAndTerrainArrayIdxFromWorldCoords(worldPos.x, worldPos.y, worldPos.z, out chunkIndex, out blockIndex);
 
-                        var blockId = CurrentBlueprint.GetBlockId(localPos.x, localPos.y, localPos.z);
+                        var blockId = CurrentBlueprint.GetBlockId(placeholder.Index);
                         var terrainData = ChunkManager.chunks_getTerrainData(chunkIndex, blockIndex);
                         if (terrainData == blockId)
                         {
@@ -396,8 +394,44 @@ namespace Duplicationer
                 int countUntested = BlueprintPlaceholder.GetStateCount(BlueprintPlaceholder.State.Untested);
                 if (countUntested > 0) text += $"<color=#CCCCCC>Untested:</color> {countUntested}\n";
 
-                int countClear = BlueprintPlaceholder.GetStateCount(BlueprintPlaceholder.State.Clear);
-                if (countClear > 0) text += $"Ready: {BlueprintPlaceholder.GetStateCount(BlueprintPlaceholder.State.Clear)}\n";
+                int countReady;
+                int countMissing;
+
+                ulong inventoryId = GameRoot.getClientCharacter().inventoryId;
+                ulong inventoryPtr = inventoryId != 0 ? InventoryManager.inventoryManager_getInventoryPtr(inventoryId) : 0;
+                if (inventoryPtr != 0)
+                {
+                    countReady = 0;
+                    countMissing = 0;
+
+                    foreach (var kv in BlueprintPlaceholder.GetStateCounts(BlueprintPlaceholder.State.Clear))
+                    {
+                        if (kv.Key != 0)
+                        {
+                            var clear = kv.Value;
+                            if (clear > 0)
+                            {
+                                var inventoryCount = InventoryManager.inventoryManager_countByItemTemplateByPtr(inventoryPtr, kv.Key, IOBool.iotrue);
+                                if (inventoryCount >= clear)
+                                {
+                                    countReady += clear;
+                                }
+                                else
+                                {
+                                    countReady += (int)inventoryCount;
+                                    countMissing += clear - (int)inventoryCount;
+                                }
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    countMissing = BlueprintPlaceholder.GetStateCount(BlueprintPlaceholder.State.Clear);
+                    countReady = 0;
+                }
+                if (countMissing > 0) text += $"Missing: {countMissing}\n";
+                if (countReady > 0) text += $"Ready: {countReady}\n";
 
                 int countBlocked = BlueprintPlaceholder.GetStateCount(BlueprintPlaceholder.State.Blocked);
                 if (countBlocked > 0) text += $"<color=\"red\">Blocked:</color> {BlueprintPlaceholder.GetStateCount(BlueprintPlaceholder.State.Blocked)}\n";
@@ -405,16 +439,15 @@ namespace Duplicationer
                 int countDone = BlueprintPlaceholder.GetStateCount(BlueprintPlaceholder.State.Done);
                 if (countDone > 0) text += $"<color=#AACCFF>Done:</color> {BlueprintPlaceholder.GetStateCount(BlueprintPlaceholder.State.Done)}\n";
 
-                if (countUntested > 0 || countBlocked > 0 || countClear > 0 || countDone > 0)
+                if (countUntested > 0 || countBlocked > 0 || countMissing > 0 || countReady > 0 || countDone > 0)
                 {
                     CurrentBlueprintStatusText = text + $"Total: {BlueprintPlaceholder.GetStateCountTotal()}";
-                    OnBlueprintUpdated(countUntested, countBlocked, countClear, countDone);
                 }
                 else
                 {
                     CurrentBlueprintStatusText = "";
-                    OnBlueprintUpdated(countUntested, countBlocked, countClear, countDone);
                 }
+                UpdateMaterialReport();
 
                 int remainingTasks = 0;
                 foreach (var group in activeConstructionTaskGroups) remainingTasks += group.Remaining;
@@ -629,7 +662,7 @@ namespace Duplicationer
                 IsBlueprintActive = true;
                 placeholderRenderGroup.Clear();
 
-                CurrentBlueprint?.Show(targetPosition, placeholderRenderGroup, buildingPlaceholders, terrainPlaceholders);
+                CurrentBlueprint?.Show(targetPosition, repeatFrom, repeatTo, CurrentBlueprintSize, placeholderRenderGroup, buildingPlaceholders, terrainPlaceholders);
             }
             else if (targetPosition != CurrentBlueprintAnchor)
             {
@@ -642,12 +675,18 @@ namespace Duplicationer
             CurrentBlueprintAnchor = targetPosition;
         }
 
+        internal void RefreshBlueprint()
+        {
+            ClearBlueprintPlaceholders();
+            ShowBlueprint();
+        }
+
         private void OnBlueprintMoved(Vector3Int oldPosition, ref Vector3Int newPosition)
         {
             UpdateBlueprintPositionText();
         }
 
-        private void OnBlueprintUpdated(int countUntested, int countBlocked, int countClear, int countDone)
+        private void UpdateMaterialReport()
         {
             if (textMaterialReport != null && Time.time >= nextUpdateTimeCountTexts)
             {
@@ -658,10 +697,11 @@ namespace Duplicationer
                 ulong inventoryPtr = inventoryId != 0 ? InventoryManager.inventoryManager_getInventoryPtr(inventoryId) : 0;
 
                 int totalItemCount = 0;
+                int totalDoneCount = 0;
                 var materialReportBuilder = new System.Text.StringBuilder();
                 foreach (var kv in CurrentBlueprint.ShoppingList)
                 {
-                    var itemCount = kv.Value.count;
+                    var itemCount = kv.Value.count * repeatCount;
                     if (itemCount > 0)
                     {
                         totalItemCount += itemCount;
@@ -671,27 +711,44 @@ namespace Duplicationer
                         var templateId = kv.Value.itemTemplateId;
                         if (templateId != 0)
                         {
+                            var doneCount = BlueprintPlaceholder.GetStateCount(templateId, BlueprintPlaceholder.State.Done);
+                            totalDoneCount += doneCount;
+
                             if (inventoryPtr != 0)
                             {
                                 var inventoryCount = InventoryManager.inventoryManager_countByItemTemplateByPtr(inventoryPtr, templateId, IOBool.iotrue);
 
-                                materialReportBuilder.AppendLine($"<color=#CCCCCC>{name}:</color> {itemCount * repeatCount} <color=#FFFFAA>({inventoryCount})</color>");
+                                if (doneCount > 0)
+                                {
+                                    materialReportBuilder.AppendLine($"<color=#CCCCCC>{name}:</color> {itemCount - doneCount} <color=#FFFFAA>({inventoryCount})</color> (<color=#AACCFF>{doneCount}</color>/{itemCount})");
+                                }
+                                else
+                                {
+                                    materialReportBuilder.AppendLine($"<color=#CCCCCC>{name}:</color> {itemCount} <color=#FFFFAA>({inventoryCount})</color>");
+                                }
                             }
                             else
                             {
-                                materialReportBuilder.AppendLine($"<color=#CCCCCC>{name}:</color> {itemCount * repeatCount} <color=#FFFFAA>(###)</color>");
+                                materialReportBuilder.AppendLine($"<color=#CCCCCC>{name}:</color> {itemCount} <color=#FFFFAA>(###)</color>");
                             }
                         }
                         else
                         {
-                            materialReportBuilder.AppendLine($"<color=#CCCCCC>{name}:</color> {itemCount * repeatCount}");
+                            materialReportBuilder.AppendLine($"<color=#CCCCCC>{name}:</color> {itemCount}");
                         }
                     }
                 }
 
                 if (totalItemCount > 0)
                 {
-                    materialReportBuilder.AppendLine($"<color=#CCCCCC>Total:</color> {totalItemCount * repeatCount}");
+                    if (totalDoneCount > 0)
+                    {
+                        materialReportBuilder.AppendLine($"<color=#CCCCCC>Total:</color> {totalItemCount - totalDoneCount} (<color=#AACCFF>{totalDoneCount}</color>/{totalItemCount})");
+                    }
+                    else
+                    {
+                        materialReportBuilder.AppendLine($"<color=#CCCCCC>Total:</color> {totalItemCount}");
+                    }
                 }
 
                 textMaterialReport.text = materialReportBuilder.ToString();
@@ -935,26 +992,26 @@ namespace Duplicationer
 
         private void BeginSaveBlueprint()
         {
-            HideBlueprintFrame();
-            ShowSaveFrame();
+            //HideBlueprintFrame();
+            //ShowSaveFrame();
         }
 
         private void FinishSaveBlueprint()
         {
-            if (CurrentBlueprint == null) throw new ArgumentNullException(nameof(CurrentBlueprint));
+            //if (CurrentBlueprint == null) throw new ArgumentNullException(nameof(CurrentBlueprint));
 
-            string name = saveFrameNameInputField.text;
-            if (string.IsNullOrWhiteSpace(name)) return;
+            //string name = saveFrameNameInputField.text;
+            //if (string.IsNullOrWhiteSpace(name)) return;
 
-            string filenameBase = PathHelpers.MakeValidFileName(name);
-            string path = Path.Combine(DuplicationerPlugin.BlueprintFolder, $"{filenameBase}.{DuplicationerPlugin.BlueprintExtension}");
-            int nextIndex = 1;
-            while (File.Exists(path)) path = Path.Combine(DuplicationerPlugin.BlueprintFolder, $"{filenameBase}{nextIndex++}.{DuplicationerPlugin.BlueprintExtension}");
+            //string filenameBase = PathHelpers.MakeValidFileName(name);
+            //string path = Path.Combine(DuplicationerPlugin.BlueprintFolder, $"{filenameBase}.{DuplicationerPlugin.BlueprintExtension}");
+            //int nextIndex = 1;
+            //while (File.Exists(path)) path = Path.Combine(DuplicationerPlugin.BlueprintFolder, $"{filenameBase}{nextIndex++}.{DuplicationerPlugin.BlueprintExtension}");
 
-            Debug.Log((string)$"Saving blueprint '{name}' to '{path}'");
-            CurrentBlueprint.Save(path, name, saveFrameIconItemTemplates.Take(saveFrameIconCount).ToArray());
+            //Debug.Log((string)$"Saving blueprint '{name}' to '{path}'");
+            //CurrentBlueprint.Save(path, name, saveFrameIconItemTemplates.Take(saveFrameIconCount).ToArray());
 
-            HideSaveFrame();
+            //HideSaveFrame();
         }
 
         internal void HideSaveFrame()
@@ -1386,77 +1443,77 @@ namespace Duplicationer
 
         private void FillLibraryGrid()
         {
-            if (libraryGridObject == null) return;
+            //if (libraryGridObject == null) return;
 
-            DestroyAllTransformChildren(libraryGridObject.transform);
+            //DestroyAllTransformChildren(libraryGridObject.transform);
 
-            var prefabs = new GameObject[5]
-            {
-                prefabBlueprintButtonDefaultIcon.Prefab, prefabBlueprintButton1Icon.Prefab, prefabBlueprintButton2Icon.Prefab, prefabBlueprintButton3Icon.Prefab, prefabBlueprintButton4Icon.Prefab
-            };
+            //var prefabs = new GameObject[5]
+            //{
+            //    prefabBlueprintButtonDefaultIcon.Prefab, prefabBlueprintButton1Icon.Prefab, prefabBlueprintButton2Icon.Prefab, prefabBlueprintButton3Icon.Prefab, prefabBlueprintButton4Icon.Prefab
+            //};
 
-            var builder = UIBuilder.BeginWith(libraryGridObject);
-            foreach (var path in Directory.GetFiles(DuplicationerPlugin.BlueprintFolder, $"*.{DuplicationerPlugin.BlueprintExtension}"))
-            {
-                if (Blueprint.TryLoadFileHeader(path, out var header, out var name))
-                {
-                    var iconItemTemplates = new List<ItemTemplate>();
-                    if (header.icon1 != 0)
-                    {
-                        var template = ItemTemplateManager.getItemTemplate(header.icon1);
-                        if (template != null && template.icon != null) iconItemTemplates.Add(template);
-                    }
-                    if (header.icon2 != 0)
-                    {
-                        var template = ItemTemplateManager.getItemTemplate(header.icon2);
-                        if (template != null && template.icon != null) iconItemTemplates.Add(template);
-                    }
-                    if (header.icon3 != 0)
-                    {
-                        var template = ItemTemplateManager.getItemTemplate(header.icon3);
-                        if (template != null && template.icon != null) iconItemTemplates.Add(template);
-                    }
-                    if (header.icon4 != 0)
-                    {
-                        var template = ItemTemplateManager.getItemTemplate(header.icon4);
-                        if (template != null && template.icon != null) iconItemTemplates.Add(template);
-                    }
+            //var builder = UIBuilder.BeginWith(libraryGridObject);
+            //foreach (var path in Directory.GetFiles(DuplicationerPlugin.BlueprintFolder, $"*.{DuplicationerPlugin.BlueprintExtension}"))
+            //{
+            //    if (Blueprint.TryLoadFileHeader(path, out var header, out var name))
+            //    {
+            //        var iconItemTemplates = new List<ItemTemplate>();
+            //        if (header.icon1 != 0)
+            //        {
+            //            var template = ItemTemplateManager.getItemTemplate(header.icon1);
+            //            if (template != null && template.icon != null) iconItemTemplates.Add(template);
+            //        }
+            //        if (header.icon2 != 0)
+            //        {
+            //            var template = ItemTemplateManager.getItemTemplate(header.icon2);
+            //            if (template != null && template.icon != null) iconItemTemplates.Add(template);
+            //        }
+            //        if (header.icon3 != 0)
+            //        {
+            //            var template = ItemTemplateManager.getItemTemplate(header.icon3);
+            //            if (template != null && template.icon != null) iconItemTemplates.Add(template);
+            //        }
+            //        if (header.icon4 != 0)
+            //        {
+            //            var template = ItemTemplateManager.getItemTemplate(header.icon4);
+            //            if (template != null && template.icon != null) iconItemTemplates.Add(template);
+            //        }
 
-                    int iconCount = iconItemTemplates.Count;
+            //        int iconCount = iconItemTemplates.Count;
 
-                    var gameObject = UnityEngine.Object.Instantiate(prefabs[iconCount], libraryGridObject.transform);
+            //        var gameObject = UnityEngine.Object.Instantiate(prefabs[iconCount], libraryGridObject.transform);
 
-                    var label = gameObject.transform.Find("Label")?.GetComponent<TextMeshProUGUI>();
-                    if (label != null) label.text = name;
+            //        var label = gameObject.transform.Find("Label")?.GetComponent<TextMeshProUGUI>();
+            //        if (label != null) label.text = name;
 
-                    var iconImages = new Image[] {
-                        gameObject.transform.Find("Icon1")?.GetComponent<Image>(),
-                        gameObject.transform.Find("Icon2")?.GetComponent<Image>(),
-                        gameObject.transform.Find("Icon3")?.GetComponent<Image>(),
-                        gameObject.transform.Find("Icon4")?.GetComponent<Image>()
-                    };
+            //        var iconImages = new Image[] {
+            //            gameObject.transform.Find("Icon1")?.GetComponent<Image>(),
+            //            gameObject.transform.Find("Icon2")?.GetComponent<Image>(),
+            //            gameObject.transform.Find("Icon3")?.GetComponent<Image>(),
+            //            gameObject.transform.Find("Icon4")?.GetComponent<Image>()
+            //        };
 
-                    for (int iconIndex = 0; iconIndex < iconCount; iconIndex++)
-                    {
-                        iconImages[iconIndex].sprite = iconItemTemplates[iconIndex].icon;
-                    }
+            //        for (int iconIndex = 0; iconIndex < iconCount; iconIndex++)
+            //        {
+            //            iconImages[iconIndex].sprite = iconItemTemplates[iconIndex].icon;
+            //        }
 
-                    var button = gameObject.GetComponentInChildren<Button>();
-                    if (button != null)
-                    {
-                        button.onClick.AddListener(new UnityAction(() =>
-                        {
-                            ActionManager.AddQueuedEvent(() =>
-                            {
-                                HideLibraryFrame();
-                                ClearBlueprintPlaceholders();
-                                LoadBlueprintFromFile(path);
-                                SelectMode(modePlace);
-                            });
-                        }));
-                    }
-                }
-            }
+            //        var button = gameObject.GetComponentInChildren<Button>();
+            //        if (button != null)
+            //        {
+            //            button.onClick.AddListener(new UnityAction(() =>
+            //            {
+            //                ActionManager.AddQueuedEvent(() =>
+            //                {
+            //                    HideLibraryFrame();
+            //                    ClearBlueprintPlaceholders();
+            //                    LoadBlueprintFromFile(path);
+            //                    SelectMode(modePlace);
+            //                });
+            //            }));
+            //        }
+            //    }
+            //}
         }
 
         private void DestroyArea(bool doBuildings, bool doBlocks, bool doTerrain, bool doDecor)
@@ -1785,10 +1842,10 @@ namespace Duplicationer
             }
         }
 
-        internal void LoadBlueprintFromFile(string path)
-        {
-            CurrentBlueprint = Blueprint.LoadFromFile(path);
-        }
+        //internal void LoadBlueprintFromFile(string path)
+        //{
+        //    CurrentBlueprint = Blueprint.LoadFromFile(path);
+        //}
 
         //public enum Mode
         //{

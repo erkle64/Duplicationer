@@ -1,4 +1,5 @@
-﻿using Unfoundry;
+﻿using System.Security.Cryptography;
+using Unfoundry;
 using UnityEngine;
 
 namespace Duplicationer
@@ -122,17 +123,23 @@ namespace Duplicationer
                             if (Mathf.Abs(roundedOffset) >= 1)
                             {
                                 var offsetVector = CustomHandheldMode.faceNormals[direction] * roundedOffset;
+                                var changed = false;
 
                                 if (positive)
                                 {
+                                    var old = tool.repeatTo;
                                     tool.repeatTo = Vector3Int.Max(Vector3Int.zero, tool.repeatTo + offsetVector);
+                                    if (tool.repeatTo != old) changed = true;
                                 }
                                 else
                                 {
+                                    var old = tool.repeatFrom;
                                     tool.repeatFrom = Vector3Int.Min(Vector3Int.zero, tool.repeatFrom + offsetVector);
+                                    if (tool.repeatFrom != old) changed = true;
                                 }
 
                                 tool.dragFaceRay.origin += CustomHandheldMode.faceNormals[direction] * (roundedOffset * dragStep);
+                                if (changed) tool.RefreshBlueprint();
                             }
                         }
                     }
