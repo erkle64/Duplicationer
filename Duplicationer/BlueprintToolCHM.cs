@@ -4,12 +4,8 @@ using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.EventSystems;
 using Unfoundry;
-using System;
-using System.IO;
-using System.Xml.Linq;
-using System.Linq;
-using HarmonyLib;
 using UnityEngine.Events;
+using HarmonyLib;
 
 namespace Duplicationer
 {
@@ -107,9 +103,6 @@ namespace Duplicationer
 
         private static List<ConstructionTaskGroup> activeConstructionTaskGroups = new List<ConstructionTaskGroup>();
 
-        public static int MaxBuildingValidationsPerFrame { get; internal set; } = 4;
-        public static int MaxTerrainValidationsPerFrame { get; internal set; } = 20;
-
         private LazyPrefab prefabGridScrollView = new LazyPrefab("GridScrollView");
         private LazyPrefab prefabBlueprintNameInputField = new LazyPrefab("BlueprintNameInputField");
         private LazyPrefab prefabBlueprintButtonDefaultIcon = new LazyPrefab("BlueprintButtonDefaultIcon");
@@ -170,7 +163,7 @@ namespace Duplicationer
             modePlace.Connect(modeSelectArea, modeMove);
             modeSelectArea.Connect(modeResize);
 
-            SetPlaceholderOpacity(DuplicationerPlugin.configPreviewAlpha);
+            SetPlaceholderOpacity(DuplicationerPlugin.configPreviewAlpha.Get());
         }
 
         public override void Enter()
@@ -282,7 +275,7 @@ namespace Duplicationer
                 var quadTree = StreamingSystem.getBuildableObjectGOQuadtreeArray();
 
                 AABB3D aabb = ObjectPoolManager.aabb3ds.getObject();
-                int count = Mathf.Min(MaxBuildingValidationsPerFrame, buildingPlaceholders.Count);
+                int count = Mathf.Min(DuplicationerPlugin.configMaxBuildingValidationsPerFrame.Get(), buildingPlaceholders.Count);
                 if (buildingPlaceholderUpdateIndex >= buildingPlaceholders.Count) buildingPlaceholderUpdateIndex = 0;
                 for (int i = 0; i < count; i++)
                 {
@@ -338,7 +331,7 @@ namespace Duplicationer
                 }
                 ObjectPoolManager.aabb3ds.returnObject(aabb); aabb = null;
 
-                count = Mathf.Min(MaxTerrainValidationsPerFrame, terrainPlaceholders.Count);
+                count = Mathf.Min(DuplicationerPlugin.configMaxTerrainValidationsPerFrame.Get(), terrainPlaceholders.Count);
                 if (terrainPlaceholderUpdateIndex >= terrainPlaceholders.Count) terrainPlaceholderUpdateIndex = 0;
                 for (int i = 0; i < count; i++)
                 {
@@ -474,7 +467,7 @@ namespace Duplicationer
                         UnityEngine.Object.DontDestroyOnLoad(placeholderSolidMaterial);
                     }
 
-                    float alpha = DuplicationerPlugin.configPreviewAlpha;
+                    float alpha = DuplicationerPlugin.configPreviewAlpha.Get();
                     if (alpha > 0.0f)
                     {
                         if (alpha < 1.0f)
@@ -495,13 +488,13 @@ namespace Duplicationer
                 }
             }
 
-            if (IsBlueprintLoaded && IsBlueprintActive && Input.GetKeyDown(DuplicationerPlugin.PasteBlueprintKey) && InputHelpers.IsKeyboardInputAllowed)
+            if (IsBlueprintLoaded && IsBlueprintActive && Input.GetKeyDown(DuplicationerPlugin.configPasteBlueprintKey.Get()) && InputHelpers.IsKeyboardInputAllowed)
             {
                 PlaceBlueprintMultiple(CurrentBlueprintAnchor, repeatFrom, repeatTo);
                 AudioManager.playUISoundEffect(ResourceDB.resourceLinker.audioClip_recipeCopyTool_paste);
             }
 
-            if (Input.GetKeyDown(DuplicationerPlugin.TogglePanelKey) && InputHelpers.IsKeyboardInputAllowed)
+            if (Input.GetKeyDown(DuplicationerPlugin.configTogglePanelKey.Get()) && InputHelpers.IsKeyboardInputAllowed)
             {
                 if (IsBlueprintFrameOpen) HideBlueprintFrame();
                 else ShowBlueprintFrame();
@@ -621,7 +614,7 @@ namespace Duplicationer
 
         internal void PlaceBlueprint(Vector3Int targetPosition)
         {
-            if (CurrentBlueprint == null) throw new ArgumentNullException(nameof(CurrentBlueprint));
+            if (CurrentBlueprint == null) throw new System.ArgumentNullException(nameof(CurrentBlueprint));
 
             ulong usernameHash = GameRoot.getClientCharacter().usernameHash;
             Debug.Log(string.Format("Placing blueprint at {0}", targetPosition.ToString()));
@@ -948,7 +941,7 @@ namespace Duplicationer
                                     .SetHorizontalLayout(new RectOffset(0, 0, 0, 0), 5.0f, TextAnchor.UpperLeft, false, true, true, false, true, false, false)
                                     .Element_Label("Preview Opacity Label", "Preview Opacity", 150, 1)
                                     .Done
-                                    .Element_Slider("Preview Opacity Slider", DuplicationerPlugin.configPreviewAlpha, 0.0f, 1.0f, (value) => { DuplicationerPlugin.configPreviewAlpha = value; SetPlaceholderOpacity(value); })
+                                    .Element_Slider("Preview Opacity Slider", DuplicationerPlugin.configPreviewAlpha.Get(), 0.0f, 1.0f, (value) => { DuplicationerPlugin.configPreviewAlpha.Set(value); SetPlaceholderOpacity(value); })
                                         .Layout()
                                             .MinWidth(200)
                                             .MinHeight(40)
@@ -1063,7 +1056,7 @@ namespace Duplicationer
                                     {
                                         var gameObject = UnityEngine.Object.Instantiate(prefabGridScrollView.Prefab, builder.GameObject.transform);
                                         var grid = gameObject.GetComponentInChildren<GridLayoutGroup>();
-                                        if (grid == null) throw new Exception("Grid not found.");
+                                        if (grid == null) throw new System.Exception("Grid not found.");
                                         saveGridObject = grid.gameObject;
                                         grid.cellSize = new Vector2(80.0f, 80.0f);
                                     })
@@ -1134,7 +1127,7 @@ namespace Duplicationer
                                     {
                                         var gameObject = UnityEngine.Object.Instantiate(prefabBlueprintNameInputField.Prefab, builder.GameObject.transform);
                                         saveFrameNameInputField = gameObject.GetComponentInChildren<TMP_InputField>();
-                                        if (saveFrameNameInputField == null) throw new Exception("TextMeshPro Input field not found.");
+                                        if (saveFrameNameInputField == null) throw new System.Exception("TextMeshPro Input field not found.");
                                         saveFrameNameInputField.text = "";
                                         saveFrameNameInputField.onValueChanged.AddListener(new UnityAction<string>((string value) =>
                                         {
@@ -1221,7 +1214,7 @@ namespace Duplicationer
                         DestroyAllTransformChildren(saveFramePreviewContainer.transform);
                         var gameObject = UnityEngine.Object.Instantiate(prefabBlueprintButtonDefaultIcon.Prefab, saveFramePreviewContainer.transform);
                         saveFramePreviewLabel = gameObject.GetComponentInChildren<TextMeshProUGUI>();
-                        if (saveFramePreviewLabel == null) throw new ArgumentNullException(nameof(saveFramePreviewLabel));
+                        if (saveFramePreviewLabel == null) throw new System.ArgumentNullException(nameof(saveFramePreviewLabel));
                     }
                     break;
 
@@ -1230,7 +1223,7 @@ namespace Duplicationer
                         DestroyAllTransformChildren(saveFramePreviewContainer.transform);
                         var gameObject = UnityEngine.Object.Instantiate(prefabBlueprintButton1Icon.Prefab, saveFramePreviewContainer.transform);
                         saveFramePreviewLabel = gameObject.GetComponentInChildren<TextMeshProUGUI>();
-                        if (saveFramePreviewLabel == null) throw new ArgumentNullException(nameof(saveFramePreviewLabel));
+                        if (saveFramePreviewLabel == null) throw new System.ArgumentNullException(nameof(saveFramePreviewLabel));
                         saveFramePreviewIconImages[0] = gameObject.transform.Find("Icon1")?.GetComponent<Image>();
                     }
                     break;
@@ -1240,7 +1233,7 @@ namespace Duplicationer
                         DestroyAllTransformChildren(saveFramePreviewContainer.transform);
                         var gameObject = UnityEngine.Object.Instantiate(prefabBlueprintButton2Icon.Prefab, saveFramePreviewContainer.transform);
                         saveFramePreviewLabel = gameObject.GetComponentInChildren<TextMeshProUGUI>();
-                        if (saveFramePreviewLabel == null) throw new ArgumentNullException(nameof(saveFramePreviewLabel));
+                        if (saveFramePreviewLabel == null) throw new System.ArgumentNullException(nameof(saveFramePreviewLabel));
                         saveFramePreviewIconImages[0] = gameObject.transform.Find("Icon1")?.GetComponent<Image>();
                         saveFramePreviewIconImages[1] = gameObject.transform.Find("Icon2")?.GetComponent<Image>();
                     }
@@ -1251,7 +1244,7 @@ namespace Duplicationer
                         DestroyAllTransformChildren(saveFramePreviewContainer.transform);
                         var gameObject = UnityEngine.Object.Instantiate(prefabBlueprintButton3Icon.Prefab, saveFramePreviewContainer.transform);
                         saveFramePreviewLabel = gameObject.GetComponentInChildren<TextMeshProUGUI>();
-                        if (saveFramePreviewLabel == null) throw new ArgumentNullException(nameof(saveFramePreviewLabel));
+                        if (saveFramePreviewLabel == null) throw new System.ArgumentNullException(nameof(saveFramePreviewLabel));
                         saveFramePreviewIconImages[0] = gameObject.transform.Find("Icon1")?.GetComponent<Image>();
                         saveFramePreviewIconImages[1] = gameObject.transform.Find("Icon2")?.GetComponent<Image>();
                         saveFramePreviewIconImages[2] = gameObject.transform.Find("Icon3")?.GetComponent<Image>();
@@ -1263,7 +1256,7 @@ namespace Duplicationer
                         DestroyAllTransformChildren(saveFramePreviewContainer.transform);
                         var gameObject = UnityEngine.Object.Instantiate(prefabBlueprintButton4Icon.Prefab, saveFramePreviewContainer.transform);
                         saveFramePreviewLabel = gameObject.GetComponentInChildren<TextMeshProUGUI>();
-                        if (saveFramePreviewLabel == null) throw new ArgumentNullException(nameof(saveFramePreviewLabel));
+                        if (saveFramePreviewLabel == null) throw new System.ArgumentNullException(nameof(saveFramePreviewLabel));
                         saveFramePreviewIconImages[0] = gameObject.transform.Find("Icon1")?.GetComponent<Image>();
                         saveFramePreviewIconImages[1] = gameObject.transform.Find("Icon2")?.GetComponent<Image>();
                         saveFramePreviewIconImages[2] = gameObject.transform.Find("Icon3")?.GetComponent<Image>();
@@ -1337,7 +1330,7 @@ namespace Duplicationer
 
         private void SaveFrameAddIcon(ItemTemplate itemTemplate)
         {
-            if (itemTemplate == null) throw new ArgumentNullException(nameof(itemTemplate));
+            if (itemTemplate == null) throw new System.ArgumentNullException(nameof(itemTemplate));
             if (saveFrameIconCount >= 4) return;
 
             saveFrameIconItemTemplates[saveFrameIconCount] = itemTemplate;
@@ -1427,7 +1420,7 @@ namespace Duplicationer
                                 {
                                     var gameObject = UnityEngine.Object.Instantiate(prefabGridScrollView.Prefab, builder.GameObject.transform);
                                     var grid = gameObject.GetComponentInChildren<GridLayoutGroup>();
-                                    if (grid == null) throw new Exception("Grid not found.");
+                                    if (grid == null) throw new System.Exception("Grid not found.");
                                     libraryGridObject = grid.gameObject;
                                 })
                             .Done

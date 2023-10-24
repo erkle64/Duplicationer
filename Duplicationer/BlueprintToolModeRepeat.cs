@@ -1,5 +1,4 @@
-﻿using System.Security.Cryptography;
-using Unfoundry;
+﻿using Unfoundry;
 using UnityEngine;
 
 namespace Duplicationer

@@ -1,10 +1,5 @@
 ﻿using HarmonyLib;
-using Newtonsoft.Json;
-using System;
 using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Text;
 using Unfoundry;
 using UnityEngine;
 
@@ -126,7 +121,7 @@ namespace Duplicationer
             {
                 BuildableEntity.BuildableEntityGeneralData generalData = default;
                 var hasGeneralData = BuildingManager.buildingManager_getBuildableEntityGeneralData(bogo.Id, ref generalData);
-                Debug.Assert(hasGeneralData == IOBool.iotrue);
+                Debug.Assert(hasGeneralData == IOBool.iotrue, $"{bogo.Id} {bogo.template?.identifier}");
 
                 if (bogo.template.type == BuildableObjectTemplate.BuildableObjectType.MinecartDepot)
                 {
@@ -325,7 +320,7 @@ namespace Duplicationer
 
         private static void AddToShoppingList(Dictionary<ulong, ShoppingListData> shoppingList, ItemTemplate template, int count = 1)
         {
-            if (template == null) throw new ArgumentNullException(nameof(template));
+            if (template == null) throw new System.ArgumentNullException(nameof(template));
 
             ShoppingListData shoppingListEntry;
             if (!shoppingList.TryGetValue(template.id, out shoppingListEntry))
@@ -763,7 +758,7 @@ namespace Duplicationer
                 buildingIndex++;
             }
 
-            if (data.blocks.ids == null) throw new ArgumentNullException(nameof(data.blocks.ids));
+            if (data.blocks.ids == null) throw new System.ArgumentNullException(nameof(data.blocks.ids));
 
             var quadTreeArray = StreamingSystem.getBuildableObjectGOQuadtreeArray();
             int blockIndex = 0;
@@ -907,20 +902,20 @@ namespace Duplicationer
         public T GetCustomData<T>(int index, string identifier) => GetCustomData<T>(ref data, index, identifier);
         public static T GetCustomData<T>(ref BlueprintData data, int index, string identifier)
         {
-            foreach (var customDataEntry in data.buildableObjects[index].customData) if (customDataEntry.identifier == identifier) return (T)Convert.ChangeType(customDataEntry.value, typeof(T));
+            foreach (var customDataEntry in data.buildableObjects[index].customData) if (customDataEntry.identifier == identifier) return (T)System.Convert.ChangeType(customDataEntry.value, typeof(T));
             return default;
         }
 
         public void GetCustomDataList<T>(int index, string identifier, List<T> list) => GetCustomDataList<T>(ref data, index, identifier, list);
         public static void GetCustomDataList<T>(ref BlueprintData data, int index, string identifier, List<T> list)
         {
-            foreach (var customDataEntry in data.buildableObjects[index].customData) if (customDataEntry.identifier == identifier) list.Add((T)Convert.ChangeType(customDataEntry.value, typeof(T)));
+            foreach (var customDataEntry in data.buildableObjects[index].customData) if (customDataEntry.identifier == identifier) list.Add((T)System.Convert.ChangeType(customDataEntry.value, typeof(T)));
         }
 
         internal BlueprintData.BuildableObjectData GetBuildableObjectData(int index) => GetBuildableObjectData(ref data, index);
         internal static BlueprintData.BuildableObjectData GetBuildableObjectData(ref BlueprintData data, int index)
         {
-            if (index < 0 || index >= data.buildableObjects.Length) throw new IndexOutOfRangeException(nameof(index));
+            if (index < 0 || index >= data.buildableObjects.Length) throw new System.IndexOutOfRangeException(nameof(index));
 
             return data.buildableObjects[index];
         }
@@ -928,9 +923,9 @@ namespace Duplicationer
         internal byte GetBlockId(int x, int y, int z) => GetBlockId(ref data, x, y, z);
         internal static byte GetBlockId(ref BlueprintData data, int x, int y, int z)
         {
-            if (x < 0 || x >= data.blocks.sizeX) throw new IndexOutOfRangeException(nameof(x));
-            if (y < 0 || y >= data.blocks.sizeY) throw new IndexOutOfRangeException(nameof(y));
-            if (z < 0 || z >= data.blocks.sizeZ) throw new IndexOutOfRangeException(nameof(z));
+            if (x < 0 || x >= data.blocks.sizeX) throw new System.IndexOutOfRangeException(nameof(x));
+            if (y < 0 || y >= data.blocks.sizeY) throw new System.IndexOutOfRangeException(nameof(y));
+            if (z < 0 || z >= data.blocks.sizeZ) throw new System.IndexOutOfRangeException(nameof(z));
 
             return data.blocks.ids[x + (y + z * data.blocks.sizeY) * data.blocks.sizeX];
         }
@@ -938,7 +933,7 @@ namespace Duplicationer
         internal byte GetBlockId(int index) => GetBlockId(ref data, index);
         internal static byte GetBlockId(ref BlueprintData data, int index)
         {
-            if (index < 0 || index >= data.blocks.ids.Length) throw new IndexOutOfRangeException(nameof(index));
+            if (index < 0 || index >= data.blocks.ids.Length) throw new System.IndexOutOfRangeException(nameof(index));
 
             return data.blocks.ids[index];
         }

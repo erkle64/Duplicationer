@@ -2,7 +2,7 @@
 
   <PropertyGroup>
 	<GenerateAssemblyInfo>false</GenerateAssemblyInfo>
-    <TargetFramework>net45</TargetFramework>
+    <TargetFramework>net48</TargetFramework>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   
@@ -15,21 +15,8 @@
       <SpecificVersion>False</SpecificVersion>
       <HintPath>G:\Games\Foundry\Foundry_Data\Managed\0Harmony.dll</HintPath>
     </Reference>
-    <Reference Include="Assembly-CSharp">
-      <HintPath>G:\Games\Foundry\Foundry_Data\Managed\Assembly-CSharp.dll</HintPath>
-    </Reference>
-    <Reference Include="Channel3">
-      <HintPath>G:\Games\Foundry\Foundry_Data\Managed\Channel3.dll</HintPath>
-    </Reference>
-    <Reference Include="Main, Version=0.0.0.0, Culture=neutral, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
+    <Reference Include="Main">
       <HintPath>G:\Games\Foundry\Foundry_Data\Managed\Main.dll</HintPath>
-    </Reference>
-    <Reference Include="System">
-      <HintPath>G:\Games\Foundry\Foundry_Data\Managed\System.dll</HintPath>
-    </Reference>
-    <Reference Include="System.Core">
-      <HintPath>G:\Games\Foundry\Foundry_Data\Managed\System.Core.dll</HintPath>
     </Reference>
     <Reference Include="Newtonsoft.Json">
       <HintPath>G:\Games\Foundry\Foundry_Data\Managed\Newtonsoft.Json.dll</HintPath>
@@ -76,11 +63,11 @@
     <Reference Include="UnityEngine.UIModule">
       <HintPath>G:\Games\Foundry\Foundry_Data\Managed\UnityEngine.UIModule.dll</HintPath>
     </Reference>
-    <Reference Include="Unfoundry">
-      <HintPath>G:\Games\Foundry\Mods\A_Unfoundry\Unfoundry.dll</HintPath>
-    </Reference>
     <Reference Include="mscorlib">
       <HintPath>G:\Games\Foundry\Foundry_Data\Managed\mscorlib.dll</HintPath>
+    </Reference>
+    <Reference Include="Unfoundry">
+      <HintPath>G:\Games\Foundry\Mods\A_Unfoundry\Unfoundry.dll</HintPath>
     </Reference>
   </ItemGroup>
 

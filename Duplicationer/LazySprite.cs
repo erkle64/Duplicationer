@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using Unfoundry;
-using UnityEngine;
+﻿using UnityEngine;
 
 namespace Duplicationer
 {
@@ -23,7 +19,7 @@ namespace Duplicationer
             {
                 if (sprite != null) return sprite;
                 sprite = DuplicationerPlugin.GetAsset<Sprite>(assetPath);
-                if (sprite == null) throw new FileLoadException(assetPath);
+                if (sprite == null) throw new System.Exception(assetPath);
                 return sprite;
             }
         }

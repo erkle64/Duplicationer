@@ -1,5 +1,4 @@
 ﻿using System.Collections.Generic;
-using System.Linq;
 using UnityEngine;
 
 namespace Duplicationer
@@ -23,7 +22,9 @@ namespace Duplicationer
         {
             var meshFilters = source.GetComponentsInChildren<MeshFilter>(true);
 
-            Entries = new Entry[meshFilters.Sum((meshFilter) => meshFilter.name == "Impostor" ? 0 : 1)];
+            var entryCount = 0;
+            foreach (var meshFilter in meshFilters) if (meshFilter.name != "Impostor") entryCount++;
+            Entries = new Entry[entryCount];
 
             var localToWorldMatrix = source.transform.localToWorldMatrix;
             var worldToLocalMatrix = source.transform.worldToLocalMatrix;

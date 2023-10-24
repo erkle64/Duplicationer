@@ -1,6 +1,4 @@
-﻿using System;
-using System.IO;
-using UnityEngine;
+﻿using UnityEngine;
 
 namespace Duplicationer
 {
@@ -20,7 +18,7 @@ namespace Duplicationer
             {
                 if (prefab != null) return prefab;
                 prefab = DuplicationerPlugin.GetAsset<GameObject>(assetPath);
-                if (prefab == null) throw new FileLoadException(assetPath);
+                if (prefab == null) throw new System.Exception(assetPath);
                 return prefab;
             }
         }

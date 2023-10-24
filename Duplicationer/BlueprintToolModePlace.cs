@@ -1,5 +1,4 @@
-﻿using System;
-using Unfoundry;
+﻿using Unfoundry;
 using UnityEngine;
 
 namespace Duplicationer

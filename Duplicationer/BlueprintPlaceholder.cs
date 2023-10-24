@@ -1,6 +1,5 @@
 ﻿using System.Collections.Generic;
 using UnityEngine;
-using System;
 using Unfoundry;
 
 namespace Duplicationer
@@ -14,7 +13,7 @@ namespace Duplicationer
         public BuildingManager.BuildOrientation Orientation { get; private set; }
         public State CurrentState { get; private set; }
         public BatchRenderingHandle[] BatchRenderingHandles { get; set; }
-        private static int[] stateCounts = new int[Enum.GetValues(typeof(State)).Length - 1];
+        private static int[] stateCounts = new int[System.Enum.GetValues(typeof(State)).Length - 1];
         private static Dictionary<ulong, int[]> stateCountsByTemplateId = new Dictionary<ulong, int[]>();
 
         internal static Color[] stateColours = new Color[] {
@@ -157,7 +156,7 @@ namespace Duplicationer
         private static int[] ForceStateCount(ulong templateId)
         {
             int[] counts;
-            return stateCountsByTemplateId.TryGetValue(templateId, out counts) ? counts : (stateCountsByTemplateId[templateId] = new int[Enum.GetValues(typeof(State)).Length - 1]);
+            return stateCountsByTemplateId.TryGetValue(templateId, out counts) ? counts : (stateCountsByTemplateId[templateId] = new int[System.Enum.GetValues(typeof(State)).Length - 1]);
         }
 
         public void Move(Vector3 offset)
