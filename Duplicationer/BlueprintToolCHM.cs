@@ -103,6 +103,8 @@ namespace Duplicationer
 
         private static List<ConstructionTaskGroup> activeConstructionTaskGroups = new List<ConstructionTaskGroup>();
 
+        private static List<bool> terrainTypeRemovalMask = null;
+
         private LazyPrefab prefabGridScrollView = new LazyPrefab("GridScrollView");
         private LazyPrefab prefabBlueprintNameInputField = new LazyPrefab("BlueprintNameInputField");
         private LazyPrefab prefabBlueprintButtonDefaultIcon = new LazyPrefab("BlueprintButtonDefaultIcon");
@@ -1510,6 +1512,25 @@ namespace Duplicationer
             //}
         }
 
+        private static List<bool> GetTerrainTypeRemovalMask()
+        {
+            if (terrainTypeRemovalMask == null)
+            {
+                var terrainTypes = ItemTemplateManager.getAllTerrainTemplates();
+
+                terrainTypeRemovalMask = new List<bool>();
+                terrainTypeRemovalMask.Add(false); // Air
+                terrainTypeRemovalMask.Add(false); // ???
+
+                foreach (var terrainType in terrainTypes)
+                {
+                    terrainTypeRemovalMask.Add(terrainType.Value.destructible);
+                }
+            }
+
+            return terrainTypeRemovalMask;
+        }
+
         private void DestroyArea(bool doBuildings, bool doBlocks, bool doTerrain, bool doDecor)
         {
             Vector3Int from, to;
@@ -1546,6 +1567,8 @@ namespace Duplicationer
 
                 if (doBlocks || doTerrain)
                 {
+                    var shouldRemove = GetTerrainTypeRemovalMask();
+
                     ulong chunkIndex;
                     uint blockIndex;
                     int blocksRemoved = 0;
@@ -1565,7 +1588,7 @@ namespace Duplicationer
                                     ActionManager.AddQueuedEvent(() => GameRoot.addLockstepEvent(new Character.DemolishBuildingEvent(characterHash, entityId, -2, 0)));
                                     ++blocksRemoved;
                                 }
-                                else if (terrainData > 0 && terrainData < GameRoot.BUILDING_PART_ARRAY_IDX_START && doTerrain)
+                                else if (doTerrain && terrainData > 0 && terrainData < GameRoot.BUILDING_PART_ARRAY_IDX_START && terrainData < shouldRemove.Count && shouldRemove[terrainData])
                                 {
                                     var worldPos = new Vector3Int(wx, wy, wz);
                                     ActionManager.AddQueuedEvent(() => GameRoot.addLockstepEvent(new Character.RemoveTerrainEvent(characterHash, worldPos, ulong.MaxValue)));
@@ -1620,6 +1643,8 @@ namespace Duplicationer
 
                 if (doBlocks || doTerrain)
                 {
+                    var shouldRemove = GetTerrainTypeRemovalMask();
+
                     ulong chunkIndex;
                     uint blockIndex;
                     int blocksRemoved = 0;
@@ -1640,7 +1665,7 @@ namespace Duplicationer
                                     ActionManager.AddQueuedEvent(() => GameRoot.addLockstepEvent(new Character.DemolishBuildingEvent(characterHash, entityId, 0, 0)));
                                     ++blocksRemoved;
                                 }
-                                else if (terrainData > 0 && terrainData < GameRoot.BUILDING_PART_ARRAY_IDX_START && doTerrain)
+                                else if (doTerrain && terrainData > 0 && terrainData < GameRoot.BUILDING_PART_ARRAY_IDX_START && terrainData < shouldRemove.Count && shouldRemove[terrainData])
                                 {
                                     var worldPos = new Vector3Int(wx, wy, wz);
                                     ActionManager.AddQueuedEvent(() => GameRoot.addLockstepEvent(new Character.RemoveTerrainEvent(characterHash, worldPos, 0)));

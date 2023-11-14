@@ -166,14 +166,14 @@ namespace Duplicationer
                     customData.Add(new BlueprintData.BuildableObjectData.CustomData("isInputLoader", loader.isInputLoader() ? "true" : "false"));
                     if (bogo.template.loader_isFilter)
                     {
-                        customData.Add(new BlueprintData.BuildableObjectData.CustomData("loaderFilterTemplateId", loader.getLastSetFilterTemplate()));
+                        customData.Add(new BlueprintData.BuildableObjectData.CustomData("loaderFilterTemplateId", Traverse.Create(loader).Field("_cache_lastSetFilterTemplateId").GetValue<ulong>()));
                     }
                 }
                 if (typeof(PipeLoaderGO).IsAssignableFrom(bogoType))
                 {
                     var loader = (PipeLoaderGO)bogo;
                     customData.Add(new BlueprintData.BuildableObjectData.CustomData("isInputLoader", loader.isInputLoader() ? "true" : "false"));
-                    customData.Add(new BlueprintData.BuildableObjectData.CustomData("pipeLoaderFilterTemplateId", loader.getLastSetFilterTemplate()));
+                    customData.Add(new BlueprintData.BuildableObjectData.CustomData("pipeLoaderFilterTemplateId", Traverse.Create(loader).Field("_cache_lastSetFilterTemplateId").GetValue<ulong>()));
                 }
                 if (typeof(ConveyorBalancerGO).IsAssignableFrom(bogoType))
                 {
