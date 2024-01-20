@@ -1075,7 +1075,7 @@ namespace Duplicationer
 
                             var baseTransform = Matrix4x4.TRS(position, rotation, Vector3.one);
 
-                            var pattern = PlaceholderPattern.Instance(template.prefab);
+                            var pattern = PlaceholderPattern.Instance(template.placeholderPrefab);
                             var handles = new BatchRenderingHandle[pattern.Entries.Length];
                             for (int i = 0; i < pattern.Entries.Length; i++)
                             {
@@ -1115,7 +1115,7 @@ namespace Duplicationer
                                         {
                                             var baseTransform = Matrix4x4.Translate(worldPos);
 
-                                            var pattern = PlaceholderPattern.Instance(template.prefab);
+                                            var pattern = PlaceholderPattern.Instance(template.placeholderPrefab);
                                             var handles = new BatchRenderingHandle[pattern.Entries.Length];
                                             for (int i = 0; i < pattern.Entries.Length; i++)
                                             {

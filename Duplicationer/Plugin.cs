@@ -3,7 +3,8 @@ using UnityEngine;
 using System.IO;
 using Unfoundry;
 using System.Collections.Generic;
-using Channel3.ModKit;
+using C3.ModKit;
+using System.Reflection;
 
 namespace Duplicationer
 {
@@ -91,11 +92,11 @@ namespace Duplicationer
 
             if (!Directory.Exists(BlueprintFolder)) Directory.CreateDirectory(BlueprintFolder);
 
-            bundleMainAssets = mod.getAssets();
-            foreach (var asset in bundleMainAssets)
-            {
-                Debug.Log($"Duplicationer Asset: {asset.Key} {asset.Value.name}");
-            }
+            bundleMainAssets = typeof(Mod).GetField("assets", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(mod) as Dictionary<string, UnityEngine.Object>;
+            //foreach (var asset in bundleMainAssets)
+            //{
+            //    Debug.Log($"Duplicationer Asset: {asset.Key} {asset.Value.name}");
+            //}
 
             blueprintTool = new BlueprintToolCHM();
             blueprintTool.LoadIconSprites();
