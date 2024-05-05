@@ -6,6 +6,7 @@ using UnityEngine.EventSystems;
 using Unfoundry;
 using UnityEngine.Events;
 using HarmonyLib;
+using System.Linq;
 
 namespace Duplicationer
 {
@@ -65,13 +66,11 @@ namespace Duplicationer
 
         public bool IsBlueprintFrameOpen => duplicationerFrame != null && duplicationerFrame.activeSelf;
         private GameObject duplicationerFrame = null;
-        //private GameObject railMinerRow = null;
         private TextMeshProUGUI textMaterialReport = null;
         private TextMeshProUGUI textPositionX = null;
         private TextMeshProUGUI textPositionY = null;
         private TextMeshProUGUI textPositionZ = null;
         private float nextUpdateTimeCountTexts = 0.0f;
-        //private float nextUpdateTimeRailMiners = 0.0f;
 
         public bool IsSaveFrameOpen => saveFrame != null && saveFrame.activeSelf;
         private GameObject saveFrame = null;
@@ -90,8 +89,6 @@ namespace Duplicationer
         private GameObject libraryGridObject = null;
 
         public bool IsAnyFrameOpen => IsBlueprintFrameOpen || IsSaveFrameOpen || IsLibraryFrameOpen;
-
-        //private List<ItemTemplate> railMinerTemplates = null;
 
         private int NudgeX => CurrentBlueprint != null && InputHelpers.IsAltHeld ? CurrentBlueprint.SizeX : 1;
         private int NudgeY => CurrentBlueprint != null && InputHelpers.IsAltHeld ? CurrentBlueprint.SizeY : 1;
@@ -269,9 +266,6 @@ namespace Duplicationer
 
         public override void UpdateBehavoir()
         {
-            ulong chunkIndex;
-            uint blockIndex;
-
             if (IsBlueprintActive)
             {
                 var quadTree = StreamingSystem.getBuildableObjectGOQuadtreeArray();
@@ -350,7 +344,7 @@ namespace Duplicationer
                     }
                     else
                     {
-                        ChunkManager.getChunkIdxAndTerrainArrayIdxFromWorldCoords(worldPos.x, worldPos.y, worldPos.z, out chunkIndex, out blockIndex);
+                        ChunkManager.getChunkIdxAndTerrainArrayIdxFromWorldCoords(worldPos.x, worldPos.y, worldPos.z, out ulong chunkIndex, out uint blockIndex);
 
                         var blockId = CurrentBlueprint.GetBlockId(placeholder.Index);
                         var terrainData = ChunkManager.chunks_getTerrainData(chunkIndex, blockIndex);
@@ -502,15 +496,15 @@ namespace Duplicationer
                 else ShowBlueprintFrame();
             }
 
-            //if (Input.GetKeyDown(DuplicationerPlugin.SaveBlueprintKey) && InputHelpers.IsKeyboardInputAllowed)
-            //{
-            //    if (IsBlueprintLoaded) BeginSaveBlueprint();
-            //}
+            if (Input.GetKeyDown(DuplicationerPlugin.configSaveBlueprintKey.Get()) && InputHelpers.IsKeyboardInputAllowed)
+            {
+                if (IsBlueprintLoaded) BeginSaveBlueprint();
+            }
 
-            //if (Input.GetKeyDown(DuplicationerPlugin.LoadBlueprintKey) && InputHelpers.IsKeyboardInputAllowed)
-            //{
-            //    BeginLoadBlueprint();
-            //}
+            if (Input.GetKeyDown(DuplicationerPlugin.configLoadBlueprintKey.Get()) && InputHelpers.IsKeyboardInputAllowed)
+            {
+                BeginLoadBlueprint();
+            }
 
             CurrentMode?.Update(this);
 
@@ -951,18 +945,18 @@ namespace Duplicationer
                                         .Done
                                     .Done
                                 .Done
-                                //.Element("Row Files")
-                                //    .SetHorizontalLayout(new RectOffset(0, 0, 0, 0), 5.0f, TextAnchor.UpperLeft, false, true, true, false, true, false, false)
-                                //    .Element_ImageTextButton("Button Save", "Save", "download", Color.white, 28, 28)
-                                //        .Component_Tooltip("Save current blueprint")
-                                //        .SetOnClick(BeginSaveBlueprint)
-                                //        .Updater<Button>(guiUpdaters, () => IsBlueprintLoaded)
-                                //    .Done
-                                //    .Element_ImageTextButton("Button Load", "Load", "upload", Color.white, 28, 28)
-                                //        .Component_Tooltip("Load blueprint from library")
-                                //        .SetOnClick(BeginLoadBlueprint)
-                                //    .Done
-                                //.Done
+                                .Element("Row Files")
+                                    .SetHorizontalLayout(new RectOffset(0, 0, 0, 0), 5.0f, TextAnchor.UpperLeft, false, true, true, false, true, false, false)
+                                    .Element_ImageTextButton("Button Save", "Save", "download", Color.white, 28, 28)
+                                        .Component_Tooltip("Save current blueprint")
+                                        .SetOnClick(BeginSaveBlueprint)
+                                        .Updater<Button>(guiUpdaters, () => IsBlueprintLoaded)
+                                    .Done
+                                    .Element_ImageTextButton("Button Load", "Load", "upload", Color.white, 28, 28)
+                                        .Component_Tooltip("Load blueprint from library")
+                                        .SetOnClick(BeginLoadBlueprint)
+                                    .Done
+                                .Done
                                 .Element("Row Confirm Buttons")
                                     .SetHorizontalLayout(new RectOffset(0, 0, 0, 0), 5.0f, TextAnchor.UpperLeft, false, true, true, false, true, false, false)
                                     .Element_TextButton("Button Paste", "Confirm/Paste")
@@ -988,26 +982,26 @@ namespace Duplicationer
 
         private void BeginSaveBlueprint()
         {
-            //HideBlueprintFrame();
-            //ShowSaveFrame();
+            HideBlueprintFrame();
+            ShowSaveFrame();
         }
 
         private void FinishSaveBlueprint()
         {
-            //if (CurrentBlueprint == null) throw new ArgumentNullException(nameof(CurrentBlueprint));
+            if (CurrentBlueprint == null) throw new System.ArgumentNullException(nameof(CurrentBlueprint));
 
-            //string name = saveFrameNameInputField.text;
-            //if (string.IsNullOrWhiteSpace(name)) return;
+            string name = saveFrameNameInputField.text;
+            if (string.IsNullOrWhiteSpace(name)) return;
 
-            //string filenameBase = PathHelpers.MakeValidFileName(name);
-            //string path = Path.Combine(DuplicationerPlugin.BlueprintFolder, $"{filenameBase}.{DuplicationerPlugin.BlueprintExtension}");
-            //int nextIndex = 1;
-            //while (File.Exists(path)) path = Path.Combine(DuplicationerPlugin.BlueprintFolder, $"{filenameBase}{nextIndex++}.{DuplicationerPlugin.BlueprintExtension}");
+            string filenameBase = PathHelpers.MakeValidFileName(name);
+            string path = System.IO.Path.Combine(DuplicationerPlugin.BlueprintFolder, $"{filenameBase}.{DuplicationerPlugin.BlueprintExtension}");
+            int nextIndex = 1;
+            while (System.IO.File.Exists(path)) path = System.IO.Path.Combine(DuplicationerPlugin.BlueprintFolder, $"{filenameBase}{nextIndex++}.{DuplicationerPlugin.BlueprintExtension}");
 
-            //Debug.Log((string)$"Saving blueprint '{name}' to '{path}'");
-            //CurrentBlueprint.Save(path, name, saveFrameIconItemTemplates.Take(saveFrameIconCount).ToArray());
+            Debug.Log((string)$"Saving blueprint '{name}' to '{path}'");
+            CurrentBlueprint.Save(path, name, saveFrameIconItemTemplates.Take(saveFrameIconCount).ToArray());
 
-            //HideSaveFrame();
+            HideSaveFrame();
         }
 
         internal void HideSaveFrame()
@@ -1116,7 +1110,8 @@ namespace Duplicationer
                                         .Done
                                     .Done
                                     .Element("Preview")
-                                        .SetRectTransform(132 + 4 + 132 + 10 + 64, -(132 + 5), 132 + 4 + 132 + 10 + 64, -(132 + 5), 0, 1, 0, 1, 0, 1)
+                                        .SetRectTransform(132 + 4 + 132 + 10 + 64 - 50, -(132 + 5 - 60), 132 + 4 + 132 + 10 + 64 - 50, -(132 + 5 - 60), 0, 1, 0, 1, 0, 1)
+                                        .SetSizeDelta(100, 120)
                                         .Keep(out saveFramePreviewContainer)
                                     .Done
                                 .Done
@@ -1309,6 +1304,9 @@ namespace Duplicationer
                 {
                     button.onClick.AddListener(new UnityAction(() => SaveFrameAddIcon(itemTemplate)));
                 }
+
+                var panel = gameObject.GetComponent<Image>();
+                if (panel != null) panel.color = Color.clear;
             }
         }
 
@@ -1439,77 +1437,77 @@ namespace Duplicationer
 
         private void FillLibraryGrid()
         {
-            //if (libraryGridObject == null) return;
+            if (libraryGridObject == null) return;
 
-            //DestroyAllTransformChildren(libraryGridObject.transform);
+            DestroyAllTransformChildren(libraryGridObject.transform);
 
-            //var prefabs = new GameObject[5]
-            //{
-            //    prefabBlueprintButtonDefaultIcon.Prefab, prefabBlueprintButton1Icon.Prefab, prefabBlueprintButton2Icon.Prefab, prefabBlueprintButton3Icon.Prefab, prefabBlueprintButton4Icon.Prefab
-            //};
+            var prefabs = new GameObject[5]
+            {
+                prefabBlueprintButtonDefaultIcon.Prefab, prefabBlueprintButton1Icon.Prefab, prefabBlueprintButton2Icon.Prefab, prefabBlueprintButton3Icon.Prefab, prefabBlueprintButton4Icon.Prefab
+            };
 
-            //var builder = UIBuilder.BeginWith(libraryGridObject);
-            //foreach (var path in Directory.GetFiles(DuplicationerPlugin.BlueprintFolder, $"*.{DuplicationerPlugin.BlueprintExtension}"))
-            //{
-            //    if (Blueprint.TryLoadFileHeader(path, out var header, out var name))
-            //    {
-            //        var iconItemTemplates = new List<ItemTemplate>();
-            //        if (header.icon1 != 0)
-            //        {
-            //            var template = ItemTemplateManager.getItemTemplate(header.icon1);
-            //            if (template != null && template.icon != null) iconItemTemplates.Add(template);
-            //        }
-            //        if (header.icon2 != 0)
-            //        {
-            //            var template = ItemTemplateManager.getItemTemplate(header.icon2);
-            //            if (template != null && template.icon != null) iconItemTemplates.Add(template);
-            //        }
-            //        if (header.icon3 != 0)
-            //        {
-            //            var template = ItemTemplateManager.getItemTemplate(header.icon3);
-            //            if (template != null && template.icon != null) iconItemTemplates.Add(template);
-            //        }
-            //        if (header.icon4 != 0)
-            //        {
-            //            var template = ItemTemplateManager.getItemTemplate(header.icon4);
-            //            if (template != null && template.icon != null) iconItemTemplates.Add(template);
-            //        }
+            var builder = UIBuilder.BeginWith(libraryGridObject);
+            foreach (var path in System.IO.Directory.GetFiles(DuplicationerPlugin.BlueprintFolder, $"*.{DuplicationerPlugin.BlueprintExtension}"))
+            {
+                if (Blueprint.TryLoadFileHeader(path, out var header, out var name))
+                {
+                    var iconItemTemplates = new List<ItemTemplate>();
+                    if (header.icon1 != 0)
+                    {
+                        var template = ItemTemplateManager.getItemTemplate(header.icon1);
+                        if (template != null && template.icon != null) iconItemTemplates.Add(template);
+                    }
+                    if (header.icon2 != 0)
+                    {
+                        var template = ItemTemplateManager.getItemTemplate(header.icon2);
+                        if (template != null && template.icon != null) iconItemTemplates.Add(template);
+                    }
+                    if (header.icon3 != 0)
+                    {
+                        var template = ItemTemplateManager.getItemTemplate(header.icon3);
+                        if (template != null && template.icon != null) iconItemTemplates.Add(template);
+                    }
+                    if (header.icon4 != 0)
+                    {
+                        var template = ItemTemplateManager.getItemTemplate(header.icon4);
+                        if (template != null && template.icon != null) iconItemTemplates.Add(template);
+                    }
 
-            //        int iconCount = iconItemTemplates.Count;
+                    int iconCount = iconItemTemplates.Count;
 
-            //        var gameObject = UnityEngine.Object.Instantiate(prefabs[iconCount], libraryGridObject.transform);
+                    var gameObject = UnityEngine.Object.Instantiate(prefabs[iconCount], libraryGridObject.transform);
 
-            //        var label = gameObject.transform.Find("Label")?.GetComponent<TextMeshProUGUI>();
-            //        if (label != null) label.text = name;
+                    var label = gameObject.transform.Find("Label")?.GetComponent<TextMeshProUGUI>();
+                    if (label != null) label.text = name;
 
-            //        var iconImages = new Image[] {
-            //            gameObject.transform.Find("Icon1")?.GetComponent<Image>(),
-            //            gameObject.transform.Find("Icon2")?.GetComponent<Image>(),
-            //            gameObject.transform.Find("Icon3")?.GetComponent<Image>(),
-            //            gameObject.transform.Find("Icon4")?.GetComponent<Image>()
-            //        };
+                    var iconImages = new Image[] {
+                        gameObject.transform.Find("Icon1")?.GetComponent<Image>(),
+                        gameObject.transform.Find("Icon2")?.GetComponent<Image>(),
+                        gameObject.transform.Find("Icon3")?.GetComponent<Image>(),
+                        gameObject.transform.Find("Icon4")?.GetComponent<Image>()
+                    };
 
-            //        for (int iconIndex = 0; iconIndex < iconCount; iconIndex++)
-            //        {
-            //            iconImages[iconIndex].sprite = iconItemTemplates[iconIndex].icon;
-            //        }
+                    for (int iconIndex = 0; iconIndex < iconCount; iconIndex++)
+                    {
+                        iconImages[iconIndex].sprite = iconItemTemplates[iconIndex].icon;
+                    }
 
-            //        var button = gameObject.GetComponentInChildren<Button>();
-            //        if (button != null)
-            //        {
-            //            button.onClick.AddListener(new UnityAction(() =>
-            //            {
-            //                ActionManager.AddQueuedEvent(() =>
-            //                {
-            //                    HideLibraryFrame();
-            //                    ClearBlueprintPlaceholders();
-            //                    LoadBlueprintFromFile(path);
-            //                    SelectMode(modePlace);
-            //                });
-            //            }));
-            //        }
-            //    }
-            //}
+                    var button = gameObject.GetComponentInChildren<Button>();
+                    if (button != null)
+                    {
+                        button.onClick.AddListener(new UnityAction(() =>
+                        {
+                            ActionManager.AddQueuedEvent(() =>
+                            {
+                                HideLibraryFrame();
+                                ClearBlueprintPlaceholders();
+                                LoadBlueprintFromFile(path);
+                                SelectMode(modePlace);
+                            });
+                        }));
+                    }
+                }
+            }
         }
 
         private static List<bool> GetTerrainTypeRemovalMask()
@@ -1533,8 +1531,7 @@ namespace Duplicationer
 
         private void DestroyArea(bool doBuildings, bool doBlocks, bool doTerrain, bool doDecor)
         {
-            Vector3Int from, to;
-            if (TryGetSelectedArea(out from, out to))
+            if (TryGetSelectedArea(out Vector3Int from, out Vector3Int to))
             {
                 //GameRoot.addLockstepEvent(new Character.BulkDemolishBuildingEvent(GameRoot.getClientCharacter().usernameHash, from, to - from + Vector3Int.one));
 
@@ -1569,8 +1566,6 @@ namespace Duplicationer
                 {
                     var shouldRemove = GetTerrainTypeRemovalMask();
 
-                    ulong chunkIndex;
-                    uint blockIndex;
                     int blocksRemoved = 0;
                     for (int wz = from.z; wz <= to.z; ++wz)
                     {
@@ -1578,7 +1573,7 @@ namespace Duplicationer
                         {
                             for (int wx = from.x; wx <= to.x; ++wx)
                             {
-                                ChunkManager.getChunkIdxAndTerrainArrayIdxFromWorldCoords(wx, wy, wz, out chunkIndex, out blockIndex);
+                                ChunkManager.getChunkIdxAndTerrainArrayIdxFromWorldCoords(wx, wy, wz, out ulong chunkIndex, out uint blockIndex);
                                 var terrainData = ChunkManager.chunks_getTerrainData(chunkIndex, blockIndex);
 
                                 if (terrainData >= GameRoot.BUILDING_PART_ARRAY_IDX_START && doBlocks)
@@ -1603,8 +1598,7 @@ namespace Duplicationer
 
         private void DemolishArea(bool doBuildings, bool doBlocks, bool doTerrain, bool doDecor)
         {
-            Vector3Int from, to;
-            if (TryGetSelectedArea(out from, out to))
+            if (TryGetSelectedArea(out Vector3Int from, out Vector3Int to))
             {
                 //GameRoot.addLockstepEvent(new Character.BulkDemolishBuildingEvent(GameRoot.getClientCharacter().usernameHash, from, to - from + Vector3Int.one));
 
@@ -1645,8 +1639,6 @@ namespace Duplicationer
                 {
                     var shouldRemove = GetTerrainTypeRemovalMask();
 
-                    ulong chunkIndex;
-                    uint blockIndex;
                     int blocksRemoved = 0;
                     for (int wz = from.z; wz <= to.z; ++wz)
                     {
@@ -1654,7 +1646,7 @@ namespace Duplicationer
                         {
                             for (int wx = from.x; wx <= to.x; ++wx)
                             {
-                                ChunkManager.getChunkIdxAndTerrainArrayIdxFromWorldCoords(wx, wy, wz, out chunkIndex, out blockIndex);
+                                ChunkManager.getChunkIdxAndTerrainArrayIdxFromWorldCoords(wx, wy, wz, out ulong chunkIndex, out uint blockIndex);
                                 var terrainData = ChunkManager.chunks_getTerrainData(chunkIndex, blockIndex);
 
                                 if (terrainData >= GameRoot.BUILDING_PART_ARRAY_IDX_START && doBlocks)
@@ -1861,10 +1853,10 @@ namespace Duplicationer
             }
         }
 
-        //internal void LoadBlueprintFromFile(string path)
-        //{
-        //    CurrentBlueprint = Blueprint.LoadFromFile(path);
-        //}
+        internal void LoadBlueprintFromFile(string path)
+        {
+            CurrentBlueprint = Blueprint.LoadFromFile(path);
+        }
 
         //public enum Mode
         //{
@@ -1906,6 +1898,17 @@ namespace Duplicationer
             None,
             Selection,
             Blueprint
+        }
+    }
+
+    public static class UIExtensions
+    {
+        public static UIBuilder SetSizeDelta(this UIBuilder builder, float width, float height)
+        {
+            RectTransform transform = (RectTransform)builder.GameObject.transform;
+            transform.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, width);
+            transform.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, height);
+            return builder;
         }
     }
 }

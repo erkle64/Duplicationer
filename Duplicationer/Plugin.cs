@@ -15,7 +15,9 @@ namespace Duplicationer
             MODNAME = "duplicationer",
             AUTHOR = "erkle64",
             GUID = AUTHOR + "." + MODNAME,
-            VERSION = "0.3.4";
+            VERSION = "0.4.1";
+
+        public static LogSource log;
 
         public static string BlueprintFolder;
 
@@ -27,6 +29,8 @@ namespace Duplicationer
         public static TypedConfigEntry<KeyCode> configToggleBlueprintToolKey;
         public static TypedConfigEntry<KeyCode> configPasteBlueprintKey;
         public static TypedConfigEntry<KeyCode> configTogglePanelKey;
+        public static TypedConfigEntry<KeyCode> configSaveBlueprintKey;
+        public static TypedConfigEntry<KeyCode> configLoadBlueprintKey;
 
         internal static Dictionary<string, UnityEngine.Object> bundleMainAssets;
 
@@ -49,7 +53,9 @@ namespace Duplicationer
 
         public DuplicationerPlugin()
         {
-            var config = new Config(GUID)
+            log = new LogSource(MODNAME);
+
+            new Config(GUID)
                 .Group("Events")
                     .Entry(out configMaxBuildingValidationsPerFrame, "MaxBuildingValidationsPerFrame", 4)
                     .Entry(out configMaxTerrainValidationsPerFrame, "MaxTerrainValidationsPerFrame", 20)
@@ -77,7 +83,9 @@ namespace Duplicationer
                     "Mouse0, Mouse1, Mouse2, Mouse3, Mouse4, Mouse5, Mouse6")
                     .Entry(out configToggleBlueprintToolKey, "ToggleBlueprintToolKey", KeyCode.K, "Keyboard shortcut for toggling the blueprint tool.")
                     .Entry(out configPasteBlueprintKey, "PasteBlueprintKey", KeyCode.J, "Keyboard shortcut key for confirm paste.")
-                    .Entry(out configTogglePanelKey, "TogglePanelKey", KeyCode.N, "Keyboard shortcut key to open the save blueprint panel.")
+                    .Entry(out configTogglePanelKey, "TogglePanelKey", KeyCode.N, "Keyboard shortcut key to open the blueprint panel.")
+                    .Entry(out configSaveBlueprintKey, "SaveBlueprintKey", KeyCode.Period, "Keyboard shortcut key to open the save blueprint panel.")
+                    .Entry(out configLoadBlueprintKey, "LoadBlueprintKey", KeyCode.Comma, "Keyboard shortcut key to open the load blueprint panel.")
                 .EndGroup()
                 .Load()
                 .Save();
@@ -166,9 +174,7 @@ namespace Duplicationer
                 {
                     __instance.terrainRemovalPlaceholderId = 0ul;
 
-                    ulong chunkIndex;
-                    uint blockIndex;
-                    ChunkManager.getChunkIdxAndTerrainArrayIdxFromWorldCoords(__instance.worldPos.x, __instance.worldPos.y, __instance.worldPos.z, out chunkIndex, out blockIndex);
+                    ChunkManager.getChunkIdxAndTerrainArrayIdxFromWorldCoords(__instance.worldPos.x, __instance.worldPos.y, __instance.worldPos.z, out ulong chunkIndex, out uint blockIndex);
 
                     byte terrainType = 0;
                     ChunkManager.chunks_removeTerrainBlock(chunkIndex, blockIndex, ref terrainType);

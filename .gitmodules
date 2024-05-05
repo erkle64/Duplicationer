@@ -1,0 +1,3 @@
+[submodule "TinyJSON"]
+	path = TinyJSON
+	url = https://github.com/erkle64/TinyJSON.git

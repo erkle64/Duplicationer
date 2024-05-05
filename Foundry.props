@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="Current" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+   <!-- Path to the Foundry folder -->
+    <FoundryInstallPath>G:\SteamLibrary\steamapps\common\FOUNDRY\</FoundryInstallPath>
+    <!-- Path to mods folder -->
+    <FoundryModsPath>$(FoundryInstallPath)Mods\</FoundryModsPath>
+    <!-- Path to Foundry assemblies folder -->
+    <FoundryAssembliesPath>$(FoundryInstallPath)Foundry_Data\Managed\</FoundryAssembliesPath>
+    <!-- Target mod folder name -->
+    <ModFolderName>Duplicationer</ModFolderName>
+    <!-- Target mod directory -->
+    <TargetModDir>$(FoundryModsPath)$(ModFolderName)</TargetModDir>
+    <!-- Target mod path -->
+    <TargetModPath>$(TargetModDir)\</TargetModPath>
+    <!-- Unfoundry assembly path -->
+    <UnfoundryAssemblyPath>$(FoundryModsPath)A_Unfoundry\Unfoundry.dll</UnfoundryAssemblyPath>
+  </PropertyGroup>
+</Project>
+

@@ -1,7 +1,4 @@
-﻿using Newtonsoft.Json;
-using UnityEngine;
-
-// dotnet mpc -i E:\Development\CS\Duplicationer\Duplicationer\Duplicationer.csproj -o E:\Development\CS\Duplicationer\Duplicationer\Formatters.cs
+﻿using UnityEngine;
 
 namespace Duplicationer
 {
@@ -41,7 +38,6 @@ namespace Duplicationer
             public byte itemMode;
             public CustomData[] customData;
 
-            [JsonIgnore]
             public Quaternion orientationUnlocked
             {
                 get => new Quaternion(orientationUnlockedX, orientationUnlockedY, orientationUnlockedZ, orientationUnlockedW);
@@ -54,7 +50,6 @@ namespace Duplicationer
                 }
             }
 
-            [JsonIgnore]
             public Vector3Int worldPos
             {
                 get => new Vector3Int(worldX, worldY, worldZ);
