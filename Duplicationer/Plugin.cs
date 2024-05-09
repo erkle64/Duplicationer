@@ -15,7 +15,7 @@ namespace Duplicationer
             MODNAME = "duplicationer",
             AUTHOR = "erkle64",
             GUID = AUTHOR + "." + MODNAME,
-            VERSION = "0.4.1";
+            VERSION = "0.4.2";
 
         public static LogSource log;
 
@@ -133,7 +133,9 @@ namespace Duplicationer
             [HarmonyPrefix]
             private static void BuildEntityEvent_processEvent_prefix(BuildEntityEvent __instance)
             {
-                if (__instance.characterHash != GameRoot.getClientCharacter().usernameHash) return;
+                if (__instance == null) return;
+                if (!(GameRoot.getClientCharacter() is Character character)) return;
+                if (__instance.characterHash != character.usernameHash) return;
                 lastSpawnedBuildableWrapperEntityId = 0;
             }
 
@@ -141,7 +143,9 @@ namespace Duplicationer
             [HarmonyPostfix]
             private static void BuildEntityEvent_processEvent_postfix(BuildEntityEvent __instance)
             {
-                if (__instance.characterHash != GameRoot.getClientCharacter().usernameHash) return;
+                if (__instance == null) return;
+                if (!(GameRoot.getClientCharacter() is Character character)) return;
+                if (__instance.characterHash != character.usernameHash) return;
                 ActionManager.InvokeAndRemoveBuildEvent(__instance, lastSpawnedBuildableWrapperEntityId);
             }
 
