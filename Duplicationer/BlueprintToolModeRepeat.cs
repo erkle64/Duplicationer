@@ -51,44 +51,63 @@ namespace Duplicationer
                         {
                             var point = lookRay.GetPoint(distance);
                             tool.isDragArrowVisible = true;
-                            tool.dragFaceRay = new Ray(point, normal);
-                            tool.dragArrowOffset = 0.5f;
+                            if (InputHelpers.IsAltHeld)
+                            {
+                                tool.dragFaceRay = new Ray(point, -normal);
+                                tool.dragArrowOffset = -0.5f;
+                            }
+                            else
+                            {
+                                tool.dragFaceRay = new Ray(point, normal);
+                                tool.dragArrowOffset = 0.5f;
+                            }
                             switch (faceIndex)
                             {
                                 case 0:
                                     tool.dragArrowMaterial = ResourceDB.material_glow_red;
-                                    TabletHelper.SetTabletTextQuickActions($"LMB: Drag +X*{tool.CurrentBlueprint.SizeX}");
+                                    TabletHelper.SetTabletTextQuickActions($"LMB: Drag +X*{tool.CurrentBlueprint.SizeX}\nAlt+LMB: Drag -X*{tool.CurrentBlueprint.SizeX}");
                                     break;
 
                                 case 1:
                                     tool.dragArrowMaterial = ResourceDB.material_glow_red;
-                                    TabletHelper.SetTabletTextQuickActions($"LMB: Drag -X*{tool.CurrentBlueprint.SizeX}");
+                                    TabletHelper.SetTabletTextQuickActions($"LMB: Drag -X*{tool.CurrentBlueprint.SizeX}\nAlt+LMB: Drag +X*{tool.CurrentBlueprint.SizeX}");
                                     break;
 
                                 case 2:
                                     tool.dragArrowMaterial = ResourceDB.material_glow_yellow;
-                                    TabletHelper.SetTabletTextQuickActions($"LMB: Drag +Y*{tool.CurrentBlueprint.SizeY}");
+                                    TabletHelper.SetTabletTextQuickActions($"LMB: Drag +Y*{tool.CurrentBlueprint.SizeY}\nAlt+LMB: Drag -Y*{tool.CurrentBlueprint.SizeY}");
                                     break;
 
                                 case 3:
                                     tool.dragArrowMaterial = ResourceDB.material_glow_yellow;
-                                    TabletHelper.SetTabletTextQuickActions($"LMB: Drag -Y*{tool.CurrentBlueprint.SizeY}");
+                                    TabletHelper.SetTabletTextQuickActions($"LMB: Drag -Y*{tool.CurrentBlueprint.SizeY}\nAlt+LMB: Drag +Y*{tool.CurrentBlueprint.SizeY}");
                                     break;
 
                                 case 4:
                                     tool.dragArrowMaterial = ResourceDB.material_glow_purple;
-                                    TabletHelper.SetTabletTextQuickActions($"LMB: Drag +Z*{tool.CurrentBlueprint.SizeZ}");
+                                    TabletHelper.SetTabletTextQuickActions($"LMB: Drag +Z*{tool.CurrentBlueprint.SizeZ}\nAlt+LMB: Drag -Z*{tool.CurrentBlueprint.SizeZ}");
                                     break;
 
                                 case 5:
                                     tool.dragArrowMaterial = ResourceDB.material_glow_purple;
-                                    TabletHelper.SetTabletTextQuickActions($"LMB: Drag -Z*{tool.CurrentBlueprint.SizeZ}");
+                                    TabletHelper.SetTabletTextQuickActions($"LMB: Drag -Z*{tool.CurrentBlueprint.SizeZ}\nAlt+LMB: Drag +Z*{tool.CurrentBlueprint.SizeZ}");
                                     break;
                             }
 
                             if (Input.GetKeyDown(KeyCode.Mouse0) && InputHelpers.IsMouseInputAllowed && !tool.IsAnyFrameOpen)
                             {
-                                mode = Mode.XPos + faceIndex;
+                                if (InputHelpers.IsAltHeld)
+                                {
+                                    mode = Mode.XPos + (faceIndex ^ 1);
+                                    tool.dragFaceRay = new Ray(tool.dragFaceRay.origin, -normal);
+                                    tool.dragArrowOffset = -0.5f;
+                                }
+                                else
+                                {
+                                    mode = Mode.XPos + faceIndex;
+                                    tool.dragFaceRay = new Ray(tool.dragFaceRay.origin, normal);
+                                    tool.dragArrowOffset = 0.5f;
+                                }
                             }
                         }
                         else
