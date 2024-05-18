@@ -105,6 +105,7 @@ namespace Duplicationer
         private LazyPrefab prefabGridScrollView = new LazyPrefab("GridScrollView");
         private LazyPrefab prefabBlueprintNameInputField = new LazyPrefab("BlueprintNameInputField");
         private LazyPrefab prefabBlueprintButtonDefaultIcon = new LazyPrefab("BlueprintButtonDefaultIcon");
+        private LazyPrefab prefabBlueprintButtonIcon = new LazyPrefab("BlueprintButtonIcon");
         private LazyPrefab prefabBlueprintButton1Icon = new LazyPrefab("BlueprintButton1Icon");
         private LazyPrefab prefabBlueprintButton2Icon = new LazyPrefab("BlueprintButton2Icon");
         private LazyPrefab prefabBlueprintButton3Icon = new LazyPrefab("BlueprintButton3Icon");
@@ -805,26 +806,21 @@ namespace Duplicationer
                             .Element("Padding")
                                 .SetRectTransform(10.0f, -785.0f, 589.0f, -10.0f, 0.5f, 0.5f, 0.0f, 1.0f, 0.0f, 1.0f)
                                 .SetVerticalLayout(new RectOffset(0, 0, 0, 0), 10.0f, TextAnchor.UpperLeft, false, true, true, true, false, false, false)
-                                .Element("Material Report")
-                                    .AutoSize(ContentSizeFitter.FitMode.Unconstrained, ContentSizeFitter.FitMode.PreferredSize)
-                                    .Component_Text("", "OpenSansSemibold SDF", 14.0f, Color.white, TextAlignmentOptions.TopLeft)
-                                    .Keep(out textMaterialReport)
+                                .Element_ScrollBox("Material Report ScrollBox", builder =>
+                                    {
+                                        builder = builder
+                                            .SetVerticalLayout(new RectOffset(5, 5, 5, 5), 10.0f, TextAnchor.UpperLeft, false, true, true, false, false, false, false)
+                                            .Element("Material Report")
+                                                .SetRectTransform(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f, 0.0f, 1.0f)
+                                                .AutoSize(ContentSizeFitter.FitMode.PreferredSize, ContentSizeFitter.FitMode.PreferredSize)
+                                                .Component_Text("", "OpenSansSemibold SDF", 14.0f, Color.white, TextAlignmentOptions.TopLeft)
+                                                .Keep(out textMaterialReport)
+                                            .Done;
+                                    })
+                                    .Layout()
+                                        .PreferredHeight(200)
+                                    .Done
                                 .Done
-                                //.Element("Rail Miner Row")
-                                //    .Keep(out railMinerRow)
-                                //    .AutoSize(ContentSizeFitter.FitMode.Unconstrained, ContentSizeFitter.FitMode.PreferredSize)
-                                //    .SetHorizontalLayout(new RectOffset(0, 0, 0, 0), 5.0f, TextAnchor.UpperLeft, false, true, true, false, true, false, false)
-                                //    .Do((builder) =>
-                                //    {
-                                //        foreach (var template in GetRailMinerTemplates())
-                                //        {
-                                //            builder.Element_ImageButton("Button Rail Miner", template.icon_identifier)
-                                //                .Component_Tooltip($"Insert and launch\n{template.name}")
-                                //                .SetOnClick(() => { InsertRailMiners(template); })
-                                //            .End(false);
-                                //        }
-                                //    })
-                                //.Done
                                 .Element("Demolish Row")
                                     .Updater(guiUpdaters, () => boxMode != BoxMode.None && CurrentMode != modeSelectArea)
                                     .SetHorizontalLayout(new RectOffset(0, 0, 0, 0), 5.0f, TextAnchor.UpperLeft, false, true, true, false, true, false, false)
@@ -856,14 +852,14 @@ namespace Duplicationer
                                     .SetHorizontalLayout(new RectOffset(0, 0, 0, 0), 5.0f, TextAnchor.UpperLeft, false, true, true, false, true, false, false)
                                     .Element_Label("Destroy Label", "Destroy ", 100, 1)
                                     .Done
-                                    .Element_ImageButton("Button Destroy Buildings", "assembler_iii")
-                                        .Component_Tooltip("Destroy\nBuildings")
-                                        .SetOnClick(() => ConfirmationFrame.Show("Permanently destroy buildings in selection?", () => DestroyArea(true, false, false, false)))
-                                    .Done
-                                    .Element_ImageButton("Button Destroy Blocks", "floor")
-                                        .Component_Tooltip("Destroy\nBlocks")
-                                        .SetOnClick(() => ConfirmationFrame.Show("Permanently destroy foundation blocks in selection?", () => DestroyArea(false, true, false, false)))
-                                    .Done
+                                    //.Element_ImageButton("Button Destroy Buildings", "assembler_iii")
+                                    //    .Component_Tooltip("Destroy\nBuildings")
+                                    //    .SetOnClick(() => ConfirmationFrame.Show("Permanently destroy buildings in selection?", () => DestroyArea(true, false, false, false)))
+                                    //.Done
+                                    //.Element_ImageButton("Button Destroy Blocks", "floor")
+                                    //    .Component_Tooltip("Destroy\nBlocks")
+                                    //    .SetOnClick(() => ConfirmationFrame.Show("Permanently destroy foundation blocks in selection?", () => DestroyArea(false, true, false, false)))
+                                    //.Done
                                     .Element_ImageButton("Button Destroy Terrain", "dirt")
                                         .Component_Tooltip("Destroy\nTerrain")
                                         .SetOnClick(() => ConfirmationFrame.Show("Permanently destroy terrain in selection?", () => DestroyArea(false, false, true, false)))
@@ -995,13 +991,23 @@ namespace Duplicationer
 
             string filenameBase = PathHelpers.MakeValidFileName(name);
             string path = System.IO.Path.Combine(DuplicationerPlugin.BlueprintFolder, $"{filenameBase}.{DuplicationerPlugin.BlueprintExtension}");
-            int nextIndex = 1;
-            while (System.IO.File.Exists(path)) path = System.IO.Path.Combine(DuplicationerPlugin.BlueprintFolder, $"{filenameBase}{nextIndex++}.{DuplicationerPlugin.BlueprintExtension}");
+            if (System.IO.File.Exists(path))
+            {
+                ConfirmationFrame.Show($"Overwrite '{name}'?", "Overwrite", () =>
+                {
+                    Debug.Log($"Saving blueprint '{name}' to '{path}'");
+                    CurrentBlueprint.Save(path, name, saveFrameIconItemTemplates.Take(saveFrameIconCount).ToArray());
 
-            Debug.Log((string)$"Saving blueprint '{name}' to '{path}'");
-            CurrentBlueprint.Save(path, name, saveFrameIconItemTemplates.Take(saveFrameIconCount).ToArray());
+                    HideSaveFrame();
+                });
+            }
+            else
+            {
+                Debug.Log($"Saving blueprint '{name}' to '{path}'");
+                CurrentBlueprint.Save(path, name, saveFrameIconItemTemplates.Take(saveFrameIconCount).ToArray());
 
-            HideSaveFrame();
+                HideSaveFrame();
+            }
         }
 
         internal void HideSaveFrame()
@@ -1147,10 +1153,20 @@ namespace Duplicationer
                                         .SetOnClick(HideSaveFrame)
                                     .Done
                                 .Done
-                                .Element("Material Report")
-                                    .AutoSize(ContentSizeFitter.FitMode.Unconstrained, ContentSizeFitter.FitMode.PreferredSize)
-                                    .Component_Text("", "OpenSansSemibold SDF", 14.0f, Color.white, TextAlignmentOptions.TopLeft)
-                                    .Keep(out saveFrameMaterialReportText)
+                                .Element_ScrollBox("Material Report ScrollBox", builder =>
+                                    {
+                                        builder = builder
+                                            .SetVerticalLayout(new RectOffset(5, 5, 5, 5), 10.0f, TextAnchor.UpperLeft, false, true, true, false, false, false, false)
+                                            .Element("Material Report")
+                                                .SetRectTransform(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f, 0.0f, 1.0f)
+                                                .AutoSize(ContentSizeFitter.FitMode.PreferredSize, ContentSizeFitter.FitMode.PreferredSize)
+                                                .Component_Text("", "OpenSansSemibold SDF", 14.0f, Color.white, TextAlignmentOptions.TopLeft)
+                                                .Keep(out saveFrameMaterialReportText)
+                                            .Done;
+                                    })
+                                    .Layout()
+                                        .PreferredHeight(400)
+                                    .Done
                                 .Done
                             .Done
                         .Done
@@ -1210,6 +1226,8 @@ namespace Duplicationer
                     {
                         DestroyAllTransformChildren(saveFramePreviewContainer.transform);
                         var gameObject = UnityEngine.Object.Instantiate(prefabBlueprintButtonDefaultIcon.Prefab, saveFramePreviewContainer.transform);
+                        var deleteButton = gameObject.transform.Find("DeleteButton")?.gameObject;
+                        if (deleteButton != null) deleteButton.SetActive(false);
                         saveFramePreviewLabel = gameObject.GetComponentInChildren<TextMeshProUGUI>();
                         if (saveFramePreviewLabel == null) throw new System.ArgumentNullException(nameof(saveFramePreviewLabel));
                     }
@@ -1219,6 +1237,8 @@ namespace Duplicationer
                     {
                         DestroyAllTransformChildren(saveFramePreviewContainer.transform);
                         var gameObject = UnityEngine.Object.Instantiate(prefabBlueprintButton1Icon.Prefab, saveFramePreviewContainer.transform);
+                        var deleteButton = gameObject.transform.Find("DeleteButton")?.gameObject;
+                        if (deleteButton != null) deleteButton.SetActive(false);
                         saveFramePreviewLabel = gameObject.GetComponentInChildren<TextMeshProUGUI>();
                         if (saveFramePreviewLabel == null) throw new System.ArgumentNullException(nameof(saveFramePreviewLabel));
                         saveFramePreviewIconImages[0] = gameObject.transform.Find("Icon1")?.GetComponent<Image>();
@@ -1229,6 +1249,8 @@ namespace Duplicationer
                     {
                         DestroyAllTransformChildren(saveFramePreviewContainer.transform);
                         var gameObject = UnityEngine.Object.Instantiate(prefabBlueprintButton2Icon.Prefab, saveFramePreviewContainer.transform);
+                        var deleteButton = gameObject.transform.Find("DeleteButton")?.gameObject;
+                        if (deleteButton != null) deleteButton.SetActive(false);
                         saveFramePreviewLabel = gameObject.GetComponentInChildren<TextMeshProUGUI>();
                         if (saveFramePreviewLabel == null) throw new System.ArgumentNullException(nameof(saveFramePreviewLabel));
                         saveFramePreviewIconImages[0] = gameObject.transform.Find("Icon1")?.GetComponent<Image>();
@@ -1240,6 +1262,8 @@ namespace Duplicationer
                     {
                         DestroyAllTransformChildren(saveFramePreviewContainer.transform);
                         var gameObject = UnityEngine.Object.Instantiate(prefabBlueprintButton3Icon.Prefab, saveFramePreviewContainer.transform);
+                        var deleteButton = gameObject.transform.Find("DeleteButton")?.gameObject;
+                        if (deleteButton != null) deleteButton.SetActive(false);
                         saveFramePreviewLabel = gameObject.GetComponentInChildren<TextMeshProUGUI>();
                         if (saveFramePreviewLabel == null) throw new System.ArgumentNullException(nameof(saveFramePreviewLabel));
                         saveFramePreviewIconImages[0] = gameObject.transform.Find("Icon1")?.GetComponent<Image>();
@@ -1291,10 +1315,7 @@ namespace Duplicationer
                 //if (!itemTemplate.includeInBuild) continue;
                 if (itemTemplate.isHiddenItem) continue;
 
-                var gameObject = UnityEngine.Object.Instantiate(prefabBlueprintButton1Icon.Prefab, saveGridObject.transform);
-
-                var label = gameObject.transform.Find("Label")?.GetComponent<TextMeshProUGUI>();
-                if (label != null) label.text = "";
+                var gameObject = UnityEngine.Object.Instantiate(prefabBlueprintButtonIcon.Prefab, saveGridObject.transform);
 
                 var iconImage = gameObject.transform.Find("Icon1")?.GetComponent<Image>();
                 if (iconImage != null) iconImage.sprite = itemTemplate.icon;
@@ -1492,7 +1513,7 @@ namespace Duplicationer
                         iconImages[iconIndex].sprite = iconItemTemplates[iconIndex].icon;
                     }
 
-                    var button = gameObject.GetComponentInChildren<Button>();
+                    var button = gameObject.GetComponent<Button>();
                     if (button != null)
                     {
                         button.onClick.AddListener(new UnityAction(() =>
@@ -1503,6 +1524,28 @@ namespace Duplicationer
                                 ClearBlueprintPlaceholders();
                                 LoadBlueprintFromFile(path);
                                 SelectMode(modePlace);
+                            });
+                        }));
+                    }
+
+                    var deleteButton = gameObject.transform.Find("DeleteButton")?.GetComponent<Button>();
+                    if (deleteButton != null)
+                    {
+                        var nameToDelete = name;
+                        var pathToDelete = path;
+                        deleteButton.onClick.AddListener(new UnityAction(() =>
+                        {
+                            ActionManager.AddQueuedEvent(() =>
+                            {
+                                ConfirmationFrame.Show($"Delete '{name}'", "Delete", () =>
+                                {
+                                    try
+                                    {
+                                        System.IO.File.Delete(pathToDelete);
+                                        FillLibraryGrid();
+                                    }
+                                    catch (System.Exception) { }
+                                });
                             });
                         }));
                     }
