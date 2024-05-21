@@ -1584,7 +1584,8 @@ namespace Duplicationer
                 {
                     AABB3D aabb = ObjectPoolManager.aabb3ds.getObject();
                     aabb.reinitialize(from.x, from.y, from.z, to.x - from.x + 1, to.y - from.y + 1, to.z - from.z + 1);
-                    StreamingSystem.getBuildableObjectGOQuadtreeArray().queryAABB3D(aabb, bogoQueryResult, false);
+                    bogoQueryResult.Clear();
+                    StreamingSystem.getBuildableObjectGOQuadtreeArray().queryAABB3D(aabb, bogoQueryResult, true);
                     if (bogoQueryResult.Count > 0)
                     {
                         foreach (var bogo in bogoQueryResult)
@@ -1651,7 +1652,8 @@ namespace Duplicationer
                 {
                     AABB3D aabb = ObjectPoolManager.aabb3ds.getObject();
                     aabb.reinitialize(from.x, from.y, from.z, to.x - from.x + 1, to.y - from.y + 1, to.z - from.z + 1);
-                    StreamingSystem.getBuildableObjectGOQuadtreeArray().queryAABB3D(aabb, bogoQueryResult, false);
+                    bogoQueryResult.Clear();
+                    StreamingSystem.getBuildableObjectGOQuadtreeArray().queryAABB3D(aabb, bogoQueryResult, true);
                     if (bogoQueryResult.Count > 0)
                     {
                         foreach (var bogo in bogoQueryResult)

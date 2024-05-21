@@ -96,6 +96,7 @@ namespace Duplicationer
             AABB3D aabb = ObjectPoolManager.aabb3ds.getObject();
             aabb.reinitialize(from.x, from.y, from.z, to.x - from.x, to.y - from.y, to.z - from.z);
             QuadtreeArray<BuildableObjectGO> quadTree = StreamingSystem.getBuildableObjectGOQuadtreeArray();
+            bogoQueryResult.Clear();
             quadTree.queryAABB3D(aabb, bogoQueryResult, true);
             foreach (var bogo in bogoQueryResult)
             {

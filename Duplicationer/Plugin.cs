@@ -15,7 +15,7 @@ namespace Duplicationer
             MODNAME = "duplicationer",
             AUTHOR = "erkle64",
             GUID = AUTHOR + "." + MODNAME,
-            VERSION = "0.4.4";
+            VERSION = "0.4.5";
 
         public static LogSource log;
 
