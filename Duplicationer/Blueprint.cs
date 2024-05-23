@@ -1,4 +1,5 @@
 ﻿using HarmonyLib;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -106,6 +107,7 @@ namespace Duplicationer
                     {
                         case BuildableObjectTemplate.BuildableObjectType.BuildingPart:
                         case BuildableObjectTemplate.BuildableObjectType.WorldDecorMineAble:
+                        case BuildableObjectTemplate.BuildableObjectType.ModularEntityModule:
                             break;
 
                         default:
@@ -204,6 +206,74 @@ namespace Duplicationer
                     if (BlastFurnaceBaseGO.blastFurnaceEntity_queryPollingData(bogo.relatedEntityId, ref data) == IOBool.iotrue)
                     {
                         customData.Add(new BlueprintData.BuildableObjectData.CustomData("blastFurnaceModeTemplateId", data.modeTemplateId));
+                    }
+                }
+                if (typeof(DroneTransportGO).IsAssignableFrom(bogoType))
+                {
+                    DroneTransportPollingUpdateData data = default;
+                    if (DroneTransportGO.droneTransportEntity_queryPollingData(bogo.relatedEntityId, ref data, null, 0U) == IOBool.iotrue)
+                    {
+                        customData.Add(new BlueprintData.BuildableObjectData.CustomData("loadConditionFlags", data.loadConditionFlags));
+                        customData.Add(new BlueprintData.BuildableObjectData.CustomData("loadCondition_comparisonType", data.loadCondition_comparisonType));
+                        customData.Add(new BlueprintData.BuildableObjectData.CustomData("loadCondition_fillRatePercentage", data.loadCondition_fillRatePercentage));
+                        customData.Add(new BlueprintData.BuildableObjectData.CustomData("loadCondition_seconds", data.loadCondition_seconds));
+                    }
+
+                    byte[] stationName = new byte[128];
+                    uint stationNameLength = 0;
+                    byte stationType = (byte)(bogo.template.droneTransport_isStartStation ? 1 : 0);
+                    DroneTransportGO.droneTransportEntity_getStationName(bogo.relatedEntityId, stationType, stationName, (uint)stationName.Length, ref stationNameLength);
+                    customData.Add(new BlueprintData.BuildableObjectData.CustomData("stationName", Encoding.UTF8.GetString(stationName, 0, (int)stationNameLength)));
+                    customData.Add(new BlueprintData.BuildableObjectData.CustomData("stationType", stationType));
+                }
+                if (typeof(ChestGO).IsAssignableFrom(bogoType))
+                {
+                    ulong inventoryId = 0UL;
+                    if (BuildingManager.buildingManager_getInventoryAccessors(bogo.relatedEntityId, 0U, ref inventoryId) == IOBool.iotrue)
+                    {
+                        uint slotCount = 0;
+                        uint categoryLock = 0;
+                        uint firstSoftLockedSlotIdx = 0;
+                        InventoryManager.inventoryManager_getAuxiliaryDataById(inventoryId, ref slotCount, ref categoryLock, ref firstSoftLockedSlotIdx, IOBool.iofalse);
+
+                        customData.Add(new BlueprintData.BuildableObjectData.CustomData("firstSoftLockedSlotIdx", firstSoftLockedSlotIdx));
+                    }
+                }
+                if (typeof(IHasModularEntityBaseManager).IsAssignableFrom(bogoType))
+                {
+                    ModularBuildingData rootNode = null;
+                    uint totalModuleCount = ModularBuildingManagerFrame.modularEntityBase_getTotalModuleCount(bogo.relatedEntityId, 0U);
+                    for (uint id = 1; id <= totalModuleCount; ++id)
+                    {
+                        ulong botId = 0;
+                        uint parentId = 0;
+                        uint parentAttachmentPointIdx = 0;
+                        ModularBuildingManagerFrame.modularEntityBase_getModuleDataForModuleId(bogo.relatedEntityId, id, ref botId, ref parentId, ref parentAttachmentPointIdx, 0U);
+                        if (id == 1U)
+                        {
+                            rootNode = new ModularBuildingData(bogo.template, id);
+                        }
+                        else
+                        {
+                            var nodeById = FindModularBuildingNodeById(rootNode, parentId);
+                            if (nodeById == null)
+                            {
+                                Debug.LogError("parent node not found!");
+                                break;
+                            }
+                            if (nodeById.attachments[(int)parentAttachmentPointIdx] != null)
+                            {
+                                Debug.LogError("parent node attachment point is occupied!");
+                                break;
+                            }
+                            var node = new ModularBuildingData(ItemTemplateManager.getBuildableObjectTemplate(botId), id);
+                            nodeById.attachments[(int)parentAttachmentPointIdx] = node;
+                        }
+                    }
+                    if (rootNode != null)
+                    {
+                        var rootNodeJSON = JSON.Dump(rootNode, EncodeOptions.NoTypeHints);
+                        customData.Add(new BlueprintData.BuildableObjectData.CustomData("modularBuildingData", rootNodeJSON));
                     }
                 }
                 if (bogo.template.hasPoleGridConnection)
@@ -621,6 +691,64 @@ namespace Duplicationer
                             }
                         });
                     }
+                }
+
+                if (template.type == BuildableObjectTemplate.BuildableObjectType.Storage && HasCustomData(buildingIndex, "firstSoftLockedSlotIdx"))
+                {
+                    var firstSoftLockedSlotIdx = GetCustomData<uint>(buildingIndex, "firstSoftLockedSlotIdx");
+                    postBuildActions.Add((ConstructionTaskGroup taskGroup, ConstructionTaskGroup.ConstructionTask task) =>
+                    {
+                        if (task.entityId > 0)
+                        {
+                            ulong inventoryId = 0UL;
+                            if (BuildingManager.buildingManager_getInventoryAccessors(task.entityId, 0U, ref inventoryId) == IOBool.iotrue)
+                            {
+                                GameRoot.addLockstepEvent(new SetSoftLockForInventory(usernameHash, inventoryId, firstSoftLockedSlotIdx));
+                            }
+                        }
+                    });
+                }
+
+                if (template.type == BuildableObjectTemplate.BuildableObjectType.DroneTransport && HasCustomData(buildingIndex, "loadConditionFlags"))
+                {
+                    var loadConditionFlags = GetCustomData<byte>(buildingIndex, "loadConditionFlags");
+                    var loadCondition_comparisonType = GetCustomData<byte>(buildingIndex, "loadCondition_comparisonType");
+                    var loadCondition_fillRatePercentage = GetCustomData<byte>(buildingIndex, "loadCondition_fillRatePercentage");
+                    var loadCondition_seconds = GetCustomData<uint>(buildingIndex, "loadCondition_seconds");
+                    postBuildActions.Add((ConstructionTaskGroup taskGroup, ConstructionTaskGroup.ConstructionTask task) =>
+                    {
+                        if (task.entityId > 0)
+                        {
+                            GameRoot.addLockstepEvent(new DroneTransportLoadConditionEvent(usernameHash, task.entityId, loadConditionFlags, loadCondition_fillRatePercentage, loadCondition_seconds, loadCondition_comparisonType));
+                        }
+                    });
+                }
+
+                if (template.type == BuildableObjectTemplate.BuildableObjectType.DroneTransport && HasCustomData(buildingIndex, "stationName"))
+                {
+                    var stationName = GetCustomData<string>(buildingIndex, "stationName");
+                    var stationType = GetCustomData<byte>(buildingIndex, "stationType");
+                    postBuildActions.Add((ConstructionTaskGroup taskGroup, ConstructionTaskGroup.ConstructionTask task) =>
+                    {
+                        if (task.entityId > 0)
+                        {
+                            GameRoot.addLockstepEvent(new DroneTransportSetNameEvent(usernameHash, stationName, task.entityId, stationType));
+                        }
+                    });
+                }
+
+                if (HasCustomData(buildingIndex, "modularBuildingData"))
+                {
+                    var modularBuildingDataJSON = GetCustomData<string>(buildingIndex, "modularBuildingData");
+                    var modularBuildingData = JSON.Load(modularBuildingDataJSON).Make<ModularBuildingData>();
+                    postBuildActions.Add((ConstructionTaskGroup taskGroup, ConstructionTaskGroup.ConstructionTask task) =>
+                    {
+                        if (task.entityId > 0)
+                        {
+                            var mbmfData = modularBuildingData.BuildMBMFData();
+                            GameRoot.addLockstepEvent(new SetModularEntityConstructionStateDataEvent(usernameHash, 0U, task.entityId, mbmfData));
+                        }
+                    });
                 }
 
                 //if (HasCustomData(buildingIndex, "interactableCount"))
@@ -1200,6 +1328,53 @@ namespace Duplicationer
             ObjectPoolManager.aabb3ds.returnObject(aabb); aabb = null;
 
             return false;
+        }
+
+        [System.Serializable]
+        public class ModularBuildingData
+        {
+            public uint id;
+            public ulong templateId;
+            public ModularBuildingData[] attachments;
+
+            public ModularBuildingData()
+            {
+                id = 0;
+                templateId = 0;
+                attachments = new ModularBuildingData[0];
+            }
+
+            public ModularBuildingData(BuildableObjectTemplate template, uint id)
+            {
+                this.id = id;
+                templateId = template.id;
+                attachments = new ModularBuildingData[template.modularBuildingConnectionNodes.Length];
+            }
+
+            public MBMFData_BuildingNode BuildMBMFData()
+            {
+                var attachmentPoints = new MBMFData_BuildingNode[attachments.Length];
+                for (int i = 0; i < attachments.Length; i++)
+                {
+                    var attachment = attachments[i];
+                    if (attachment != null) attachmentPoints[i] = attachment.BuildMBMFData();
+                }
+                return new MBMFData_BuildingNode(templateId, attachmentPoints, id);
+            }
+        }
+
+        private static ModularBuildingData FindModularBuildingNodeById(ModularBuildingData node, uint id)
+        {
+            if (node.id == id) return node;
+            for (uint index = 0; index < node.attachments.Length; ++index)
+            {
+                if (node.attachments[(int)index] != null)
+                {
+                    var nodeById = FindModularBuildingNodeById(node.attachments[(int)index], id);
+                    if (nodeById != null) return nodeById;
+                }
+            }
+            return null;
         }
 
         public struct ShoppingListData
