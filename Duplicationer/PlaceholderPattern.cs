@@ -23,7 +23,7 @@ namespace Duplicationer
             var meshFilters = source.GetComponentsInChildren<MeshFilter>(true);
 
             var entryCount = 0;
-            foreach (var meshFilter in meshFilters) if (meshFilter.name != "Impostor") entryCount++;
+            foreach (var meshFilter in meshFilters) if (meshFilter.name != "Impostor" && meshFilter.sharedMesh != null) entryCount++;
             Entries = new Entry[entryCount];
 
             var localToWorldMatrix = source.transform.localToWorldMatrix;
@@ -32,7 +32,7 @@ namespace Duplicationer
             for (int i = 0; i < meshFilters.Length; i++)
             {
                 MeshFilter meshFilter = meshFilters[i];
-                if (meshFilter.name == "Impostor") continue;
+                if (meshFilter.name == "Impostor" || meshFilter.sharedMesh == null) continue;
 
                 var mesh = meshFilter.sharedMesh;
                 var relativeTransform = worldToLocalMatrix * meshFilter.transform.localToWorldMatrix;
