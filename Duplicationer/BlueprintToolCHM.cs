@@ -7,6 +7,7 @@ using Unfoundry;
 using UnityEngine.Events;
 using HarmonyLib;
 using System.Linq;
+using System.IO;
 
 namespace Duplicationer
 {
@@ -290,6 +291,61 @@ namespace Duplicationer
                     byte errorCodeRaw = 0;
                     BuildingManager.buildingManager_validateConstruction_buildableEntityWrapper(new v3i(worldPos.x, worldPos.y, worldPos.z), buildableObjectData.orientationY, buildableObjectData.orientationUnlocked, buildableObjectData.templateId, ref errorCodeRaw, IOBool.iofalse);
                     var errorCode = (BuildingManager.CheckBuildableErrorCode)errorCodeRaw;
+
+                    if (placeholder.ExtraBoundingBoxes != null)
+                    {
+                        foreach (var extraBox in placeholder.ExtraBoundingBoxes)
+                        {
+                            aabb.reinitialize(
+                                extraBox.position.x + CurrentBlueprintAnchor.x,
+                                extraBox.position.y + CurrentBlueprintAnchor.y,
+                                extraBox.position.z + CurrentBlueprintAnchor.z,
+                                extraBox.size.x,
+                                extraBox.size.y,
+                                extraBox.size.z);
+
+                            if (aabb.y0 < 0 || aabb.y1 >= 256)
+                            {
+                                errorCode = BuildingManager.CheckBuildableErrorCode.BlockedByReservedArea;
+                                break;
+                            }
+
+                            DuplicationerPlugin.log.Log($"aabb: {aabb.x0} {aabb.y0} {aabb.z0} {aabb.wx} {aabb.wy} {aabb.wz}");
+                            bogoQueryResult.Clear();
+                            quadTree.queryAABB3D(aabb, bogoQueryResult, true);
+                            foreach (var bogo in bogoQueryResult)
+                            {
+                                if (aabb.hasXYZIntersection(bogo._aabb))
+                                {
+                                    errorCode = BuildingManager.CheckBuildableErrorCode.BlockedByReservedArea;
+                                    break;
+                                }
+                            }
+
+                            var from = new Vector3Int(aabb.x0, aabb.y0, aabb.z0);
+                            var to = new Vector3Int(aabb.x0 + aabb.wx - 1, aabb.y0 + aabb.wy - 1, aabb.z0 + aabb.wz - 1);
+                            for (int bz = from.z; bz < to.z; ++bz)
+                            {
+                                for (int by = from.y; by < to.y; ++by)
+                                {
+                                    for (int bx = from.x; bx < to.x; ++bx)
+                                    {
+                                        ChunkManager.getChunkIdxAndTerrainArrayIdxFromWorldCoords(bx, by, bz, out ulong chunkIndex, out uint blockIndex);
+                                        var blockId = ChunkManager.chunks_getTerrainData(chunkIndex, blockIndex);
+                                        if (blockId > 0)
+                                        {
+                                            errorCode = BuildingManager.CheckBuildableErrorCode.BlockedByReservedArea;
+                                            break;
+                                        }
+                                    }
+                                    if (errorCode == BuildingManager.CheckBuildableErrorCode.BlockedByReservedArea) break;
+                                }
+                                if (errorCode == BuildingManager.CheckBuildableErrorCode.BlockedByReservedArea) break;
+                            }
+
+                            if (errorCode == BuildingManager.CheckBuildableErrorCode.BlockedByReservedArea) break;
+                        }
+                    }
 
                     bool positionClear = false;
                     bool positionFilled = false;
@@ -614,7 +670,7 @@ namespace Duplicationer
             if (CurrentBlueprint == null) throw new System.ArgumentNullException(nameof(CurrentBlueprint));
 
             ulong usernameHash = GameRoot.getClientCharacter().usernameHash;
-            Debug.Log(string.Format("Placing blueprint at {0}", targetPosition.ToString()));
+            DuplicationerPlugin.log.Log(string.Format("Placing blueprint at {0}", targetPosition.ToString()));
             AABB3D aabb = ObjectPoolManager.aabb3ds.getObject();
             var modularBaseCoords = new Dictionary<ulong, Vector3Int>();
             var constructionTaskGroup = new ConstructionTaskGroup((ConstructionTaskGroup taskGroup) => { activeConstructionTaskGroups.Remove(taskGroup); });
@@ -982,6 +1038,11 @@ namespace Duplicationer
             ShowSaveFrame();
         }
 
+        private void GetInfoFromExistingBlueprint()
+        {
+            ShowLibraryFrame(true);
+        }
+
         private void FinishSaveBlueprint()
         {
             if (CurrentBlueprint == null) throw new System.ArgumentNullException(nameof(CurrentBlueprint));
@@ -990,12 +1051,12 @@ namespace Duplicationer
             if (string.IsNullOrWhiteSpace(name)) return;
 
             string filenameBase = PathHelpers.MakeValidFileName(name);
-            string path = System.IO.Path.Combine(DuplicationerPlugin.BlueprintFolder, $"{filenameBase}.{DuplicationerPlugin.BlueprintExtension}");
-            if (System.IO.File.Exists(path))
+            string path = Path.Combine(DuplicationerPlugin.BlueprintFolder, $"{filenameBase}.{DuplicationerPlugin.BlueprintExtension}");
+            if (File.Exists(path))
             {
                 ConfirmationFrame.Show($"Overwrite '{name}'?", "Overwrite", () =>
                 {
-                    Debug.Log($"Saving blueprint '{name}' to '{path}'");
+                    DuplicationerPlugin.log.Log($"Saving blueprint '{name}' to '{path}'");
                     CurrentBlueprint.Save(path, name, saveFrameIconItemTemplates.Take(saveFrameIconCount).ToArray());
 
                     HideSaveFrame();
@@ -1003,7 +1064,7 @@ namespace Duplicationer
             }
             else
             {
-                Debug.Log($"Saving blueprint '{name}' to '{path}'");
+                DuplicationerPlugin.log.Log($"Saving blueprint '{name}' to '{path}'");
                 CurrentBlueprint.Save(path, name, saveFrameIconItemTemplates.Take(saveFrameIconCount).ToArray());
 
                 HideSaveFrame();
@@ -1021,6 +1082,8 @@ namespace Duplicationer
         internal void ShowSaveFrame()
         {
             if (saveFrame != null && saveFrame.activeSelf) return;
+
+            if (libraryFrame != null && libraryFrame.activeSelf) HideLibraryFrame();
 
             if (saveFrame == null)
             {
@@ -1149,6 +1212,9 @@ namespace Duplicationer
                                         .Updater<Button>(guiUpdaters, () => !string.IsNullOrWhiteSpace(saveFrameNameInputField?.text))
                                         .SetOnClick(FinishSaveBlueprint)
                                     .Done
+                                    .Element_TextButton("Button Get Existing", "Get Existing")
+                                        .SetOnClick(GetInfoFromExistingBlueprint)
+                                    .Done
                                     .Element_TextButton("Button Cancel", "Cancel")
                                         .SetOnClick(HideSaveFrame)
                                     .Done
@@ -1228,6 +1294,8 @@ namespace Duplicationer
                         var gameObject = UnityEngine.Object.Instantiate(prefabBlueprintButtonDefaultIcon.Prefab, saveFramePreviewContainer.transform);
                         var deleteButton = gameObject.transform.Find("DeleteButton")?.gameObject;
                         if (deleteButton != null) deleteButton.SetActive(false);
+                        var renameButton = gameObject.transform.Find("RenameButton")?.gameObject;
+                        if (renameButton != null) renameButton.SetActive(false);
                         saveFramePreviewLabel = gameObject.GetComponentInChildren<TextMeshProUGUI>();
                         if (saveFramePreviewLabel == null) throw new System.ArgumentNullException(nameof(saveFramePreviewLabel));
                     }
@@ -1239,6 +1307,8 @@ namespace Duplicationer
                         var gameObject = UnityEngine.Object.Instantiate(prefabBlueprintButton1Icon.Prefab, saveFramePreviewContainer.transform);
                         var deleteButton = gameObject.transform.Find("DeleteButton")?.gameObject;
                         if (deleteButton != null) deleteButton.SetActive(false);
+                        var renameButton = gameObject.transform.Find("RenameButton")?.gameObject;
+                        if (renameButton != null) renameButton.SetActive(false);
                         saveFramePreviewLabel = gameObject.GetComponentInChildren<TextMeshProUGUI>();
                         if (saveFramePreviewLabel == null) throw new System.ArgumentNullException(nameof(saveFramePreviewLabel));
                         saveFramePreviewIconImages[0] = gameObject.transform.Find("Icon1")?.GetComponent<Image>();
@@ -1251,6 +1321,8 @@ namespace Duplicationer
                         var gameObject = UnityEngine.Object.Instantiate(prefabBlueprintButton2Icon.Prefab, saveFramePreviewContainer.transform);
                         var deleteButton = gameObject.transform.Find("DeleteButton")?.gameObject;
                         if (deleteButton != null) deleteButton.SetActive(false);
+                        var renameButton = gameObject.transform.Find("RenameButton")?.gameObject;
+                        if (renameButton != null) renameButton.SetActive(false);
                         saveFramePreviewLabel = gameObject.GetComponentInChildren<TextMeshProUGUI>();
                         if (saveFramePreviewLabel == null) throw new System.ArgumentNullException(nameof(saveFramePreviewLabel));
                         saveFramePreviewIconImages[0] = gameObject.transform.Find("Icon1")?.GetComponent<Image>();
@@ -1264,6 +1336,8 @@ namespace Duplicationer
                         var gameObject = UnityEngine.Object.Instantiate(prefabBlueprintButton3Icon.Prefab, saveFramePreviewContainer.transform);
                         var deleteButton = gameObject.transform.Find("DeleteButton")?.gameObject;
                         if (deleteButton != null) deleteButton.SetActive(false);
+                        var renameButton = gameObject.transform.Find("RenameButton")?.gameObject;
+                        if (renameButton != null) renameButton.SetActive(false);
                         saveFramePreviewLabel = gameObject.GetComponentInChildren<TextMeshProUGUI>();
                         if (saveFramePreviewLabel == null) throw new System.ArgumentNullException(nameof(saveFramePreviewLabel));
                         saveFramePreviewIconImages[0] = gameObject.transform.Find("Icon1")?.GetComponent<Image>();
@@ -1278,6 +1352,8 @@ namespace Duplicationer
                         var gameObject = UnityEngine.Object.Instantiate(prefabBlueprintButton4Icon.Prefab, saveFramePreviewContainer.transform);
                         saveFramePreviewLabel = gameObject.GetComponentInChildren<TextMeshProUGUI>();
                         if (saveFramePreviewLabel == null) throw new System.ArgumentNullException(nameof(saveFramePreviewLabel));
+                        var renameButton = gameObject.transform.Find("RenameButton")?.gameObject;
+                        if (renameButton != null) renameButton.SetActive(false);
                         saveFramePreviewIconImages[0] = gameObject.transform.Find("Icon1")?.GetComponent<Image>();
                         saveFramePreviewIconImages[1] = gameObject.transform.Find("Icon2")?.GetComponent<Image>();
                         saveFramePreviewIconImages[2] = gameObject.transform.Find("Icon3")?.GetComponent<Image>();
@@ -1397,66 +1473,71 @@ namespace Duplicationer
             GlobalStateManager.removeCursorRequirement();
         }
 
-        internal void ShowLibraryFrame()
+        internal void ShowLibraryFrame(bool isForSaveInfo = false)
         {
-            if (libraryFrame != null && libraryFrame.activeSelf) return;
+            if (!isForSaveInfo && saveFrame != null && saveFrame.activeSelf) HideSaveFrame();
 
-            if (libraryFrame == null)
+            if (libraryFrame != null)
             {
-                var graphics = Traverse.Create(typeof(UIRaycastTooltipManager))?.Field("singleton")?.GetValue<UIRaycastTooltipManager>()?.tooltipRectTransform?.GetComponentsInChildren<Graphic>();
-                if (graphics != null)
-                {
-                    foreach (var graphic in graphics)
-                    {
-                        graphic.raycastTarget = false;
-                    }
-                }
+                if (libraryFrame.activeSelf) return;
 
-                ulong usernameHash = GameRoot.getClientCharacter().usernameHash;
-                UIBuilder.BeginWith(GameRoot.getDefaultCanvas())
-                    .Element_Panel("Library Frame", "corner_cut_outline", new Color(0.133f, 0.133f, 0.133f, 1.0f), new Vector4(13, 10, 8, 13))
-                        .Keep(out libraryFrame)
-                        .SetRectTransform(100, 100, -100, -100, 0.5f, 0.5f, 0, 0, 1, 1)
-                        .Element_Header("HeaderBar", "corner_cut_outline", new Color(0.0f, 0.6f, 1.0f, 1.0f), new Vector4(13, 3, 8, 13))
-                            .SetRectTransform(0.0f, -60.0f, 0.0f, 0.0f, 0.5f, 1.0f, 0.0f, 1.0f, 1.0f, 1.0f)
-                            .Element("Heading")
-                                .SetRectTransform(0.0f, 0.0f, -60.0f, 0.0f, 0.0f, 0.5f, 0.0f, 0.0f, 1.0f, 1.0f)
-                                .Component_Text("Blueprints", "OpenSansSemibold SDF", 34.0f, Color.white)
-                            .Done
-                            .Element_Button("Button Close", "corner_cut_fully_inset", Color.white, new Vector4(13.0f, 1.0f, 4.0f, 13.0f))
-                                .SetOnClick(HideLibraryFrame)
-                                .SetRectTransform(-60.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.5f, 1.0f, 0.0f, 1.0f, 1.0f)
-                                .SetTransitionColors(new Color(1.0f, 1.0f, 1.0f, 1.0f), new Color(1.0f, 0.25f, 0.0f, 1.0f), new Color(1.0f, 0.0f, 0.0f, 1.0f), new Color(1.0f, 0.25f, 0.0f, 1.0f), new Color(0.5f, 0.5f, 0.5f, 1.0f), 1.0f, 0.1f)
-                                .Element("Image")
-                                    .SetRectTransform(5.0f, 5.0f, -5.0f, -5.0f, 0.5f, 0.5f, 0.0f, 0.0f, 1.0f, 1.0f)
-                                    .Component_Image("cross", Color.white, Image.Type.Sliced, Vector4.zero)
-                                .Done
-                            .Done
+                Object.Destroy(libraryFrame);
+                libraryFrame = null;
+            }
+
+            var graphics = Traverse.Create(typeof(UIRaycastTooltipManager))?.Field("singleton")?.GetValue<UIRaycastTooltipManager>()?.tooltipRectTransform?.GetComponentsInChildren<Graphic>();
+            if (graphics != null)
+            {
+                foreach (var graphic in graphics)
+                {
+                    graphic.raycastTarget = false;
+                }
+            }
+
+            ulong usernameHash = GameRoot.getClientCharacter().usernameHash;
+            UIBuilder.BeginWith(GameRoot.getDefaultCanvas())
+                .Element_Panel("Library Frame", "corner_cut_outline", new Color(0.133f, 0.133f, 0.133f, 1.0f), new Vector4(13, 10, 8, 13))
+                    .Keep(out libraryFrame)
+                    .SetRectTransform(100, 100, -100, -100, 0.5f, 0.5f, 0, 0, 1, 1)
+                    .Element_Header("HeaderBar", "corner_cut_outline", new Color(0.0f, 0.6f, 1.0f, 1.0f), new Vector4(13, 3, 8, 13))
+                        .SetRectTransform(0.0f, -60.0f, 0.0f, 0.0f, 0.5f, 1.0f, 0.0f, 1.0f, 1.0f, 1.0f)
+                        .Element("Heading")
+                            .SetRectTransform(0.0f, 0.0f, -60.0f, 0.0f, 0.0f, 0.5f, 0.0f, 0.0f, 1.0f, 1.0f)
+                            .Component_Text("Blueprints", "OpenSansSemibold SDF", 34.0f, Color.white)
                         .Done
-                        .Element("Content")
-                            .SetRectTransform(0.0f, 0.0f, 0.0f, -60.0f, 0.5f, 0.5f, 0.0f, 0.0f, 1.0f, 1.0f)
-                            .Element("Padding")
-                                .SetRectTransform(10.0f, 10.0f, -10.0f, -10.0f, 0.5f, 0.5f, 0.0f, 0.0f, 1.0f, 1.0f)
-                                .Do(builder =>
-                                {
-                                    var gameObject = UnityEngine.Object.Instantiate(prefabGridScrollView.Prefab, builder.GameObject.transform);
-                                    var grid = gameObject.GetComponentInChildren<GridLayoutGroup>();
-                                    if (grid == null) throw new System.Exception("Grid not found.");
-                                    libraryGridObject = grid.gameObject;
-                                })
+                        .Element_Button("Button Close", "corner_cut_fully_inset", Color.white, new Vector4(13.0f, 1.0f, 4.0f, 13.0f))
+                            .SetOnClick(HideLibraryFrame)
+                            .SetRectTransform(-60.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.5f, 1.0f, 0.0f, 1.0f, 1.0f)
+                            .SetTransitionColors(new Color(1.0f, 1.0f, 1.0f, 1.0f), new Color(1.0f, 0.25f, 0.0f, 1.0f), new Color(1.0f, 0.0f, 0.0f, 1.0f), new Color(1.0f, 0.25f, 0.0f, 1.0f), new Color(0.5f, 0.5f, 0.5f, 1.0f), 1.0f, 0.1f)
+                            .Element("Image")
+                                .SetRectTransform(5.0f, 5.0f, -5.0f, -5.0f, 0.5f, 0.5f, 0.0f, 0.0f, 1.0f, 1.0f)
+                                .Component_Image("cross", Color.white, Image.Type.Sliced, Vector4.zero)
                             .Done
                         .Done
                     .Done
-                .End();
-            }
+                    .Element("Content")
+                        .SetRectTransform(0.0f, 0.0f, 0.0f, -60.0f, 0.5f, 0.5f, 0.0f, 0.0f, 1.0f, 1.0f)
+                        .Element("Padding")
+                            .SetRectTransform(10.0f, 10.0f, -10.0f, -10.0f, 0.5f, 0.5f, 0.0f, 0.0f, 1.0f, 1.0f)
+                            .Do(builder =>
+                            {
+                                var gameObject = UnityEngine.Object.Instantiate(prefabGridScrollView.Prefab, builder.GameObject.transform);
+                                var grid = gameObject.GetComponentInChildren<GridLayoutGroup>();
+                                if (grid == null) throw new System.Exception("Grid not found.");
+                                libraryGridObject = grid.gameObject;
+                            })
+                        .Done
+                    .Done
+                .Done
+            .End();
 
-            FillLibraryGrid();
+            FillLibraryGrid(isForSaveInfo);
 
             libraryFrame.SetActive(true);
             GlobalStateManager.addCursorRequirement();
         }
 
-        private void FillLibraryGrid()
+        private void FillLibraryGrid(bool isForSaveInfo)
         {
             if (libraryGridObject == null) return;
 
@@ -1468,7 +1549,7 @@ namespace Duplicationer
             };
 
             var builder = UIBuilder.BeginWith(libraryGridObject);
-            foreach (var path in System.IO.Directory.GetFiles(DuplicationerPlugin.BlueprintFolder, $"*.{DuplicationerPlugin.BlueprintExtension}"))
+            foreach (var path in Directory.GetFiles(DuplicationerPlugin.BlueprintFolder, $"*.{DuplicationerPlugin.BlueprintExtension}"))
             {
                 if (Blueprint.TryLoadFileHeader(path, out var header, out var name))
                 {
@@ -1516,21 +1597,49 @@ namespace Duplicationer
                     var button = gameObject.GetComponent<Button>();
                     if (button != null)
                     {
-                        button.onClick.AddListener(new UnityAction(() =>
+                        if (isForSaveInfo)
                         {
-                            ActionManager.AddQueuedEvent(() =>
+                            var nameForSaveInfo = Path.GetFileNameWithoutExtension(path);
+                            button.onClick.AddListener(new UnityAction(() =>
                             {
-                                HideLibraryFrame();
-                                ClearBlueprintPlaceholders();
-                                LoadBlueprintFromFile(path);
-                                SelectMode(modePlace);
-                            });
-                        }));
+                                ActionManager.AddQueuedEvent(() =>
+                                {
+                                    saveFrameNameInputField.text = nameForSaveInfo;
+                                    saveFrameIconCount = iconCount;
+                                    for (int i = 0; i < 4; i++)
+                                    {
+                                        saveFrameIconItemTemplates[i] = (i < iconCount) ? iconItemTemplates[i] : null;
+                                    }
+                                    FillSaveFrameIcons();
+                                    FillSavePreview();
+                                    HideLibraryFrame();
+                                });
+                            }));
+                        }
+                        else
+                        {
+                            button.onClick.AddListener(new UnityAction(() =>
+                            {
+                                ActionManager.AddQueuedEvent(() =>
+                                {
+                                    HideLibraryFrame();
+                                    ClearBlueprintPlaceholders();
+                                    LoadBlueprintFromFile(path);
+                                    SelectMode(modePlace);
+                                });
+                            }));
+                        }
                     }
 
                     var deleteButton = gameObject.transform.Find("DeleteButton")?.GetComponent<Button>();
                     if (deleteButton != null)
                     {
+                        if (isForSaveInfo)
+                        {
+                            deleteButton.gameObject.SetActive(false);
+                        }
+                        else
+                        {
                         var nameToDelete = name;
                         var pathToDelete = path;
                         deleteButton.onClick.AddListener(new UnityAction(() =>
@@ -1541,16 +1650,104 @@ namespace Duplicationer
                                 {
                                     try
                                     {
-                                        System.IO.File.Delete(pathToDelete);
-                                        FillLibraryGrid();
+                                        File.Delete(pathToDelete);
+                                        FillLibraryGrid(false);
                                     }
                                     catch (System.Exception) { }
                                 });
                             });
                         }));
                     }
+
+                    var renameButton = gameObject.transform.Find("RenameButton")?.GetComponent<Button>();
+                        if (renameButton != null)
+                        {
+                            if (isForSaveInfo)
+                            {
+                                renameButton.gameObject.SetActive(false);
+                            }
+                            else
+                            {
+                                var nameToRename = name;
+                                var pathToRename = path;
+                                renameButton.onClick.AddListener(new UnityAction(() =>
+                                {
+                                    ActionManager.AddQueuedEvent(() =>
+                                    {
+                                        TextEntryFrame.Show($"Rename Blueprint", nameToRename, "Rename", (string newName) =>
+                                        {
+                                            string filenameBase = PathHelpers.MakeValidFileName(newName);
+                                            string newPath = Path.Combine(DuplicationerPlugin.BlueprintFolder, $"{filenameBase}.{DuplicationerPlugin.BlueprintExtension}");
+                                            if (File.Exists(newPath))
+                                            {
+                                                ConfirmationFrame.Show($"Overwrite '{newName}'?", "Overwrite", () =>
+                                                {
+                                                    try
+                                                    {
+                                                        DuplicationerPlugin.log.Log($"Renaming blueprint '{nameToRename}' to '{newName}'");
+                                                        File.Delete(newPath);
+                                                        File.Move(pathToRename, newPath);
+                                                        RenameBlueprint(newPath, newName);
+                                                        FillLibraryGrid(false);
+                                                    }
+                                                    catch (System.Exception) { }
+                                                });
+                                            }
+                                            else
+                                            {
+                                                try
+                                                {
+                                                    DuplicationerPlugin.log.Log($"Renaming blueprint '{nameToRename}' to '{newName}'");
+                                                    File.Move(pathToRename, newPath);
+                                                    RenameBlueprint(newPath, newName);
+                                                    FillLibraryGrid(false);
+                                                }
+                                                catch (System.Exception) { }
+                                            }
+                                        });
+                                    });
+                                }));
+                            }
+                        }
+                    }
                 }
             }
+        }
+
+        private void RenameBlueprint(string path, string name)
+        {
+            var iconItemTemplateIds = new ulong[4];
+
+            var reader = new BinaryReader(new FileStream(path, FileMode.Open, FileAccess.Read));
+
+            var magic = reader.ReadUInt32();
+            var version = reader.ReadUInt32();
+
+            for (int i = 0; i < 4; i++) iconItemTemplateIds[i] = reader.ReadUInt64();
+
+            var oldName = reader.ReadString();
+
+            var data = reader.ReadBytes((int)(reader.BaseStream.Length - reader.BaseStream.Position));
+
+            reader.Close();
+            reader.Dispose();
+
+            var writer = new BinaryWriter(new FileStream(path, FileMode.Create, FileAccess.Write));
+
+            writer.Write(magic);
+            writer.Write(version);
+
+            for (int i = 0; i < 4; i++)
+            {
+                writer.Write(iconItemTemplateIds[i]);
+            }
+
+            writer.Write(name);
+
+            writer.Write(data);
+
+            writer.Close();
+            writer.Dispose();
         }
 
         private static List<bool> GetTerrainTypeRemovalMask()

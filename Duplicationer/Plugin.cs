@@ -44,7 +44,7 @@ namespace Duplicationer
         {
             if (!bundleMainAssets.TryGetValue(name, out var asset))
             {
-                Debug.Log($"Missing asset '{name}'");
+                log.Log($"Missing asset '{name}'");
                 return null;
             }
 
@@ -95,15 +95,15 @@ namespace Duplicationer
         {
             BlueprintFolder = Path.Combine(Application.persistentDataPath, MODNAME.ToLower());
 
-            Debug.Log("Loading Duplicationer");
-            Debug.Log($"blueprintFolder: {BlueprintFolder}");
+            log.Log("Loading Duplicationer");
+            log.Log($"blueprintFolder: {BlueprintFolder}");
 
             if (!Directory.Exists(BlueprintFolder)) Directory.CreateDirectory(BlueprintFolder);
 
             bundleMainAssets = typeof(Mod).GetField("assets", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(mod) as Dictionary<string, UnityEngine.Object>;
             //foreach (var asset in bundleMainAssets)
             //{
-            //    Debug.Log($"Duplicationer Asset: {asset.Key} {asset.Value.name}");
+            //    log.Log($"Duplicationer Asset: {asset.Key} {asset.Value.name}");
             //}
 
             blueprintTool = new BlueprintToolCHM();
@@ -193,8 +193,8 @@ namespace Duplicationer
             //[HarmonyPostfix]
             //private static void GameRoot_addLockstepEvent(GameRoot.LockstepEvent e)
             //{
-            //    Debug.Log("====== GameRoot.addLockstepEvent ======");
-            //    Debug.Log(e.getDbgInfo());
+            //    log.Log("====== GameRoot.addLockstepEvent ======");
+            //    log.Log(e.getDbgInfo());
             //}
         }
     }

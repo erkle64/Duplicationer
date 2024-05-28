@@ -60,6 +60,27 @@ namespace Duplicationer
                     worldZ = value.z;
                 }
             }
+
+            public bool HasCustomData(string identifier)
+            {
+                foreach (var customDataEntry in customData) if (customDataEntry.identifier == identifier) return true;
+                return false;
+            }
+
+            public bool TryGetCustomData(string identifier, out string value)
+            {
+                foreach (var customDataEntry in customData)
+                {
+                    if (customDataEntry.identifier == identifier)
+                    {
+                        value = customDataEntry.value;
+                        return true;
+                    }
+                }
+
+                value = null;
+                return false;
+            }
         }
 
         public struct BlockData

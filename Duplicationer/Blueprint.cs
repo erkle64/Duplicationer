@@ -258,12 +258,12 @@ namespace Duplicationer
                             var nodeById = FindModularBuildingNodeById(rootNode, parentId);
                             if (nodeById == null)
                             {
-                                Debug.LogError("parent node not found!");
+                                DuplicationerPlugin.log.LogError("parent node not found!");
                                 break;
                             }
                             if (nodeById.attachments[(int)parentAttachmentPointIdx] != null)
                             {
-                                Debug.LogError("parent node attachment point is occupied!");
+                                DuplicationerPlugin.log.LogError("parent node attachment point is occupied!");
                                 break;
                             }
                             var node = new ModularBuildingData(ItemTemplateManager.getBuildableObjectTemplate(botId), id);
@@ -865,7 +865,7 @@ namespace Duplicationer
 
                     var dependency = constructionTaskGroup.GetTask(parentId);
                     if (dependency != null) dependenciesTemp.Add(dependency);
-                    else Debug.LogWarning((string)$"Entity id {parentId} not found in blueprint");
+                    else DuplicationerPlugin.log.LogWarning((string)$"Entity id {parentId} not found in blueprint");
                 }
 
                 var powerlineEntityIds = new List<ulong>();
@@ -874,7 +874,7 @@ namespace Duplicationer
                 {
                     var dependency = constructionTaskGroup.GetTask(powerlineEntityId);
                     if (dependency != null) dependenciesTemp.Add(dependency);
-                    else Debug.LogWarning((string)$"Entity id {powerlineEntityId} not found in blueprint");
+                    else DuplicationerPlugin.log.LogWarning((string)$"Entity id {powerlineEntityId} not found in blueprint");
                 }
 
                 if (dependenciesTemp.Count > 0)
@@ -911,7 +911,7 @@ namespace Duplicationer
                                     var partTemplate = ItemTemplateManager.getBuildingPartTemplate(GameRoot.BuildingPartIdxLookupTable.table[blockId]);
                                     if (partTemplate != null && partTemplate.parentItemTemplate != null)
                                     {
-                                        //Debug.Log((string)$"Place building part {partTemplate.parentItemTemplate.name} at ({worldPos.x}, {worldPos.y}, {worldPos.z})");
+                                        //DuplicationerPlugin.log.Log((string)$"Place building part {partTemplate.parentItemTemplate.name} at ({worldPos.x}, {worldPos.y}, {worldPos.z})");
 
                                         ActionManager.AddQueuedEvent(() =>
                                         {
@@ -959,7 +959,7 @@ namespace Duplicationer
                                         var itemTemplate = blockTemplate.parentBOT.parentItemTemplate;
                                         if (itemTemplate != null)
                                         {
-                                            //Debug.Log((string)$"Place terrain {itemTemplate.name} at ({worldPos.x}, {worldPos.y}, {worldPos.z})");
+                                            //DuplicationerPlugin.log.Log((string)$"Place terrain {itemTemplate.name} at ({worldPos.x}, {worldPos.y}, {worldPos.z})");
 
                                             ActionManager.AddQueuedEvent(() =>
                                             {
@@ -980,12 +980,12 @@ namespace Duplicationer
                                         }
                                         else
                                         {
-                                            Debug.LogWarning((string)$"No item template for terrain index {blockId}");
+                                            DuplicationerPlugin.log.LogWarning((string)$"No item template for terrain index {blockId}");
                                         }
                                     }
                                     else
                                     {
-                                        Debug.LogWarning((string)$"No block template for terrain index {blockId}");
+                                        DuplicationerPlugin.log.LogWarning((string)$"No block template for terrain index {blockId}");
                                     }
                                 }
                             }
@@ -1097,7 +1097,7 @@ namespace Duplicationer
                         }
                         else
                         {
-                            Debug.LogWarning("data not found");
+                            DuplicationerPlugin.log.LogWarning("data not found");
                             match = false;
                         }
 
@@ -1199,16 +1199,43 @@ namespace Duplicationer
 
                             var baseTransform = Matrix4x4.TRS(position, rotation, Vector3.one);
 
-                            var pattern = PlaceholderPattern.Instance(template.placeholderPrefab);
-                            var handles = new BatchRenderingHandle[pattern.Entries.Length];
-                            for (int i = 0; i < pattern.Entries.Length; i++)
+                            if (buildableObjectData.TryGetCustomData("modularBuildingData", out var modularBuildingDataJSON))
                             {
-                                var entry = pattern.Entries[i];
-                                var transform = baseTransform * entry.relativeTransform;
-                                handles[i] = placeholderRenderGroup.AddSimplePlaceholderTransform(entry.mesh, transform, BlueprintPlaceholder.stateColours[1]);
-                            }
+                                var pattern = PlaceholderPattern.Instance(template.placeholderPrefab);
+                                var handles = new List<BatchRenderingHandle>(pattern.Entries.Length);
+                                for (int i = 0; i < pattern.Entries.Length; i++)
+                                {
+                                    var entry = pattern.Entries[i];
+                                    var transform = baseTransform * entry.relativeTransform;
+                                    handles.Add(placeholderRenderGroup.AddSimplePlaceholderTransform(entry.mesh, transform, BlueprintPlaceholder.stateColours[1]));
+                                }
 
-                            buildingPlaceholders.Add(new BlueprintPlaceholder(buildingIndex, repeatIndex, template, position, rotation, orientation, handles));
+                                var modularBuildingData = JSON.Load(modularBuildingDataJSON).Make<ModularBuildingData>();
+
+                                var centerOffset = new Vector3(wx, 0.0f, wz) * -0.5f;
+
+                                var extraBoundingBoxes = new List<BoundsInt>();
+
+                                AABB3D aabb = ObjectPoolManager.aabb3ds.getObject();
+                                aabb.reinitialize(0, 0, 0, wx, wy, wz);
+                                BuildModularBuildPlaceholders(anchorPosition, handles, placeholderRenderGroup, buildingPlaceholders, repeatIndex, buildingIndex, template, baseTransform, position + centerOffset, orientation, aabb, modularBuildingData, extraBoundingBoxes);
+                                ObjectPoolManager.aabb3ds.returnObject(aabb);
+
+                                buildingPlaceholders.Add(new BlueprintPlaceholder(buildingIndex, repeatIndex, template, position, rotation, orientation, handles.ToArray(), extraBoundingBoxes.ToArray()));
+                            }
+                            else
+                            {
+                                var pattern = PlaceholderPattern.Instance(template.placeholderPrefab);
+                                var handles = new BatchRenderingHandle[pattern.Entries.Length];
+                                for (int i = 0; i < pattern.Entries.Length; i++)
+                                {
+                                    var entry = pattern.Entries[i];
+                                    var transform = baseTransform * entry.relativeTransform;
+                                    handles[i] = placeholderRenderGroup.AddSimplePlaceholderTransform(entry.mesh, transform, BlueprintPlaceholder.stateColours[1]);
+                                }
+
+                                buildingPlaceholders.Add(new BlueprintPlaceholder(buildingIndex, repeatIndex, template, position, rotation, orientation, handles));
+                            }
                         }
 
                         int blockIndex = 0;
@@ -1232,7 +1259,7 @@ namespace Duplicationer
                                         else
                                         {
                                             template = ItemTemplateManager.getBuildingPartTemplate(GameRoot.BuildingPartIdxLookupTable.table[id]);
-                                            if (template == null) Debug.LogWarning((string)$"Template not found for terrain index {id}-{GameRoot.BUILDING_PART_ARRAY_IDX_START} with id {GameRoot.BuildingPartIdxLookupTable.table[id]} at ({worldPos.x}, {worldPos.y}, {worldPos.z})");
+                                            if (template == null) DuplicationerPlugin.log.LogWarning((string)$"Template not found for terrain index {id}-{GameRoot.BUILDING_PART_ARRAY_IDX_START} with id {GameRoot.BuildingPartIdxLookupTable.table[id]} at ({worldPos.x}, {worldPos.y}, {worldPos.z})");
                                         }
 
                                         if (template != null)
@@ -1255,6 +1282,82 @@ namespace Duplicationer
                                 }
                             }
                         }
+                    }
+                }
+            }
+        }
+
+        private static Vector3 getWorldPositionByLocalOffsetOrientationY(AABB3D aabb, int orientation, Vector3 localOffset)
+        {
+            Vector3 result = new Vector3(aabb.x0, aabb.y0 + localOffset.y, aabb.z0);
+            switch (orientation)
+            {
+                case 0:
+                    result.x += localOffset.x;
+                    result.z += localOffset.z;
+                    break;
+                case 1:
+                    result.z += aabb.wz;
+                    result.x += localOffset.z;
+                    result.z -= localOffset.x;
+                    break;
+                case 2:
+                    result.x += aabb.wx;
+                    result.z += aabb.wz;
+                    result.x -= localOffset.x;
+                    result.z -= localOffset.z;
+                    break;
+                case 3:
+                    result.x += aabb.wx;
+                    result.x -= localOffset.z;
+                    result.z += localOffset.x;
+                    break;
+            }
+
+            return result;
+        }
+
+
+        private static void BuildModularBuildPlaceholders(Vector3Int anchorPosition, List<BatchRenderingHandle> handles, BatchRenderingGroup placeholderRenderGroup, List<BlueprintPlaceholder> buildingPlaceholders, Vector3Int repeatIndex, int buildingIndex, BuildableObjectTemplate template, Matrix4x4 baseTransform, Vector3 position, BuildingManager.BuildOrientation orientation, AABB3D aabb, ModularBuildingData modularBuildingData, List<BoundsInt> extraBoundingBoxes)
+        {
+            for (int attachmentIndex = 0; attachmentIndex < modularBuildingData.attachments.Length; attachmentIndex++)
+            {
+                var attachment = modularBuildingData.attachments[attachmentIndex];
+                if (attachment == null) continue;
+
+                foreach (var node in template.modularBuildingConnectionNodes[attachmentIndex].nodeData)
+                {
+                    if (node.botId == attachment.templateId)
+                    {
+                        var attachmentTemplate = ItemTemplateManager.getBuildableObjectTemplate(attachment.templateId);
+
+                        BuildingManager.getWidthFromOrientation(attachmentTemplate, node.positionData.orientation, out var wx, out var wy, out var wz);
+
+                        var offsetPosition = getWorldPositionByLocalOffsetOrientationY(aabb, (int)orientation, node.positionData.offset + new Vector3(wx, 0.0f, wz) * 0.5f);
+                        var attachmentOrientation = (BuildingManager.BuildOrientation)(((int)node.positionData.orientation + (int)orientation) % 4);
+
+                        var attachmentPosition = position + offsetPosition;
+                        var attachmentRotation = Quaternion.Euler(0.0f, (int)attachmentOrientation * 90.0f, 0.0f);
+                        var attachmentTransform = Matrix4x4.TRS(attachmentPosition, attachmentRotation, Vector3.one);
+
+                        var attachmentPattern = PlaceholderPattern.Instance(attachmentTemplate.placeholderPrefab);
+                        foreach (var entry in attachmentPattern.Entries)
+                        {
+                            var transform = attachmentTransform * entry.relativeTransform;
+                            handles.Add(placeholderRenderGroup.AddSimplePlaceholderTransform(entry.mesh, transform, BlueprintPlaceholder.stateColours[1]));
+                        }
+
+                        BuildingManager.getWidthFromOrientation(attachmentTemplate, attachmentOrientation, out wx, out wy, out wz);
+                        var centerOffset = new Vector3(wx, 0.0f, wz) * -0.5f;
+
+                        AABB3D attachmentAabb = ObjectPoolManager.aabb3ds.getObject();
+                        attachmentAabb.reinitialize(0, 0, 0, wx, wy, wz);
+                        BuildModularBuildPlaceholders(anchorPosition, handles, placeholderRenderGroup, buildingPlaceholders, repeatIndex, buildingIndex, attachmentTemplate, baseTransform, attachmentPosition + centerOffset, attachmentOrientation, attachmentAabb, attachment, extraBoundingBoxes);
+                        ObjectPoolManager.aabb3ds.returnObject(attachmentAabb);
+
+                        extraBoundingBoxes.Add(new BoundsInt(Vector3Int.RoundToInt(attachmentPosition + centerOffset) - anchorPosition, new Vector3Int(wx, wy, wz)));
+
+                        break;
                     }
                 }
             }

@@ -23,7 +23,7 @@ namespace Duplicationer
             var meshFilters = source.GetComponentsInChildren<MeshFilter>(true);
 
             var entryCount = 0;
-            foreach (var meshFilter in meshFilters) if (meshFilter.name != "Impostor" && meshFilter.sharedMesh != null) entryCount++;
+            foreach (var meshFilter in meshFilters) if (IsValidMeshFilter(meshFilter, source)) entryCount++;
             Entries = new Entry[entryCount];
 
             var localToWorldMatrix = source.transform.localToWorldMatrix;
@@ -32,12 +32,26 @@ namespace Duplicationer
             for (int i = 0; i < meshFilters.Length; i++)
             {
                 MeshFilter meshFilter = meshFilters[i];
-                if (meshFilter.name == "Impostor" || meshFilter.sharedMesh == null) continue;
+                if (!IsValidMeshFilter(meshFilter, source)) continue;
 
                 var mesh = meshFilter.sharedMesh;
                 var relativeTransform = worldToLocalMatrix * meshFilter.transform.localToWorldMatrix;
                 Entries[index++] = new Entry(mesh, relativeTransform);
             }
+        }
+
+        private bool IsValidMeshFilter(MeshFilter meshFilter, GameObject root)
+        {
+            if (meshFilter.gameObject == root) return true;
+            if (meshFilter.name == "Impostor" || meshFilter.sharedMesh == null || !meshFilter.gameObject.activeSelf) return false;
+            var transform = meshFilter.transform;
+            while (transform != null)
+            {
+                if (transform == root.transform) return true;
+                if (!transform.gameObject.activeSelf) return false;
+                transform = transform.parent;
+            }
+            return false;
         }
 
         public struct Entry

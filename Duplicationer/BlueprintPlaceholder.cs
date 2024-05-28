@@ -13,6 +13,7 @@ namespace Duplicationer
         public BuildingManager.BuildOrientation Orientation { get; private set; }
         public State CurrentState { get; private set; }
         public BatchRenderingHandle[] BatchRenderingHandles { get; set; }
+        public BoundsInt[] ExtraBoundingBoxes { get; set; }
         private static int[] stateCounts = new int[System.Enum.GetValues(typeof(State)).Length - 1];
         private static Dictionary<ulong, int[]> stateCountsByTemplateId = new Dictionary<ulong, int[]>();
 
@@ -47,7 +48,7 @@ namespace Duplicationer
             null
         };
 
-        public BlueprintPlaceholder(int index, Vector3Int repeatIndex, BuildableObjectTemplate template, Vector3 position, Quaternion rotation, BuildingManager.BuildOrientation orientation, BatchRenderingHandle[] batchRenderingHandles, State state = State.Untested)
+        public BlueprintPlaceholder(int index, Vector3Int repeatIndex, BuildableObjectTemplate template, Vector3 position, Quaternion rotation, BuildingManager.BuildOrientation orientation, BatchRenderingHandle[] batchRenderingHandles, BoundsInt[] extraBoundingBoxes = null, State state = State.Untested)
         {
             Index = index;
             RepeatIndex = repeatIndex;
@@ -56,6 +57,7 @@ namespace Duplicationer
             Rotation = rotation;
             Orientation = orientation;
             BatchRenderingHandles = batchRenderingHandles;
+            ExtraBoundingBoxes = extraBoundingBoxes;
             CurrentState = State.Invalid;
             SetState(state);
         }
