@@ -73,6 +73,9 @@ namespace Duplicationer
         private TextMeshProUGUI textPositionZ = null;
         private float nextUpdateTimeCountTexts = 0.0f;
 
+        private GameObject rowCheats;
+        private Button buttonCheatMode;
+
         public bool IsSaveFrameOpen => saveFrame != null && saveFrame.activeSelf;
         private GameObject saveFrame = null;
         private GameObject saveGridObject = null;
@@ -444,9 +447,7 @@ namespace Duplicationer
                 int countReady;
                 int countMissing;
 
-                ulong inventoryId = GameRoot.getClientCharacter().inventoryId;
-                ulong inventoryPtr = inventoryId != 0 ? InventoryManager.inventoryManager_getInventoryPtr(inventoryId) : 0;
-                if (inventoryPtr != 0)
+                if (DuplicationerPlugin.IsCheatModeEnabled)
                 {
                     countReady = 0;
                     countMissing = 0;
@@ -456,26 +457,45 @@ namespace Duplicationer
                         if (kv.Key != 0)
                         {
                             var clear = kv.Value;
-                            if (clear > 0)
-                            {
-                                var inventoryCount = InventoryManager.inventoryManager_countByItemTemplateByPtr(inventoryPtr, kv.Key, IOBool.iotrue);
-                                if (inventoryCount >= clear)
-                                {
-                                    countReady += clear;
-                                }
-                                else
-                                {
-                                    countReady += (int)inventoryCount;
-                                    countMissing += clear - (int)inventoryCount;
-                                }
-                            }
+                            if (clear > 0) countReady += clear;
                         }
                     }
                 }
                 else
                 {
-                    countMissing = BlueprintPlaceholder.GetStateCount(BlueprintPlaceholder.State.Clear);
-                    countReady = 0;
+                    ulong inventoryId = GameRoot.getClientCharacter().inventoryId;
+                    ulong inventoryPtr = inventoryId != 0 ? InventoryManager.inventoryManager_getInventoryPtr(inventoryId) : 0;
+                    if (inventoryPtr != 0)
+                    {
+                        countReady = 0;
+                        countMissing = 0;
+
+                        foreach (var kv in BlueprintPlaceholder.GetStateCounts(BlueprintPlaceholder.State.Clear))
+                        {
+                            if (kv.Key != 0)
+                            {
+                                var clear = kv.Value;
+                                if (clear > 0)
+                                {
+                                    var inventoryCount = InventoryManager.inventoryManager_countByItemTemplateByPtr(inventoryPtr, kv.Key, IOBool.iotrue);
+                                    if (inventoryCount >= clear)
+                                    {
+                                        countReady += clear;
+                                    }
+                                    else
+                                    {
+                                        countReady += (int)inventoryCount;
+                                        countMissing += clear - (int)inventoryCount;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    else
+                    {
+                        countMissing = BlueprintPlaceholder.GetStateCount(BlueprintPlaceholder.State.Clear);
+                        countReady = 0;
+                    }
                 }
                 if (countMissing > 0) text += $"Missing: {countMissing}\n";
                 if (countReady > 0) text += $"Ready: {countReady}\n";
@@ -997,6 +1017,15 @@ namespace Duplicationer
                                         .Done
                                     .Done
                                 .Done
+                                .Element("Row Cheats")
+                                    .Keep(out rowCheats)
+                                    .SetHorizontalLayout(new RectOffset(0, 0, 0, 0), 5.0f, TextAnchor.UpperLeft, false, true, true, false, true, false, false)
+                                    .Element_TextButton("Button Cheat Mode", CheatModeButtonText(), Color.white)
+                                        .Keep(out buttonCheatMode)
+                                        .Component_Tooltip("Toggle cheat mode")
+                                        .SetOnClick(ToggleCheatMode)
+                                    .Done
+                                .Done
                                 .Element("Row Files")
                                     .SetHorizontalLayout(new RectOffset(0, 0, 0, 0), 5.0f, TextAnchor.UpperLeft, false, true, true, false, true, false, false)
                                     .Element_ImageTextButton("Button Save", "Save", "download", Color.white, 28, 28)
@@ -1024,12 +1053,29 @@ namespace Duplicationer
                         .Done
                     .Done
                 .End();
+
+                if (!DuplicationerPlugin.configCheatModeAllowed.Get() && rowCheats != null)
+                {
+                    rowCheats.SetActive(false);
+                }
             }
 
             duplicationerFrame.SetActive(true);
             GlobalStateManager.addCursorRequirement();
 
             UpdateBlueprintPositionText();
+        }
+
+        private string CheatModeButtonText() => DuplicationerPlugin.IsCheatModeEnabled ? "Disable Cheat Mode" : "Enable Cheat Mode";
+
+        private void ToggleCheatMode()
+        {
+            if (buttonCheatMode == null) return;
+            if (!DuplicationerPlugin.configCheatModeAllowed.Get()) return;
+            DuplicationerPlugin.configCheatModeEnabled.Set(!DuplicationerPlugin.configCheatModeEnabled.Get());
+            var textComponent = buttonCheatMode.GetComponentInChildren<TextMeshProUGUI>();
+            if (textComponent == null) return;
+            textComponent.text = CheatModeButtonText();
         }
 
         private void BeginSaveBlueprint()

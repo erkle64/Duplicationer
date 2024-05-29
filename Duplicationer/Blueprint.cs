@@ -824,7 +824,9 @@ namespace Duplicationer
                             worldPos,
                             buildableObjectData.orientationY,
                             buildableObjectData.orientationUnlocked,
-                            template.modularBuildingModule_amountItemCost > 1 ? (int)template.modularBuildingModule_amountItemCost : 1,
+                            DuplicationerPlugin.IsCheatModeEnabled
+                                ? 0
+                                : (template.modularBuildingModule_amountItemCost > 1 ? (int)template.modularBuildingModule_amountItemCost : 1),
                             0,
                             additionalData_ulong_01: additionalData_ulong_01,
                             additionalData_ulong_02: additionalData_ulong_02,

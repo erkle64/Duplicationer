@@ -31,6 +31,8 @@ namespace Duplicationer
         public static TypedConfigEntry<KeyCode> configTogglePanelKey;
         public static TypedConfigEntry<KeyCode> configSaveBlueprintKey;
         public static TypedConfigEntry<KeyCode> configLoadBlueprintKey;
+        public static TypedConfigEntry<bool> configCheatModeAllowed;
+        public static TypedConfigEntry<bool> configCheatModeEnabled;
 
         internal static Dictionary<string, UnityEngine.Object> bundleMainAssets;
 
@@ -62,6 +64,10 @@ namespace Duplicationer
                 .EndGroup()
                 .Group("Preview")
                     .Entry(out configPreviewAlpha, "Opacity", 0.5f, "Opacity of preview models.", "0.0 = transparent/invisible.", "1.0 = opaque.")
+                .EndGroup()
+                .Group("Cheats")
+                    .Entry(out configCheatModeAllowed, "CheatModeAllowed", false, "Enable the cheat mode button.")
+                    .Entry(out configCheatModeEnabled, "CheatModeEnabled", false, "Enable cheat mode if allowed.")
                 .EndGroup()
                 .Group("Input",
                     "Key Codes: Backspace, Tab, Clear, Return, Pause, Escape, Space, Exclaim,",
@@ -125,6 +131,8 @@ namespace Duplicationer
                 CustomHandheldModeManager.ToggleMode(clientCharacter, BlueprintToolModeIndex);
             }
         }
+
+        public static bool IsCheatModeEnabled => configCheatModeAllowed.Get() && configCheatModeEnabled.Get();
 
         [HarmonyPatch]
         public static class Patch
