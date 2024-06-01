@@ -8,6 +8,7 @@ using UnityEngine.Events;
 using HarmonyLib;
 using System.Linq;
 using System.IO;
+using System.Xml.Linq;
 
 namespace Duplicationer
 {
@@ -90,7 +91,9 @@ namespace Duplicationer
 
         public bool IsLibraryFrameOpen => libraryFrame != null && libraryFrame.activeSelf;
         private GameObject libraryFrame = null;
+        private TextMeshProUGUI libraryFrameHeading = null;
         private GameObject libraryGridObject = null;
+        private string lastLibraryRelativePath = "";
 
         public bool IsAnyFrameOpen => IsBlueprintFrameOpen || IsSaveFrameOpen || IsLibraryFrameOpen;
 
@@ -114,6 +117,9 @@ namespace Duplicationer
         private LazyPrefab prefabBlueprintButton2Icon = new LazyPrefab("BlueprintButton2Icon");
         private LazyPrefab prefabBlueprintButton3Icon = new LazyPrefab("BlueprintButton3Icon");
         private LazyPrefab prefabBlueprintButton4Icon = new LazyPrefab("BlueprintButton4Icon");
+        private LazyPrefab prefabBlueprintButtonFolder = new LazyPrefab("BlueprintButtonFolder");
+        private LazyPrefab prefabBlueprintButtonFolderNew = new LazyPrefab("BlueprintButtonFolderNew");
+        private LazyPrefab prefabBlueprintButtonFolderBack = new LazyPrefab("BlueprintButtonFolderBack");
 
         private static Material placeholderMaterial = null;
         private static Material placeholderPrepassMaterial = null;
@@ -1096,14 +1102,14 @@ namespace Duplicationer
             string name = saveFrameNameInputField.text;
             if (string.IsNullOrWhiteSpace(name)) return;
 
-            string filenameBase = PathHelpers.MakeValidFileName(name);
+            string filenameBase = Path.Combine(Path.GetDirectoryName(name), PathHelpers.MakeValidFileName(Path.GetFileName(name)));
             string path = Path.Combine(DuplicationerPlugin.BlueprintFolder, $"{filenameBase}.{DuplicationerPlugin.BlueprintExtension}");
             if (File.Exists(path))
             {
                 ConfirmationFrame.Show($"Overwrite '{name}'?", "Overwrite", () =>
                 {
                     DuplicationerPlugin.log.Log($"Saving blueprint '{name}' to '{path}'");
-                    CurrentBlueprint.Save(path, name, saveFrameIconItemTemplates.Take(saveFrameIconCount).ToArray());
+                    CurrentBlueprint.Save(path, Path.GetFileName(name), saveFrameIconItemTemplates.Take(saveFrameIconCount).ToArray());
 
                     HideSaveFrame();
                 });
@@ -1111,7 +1117,7 @@ namespace Duplicationer
             else
             {
                 DuplicationerPlugin.log.Log($"Saving blueprint '{name}' to '{path}'");
-                CurrentBlueprint.Save(path, name, saveFrameIconItemTemplates.Take(saveFrameIconCount).ToArray());
+                CurrentBlueprint.Save(path, Path.GetFileName(name), saveFrameIconItemTemplates.Take(saveFrameIconCount).ToArray());
 
                 HideSaveFrame();
             }
@@ -1170,6 +1176,8 @@ namespace Duplicationer
                                         if (grid == null) throw new System.Exception("Grid not found.");
                                         saveGridObject = grid.gameObject;
                                         grid.cellSize = new Vector2(80.0f, 80.0f);
+                                        grid.padding = new RectOffset(4, 4, 4, 4);
+                                        grid.spacing = new Vector2(0.0f, 0.0f);
                                     })
                                 .Done
                             .Done
@@ -1237,13 +1245,13 @@ namespace Duplicationer
                                     .Done
                                     .Do(builder =>
                                     {
-                                        var gameObject = UnityEngine.Object.Instantiate(prefabBlueprintNameInputField.Prefab, builder.GameObject.transform);
+                                        var gameObject = Object.Instantiate(prefabBlueprintNameInputField.Prefab, builder.GameObject.transform);
                                         saveFrameNameInputField = gameObject.GetComponentInChildren<TMP_InputField>();
                                         if (saveFrameNameInputField == null) throw new System.Exception("TextMeshPro Input field not found.");
                                         saveFrameNameInputField.text = "";
                                         saveFrameNameInputField.onValueChanged.AddListener(new UnityAction<string>((string value) =>
                                         {
-                                            if (saveFramePreviewLabel != null) saveFramePreviewLabel.text = value;
+                                            if (saveFramePreviewLabel != null) saveFramePreviewLabel.text = Path.GetFileName(value);
                                         }));
                                         EventSystem.current.SetSelectedGameObject(saveFrameNameInputField.gameObject, null);
                                     })
@@ -1413,7 +1421,7 @@ namespace Duplicationer
 
             if (saveFramePreviewLabel != null && saveFrameNameInputField != null)
             {
-                saveFramePreviewLabel.text = saveFrameNameInputField.text;
+                saveFramePreviewLabel.text = Path.GetFileName(saveFrameNameInputField.text);
             }
 
             for (int i = 0; i < saveFrameIconCount; i++)
@@ -1550,6 +1558,7 @@ namespace Duplicationer
                         .Element("Heading")
                             .SetRectTransform(0.0f, 0.0f, -60.0f, 0.0f, 0.0f, 0.5f, 0.0f, 0.0f, 1.0f, 1.0f)
                             .Component_Text("Blueprints", "OpenSansSemibold SDF", 34.0f, Color.white)
+                            .Keep(out libraryFrameHeading)
                         .Done
                         .Element_Button("Button Close", "corner_cut_fully_inset", Color.white, new Vector4(13.0f, 1.0f, 4.0f, 13.0f))
                             .SetOnClick(HideLibraryFrame)
@@ -1577,25 +1586,153 @@ namespace Duplicationer
                 .Done
             .End();
 
-            FillLibraryGrid(isForSaveInfo);
+            FillLibraryGrid(lastLibraryRelativePath, isForSaveInfo);
 
             libraryFrame.SetActive(true);
             GlobalStateManager.addCursorRequirement();
         }
 
-        private void FillLibraryGrid(bool isForSaveInfo)
+        private void FillLibraryGrid(string relativePath, bool isForSaveInfo)
         {
             if (libraryGridObject == null) return;
 
+            lastLibraryRelativePath = relativePath;
+
             DestroyAllTransformChildren(libraryGridObject.transform);
+
+            libraryFrameHeading.text = string.IsNullOrEmpty(relativePath) ? "Blueprints" : $"Blueprints\\{relativePath}";
 
             var prefabs = new GameObject[5]
             {
                 prefabBlueprintButtonDefaultIcon.Prefab, prefabBlueprintButton1Icon.Prefab, prefabBlueprintButton2Icon.Prefab, prefabBlueprintButton3Icon.Prefab, prefabBlueprintButton4Icon.Prefab
             };
 
+            if (!string.IsNullOrEmpty(relativePath))
+            {
+                var backGameObject = Object.Instantiate(prefabBlueprintButtonFolderBack.Prefab, libraryGridObject.transform);
+                var backButton = backGameObject.GetComponentInChildren<Button>();
+                if (backButton != null)
+                {
+                    backButton.onClick.AddListener(new UnityAction(() =>
+                    {
+                        var backPath = Path.GetDirectoryName(relativePath);
+                        FillLibraryGrid(backPath, isForSaveInfo);
+                    }));
+                }
+            }
+
+            if (!isForSaveInfo)
+            {
+                var newFolderGameObject = Object.Instantiate(prefabBlueprintButtonFolderNew.Prefab, libraryGridObject.transform);
+                var newFolderButton = newFolderGameObject.GetComponentInChildren<Button>();
+                if (newFolderButton != null)
+                {
+                    newFolderButton.onClick.AddListener(new UnityAction(() =>
+                    {
+                        TextEntryFrame.Show("Enter folder name:", "", "Create Folder", (name) =>
+                        {
+                            if (string.IsNullOrWhiteSpace(name)) return;
+                            var path = Path.Combine(DuplicationerPlugin.BlueprintFolder, relativePath, name);
+                            if (Directory.Exists(path)) return;
+                            Directory.CreateDirectory(path);
+                            FillLibraryGrid(Path.Combine(relativePath, name), false);
+                        });
+                    }));
+                }
+            }
+
             var builder = UIBuilder.BeginWith(libraryGridObject);
-            foreach (var path in Directory.GetFiles(DuplicationerPlugin.BlueprintFolder, $"*.{DuplicationerPlugin.BlueprintExtension}"))
+            foreach (var path in Directory.GetDirectories(Path.Combine(DuplicationerPlugin.BlueprintFolder, relativePath)))
+            {
+                var name = Path.GetFileName(path);
+
+                var gameObject = Object.Instantiate(prefabBlueprintButtonFolder.Prefab, libraryGridObject.transform);
+
+                var label = gameObject.transform.Find("Label")?.GetComponent<TextMeshProUGUI>();
+                if (label != null) label.text = name;
+
+                var iconImage = gameObject.transform.Find("Icon1")?.GetComponent<Image>();
+                iconImage.gameObject.SetActive(false);
+                //iconImage.sprite = iconItemTemplate.icon;
+
+                var button = gameObject.GetComponent<Button>();
+                if (button != null)
+                {
+                    button.onClick.AddListener(new UnityAction(() =>
+                    {
+                        ActionManager.AddQueuedEvent(() =>
+                        {
+                            FillLibraryGrid(Path.Combine(relativePath, name), isForSaveInfo);
+                        });
+                    }));
+                }
+
+                var deleteButton = gameObject.transform.Find("DeleteButton")?.GetComponent<Button>();
+                if (deleteButton != null)
+                {
+                    if (isForSaveInfo)
+                    {
+                        deleteButton.gameObject.SetActive(false);
+                    }
+                    else
+                    {
+                        var nameToDelete = name;
+                        var pathToDelete = path;
+                        deleteButton.onClick.AddListener(new UnityAction(() =>
+                        {
+                            ActionManager.AddQueuedEvent(() =>
+                            {
+                                ConfirmationFrame.Show($"Delete folder '{name}'", "Delete", () =>
+                                {
+                                    try
+                                    {
+                                        Directory.Delete(pathToDelete, true);
+                                        FillLibraryGrid(relativePath, false);
+                                    }
+                                    catch (System.Exception) { }
+                                });
+                            });
+                        }));
+                    }
+
+                    var renameButton = gameObject.transform.Find("RenameButton")?.GetComponent<Button>();
+                    if (renameButton != null)
+                    {
+                        if (isForSaveInfo)
+                        {
+                            renameButton.gameObject.SetActive(false);
+                        }
+                        else
+                        {
+                            var nameToRename = name;
+                            var pathToRename = path;
+                            renameButton.onClick.AddListener(new UnityAction(() =>
+                            {
+                                ActionManager.AddQueuedEvent(() =>
+                                {
+                                    TextEntryFrame.Show($"Rename Folder", nameToRename, "Rename", (string newName) =>
+                                    {
+                                        string filenameBase = Path.Combine(Path.GetDirectoryName(newName), PathHelpers.MakeValidFileName(Path.GetFileName(newName)));
+                                        string newPath = Path.Combine(DuplicationerPlugin.BlueprintFolder, relativePath, filenameBase);
+                                        if (!File.Exists(newPath))
+                                        {
+                                            try
+                                            {
+                                                DuplicationerPlugin.log.Log($"Renaming folder '{pathToRename}' to '{newPath}'");
+                                                Directory.Move(pathToRename, newPath);
+                                                FillLibraryGrid(relativePath, false);
+                                            }
+                                            catch (System.Exception) { }
+                                        }
+                                    });
+                                });
+                            }));
+                        }
+                    }
+                }
+            }
+
+            foreach (var path in Directory.GetFiles(Path.Combine(DuplicationerPlugin.BlueprintFolder, relativePath), $"*.{DuplicationerPlugin.BlueprintExtension}"))
             {
                 if (Blueprint.TryLoadFileHeader(path, out var header, out var name))
                 {
@@ -1623,7 +1760,7 @@ namespace Duplicationer
 
                     int iconCount = iconItemTemplates.Count;
 
-                    var gameObject = UnityEngine.Object.Instantiate(prefabs[iconCount], libraryGridObject.transform);
+                    var gameObject = Object.Instantiate(prefabs[iconCount], libraryGridObject.transform);
 
                     var label = gameObject.transform.Find("Label")?.GetComponent<TextMeshProUGUI>();
                     if (label != null) label.text = name;
@@ -1645,7 +1782,7 @@ namespace Duplicationer
                     {
                         if (isForSaveInfo)
                         {
-                            var nameForSaveInfo = Path.GetFileNameWithoutExtension(path);
+                            var nameForSaveInfo = Path.Combine(relativePath, Path.GetFileNameWithoutExtension(path));
                             button.onClick.AddListener(new UnityAction(() =>
                             {
                                 ActionManager.AddQueuedEvent(() =>
@@ -1697,7 +1834,7 @@ namespace Duplicationer
                                     try
                                     {
                                         File.Delete(pathToDelete);
-                                        FillLibraryGrid(false);
+                                        FillLibraryGrid(relativePath, false);
                                     }
                                     catch (System.Exception) { }
                                 });
@@ -1722,8 +1859,8 @@ namespace Duplicationer
                                     {
                                         TextEntryFrame.Show($"Rename Blueprint", nameToRename, "Rename", (string newName) =>
                                         {
-                                            string filenameBase = PathHelpers.MakeValidFileName(newName);
-                                            string newPath = Path.Combine(DuplicationerPlugin.BlueprintFolder, $"{filenameBase}.{DuplicationerPlugin.BlueprintExtension}");
+                                            string filenameBase = Path.Combine(Path.GetDirectoryName(newName), PathHelpers.MakeValidFileName(Path.GetFileName(newName)));
+                                            string newPath = Path.Combine(DuplicationerPlugin.BlueprintFolder, relativePath, $"{filenameBase}.{DuplicationerPlugin.BlueprintExtension}");
                                             if (File.Exists(newPath))
                                             {
                                                 ConfirmationFrame.Show($"Overwrite '{newName}'?", "Overwrite", () =>
@@ -1733,8 +1870,8 @@ namespace Duplicationer
                                                         DuplicationerPlugin.log.Log($"Renaming blueprint '{nameToRename}' to '{newName}'");
                                                         File.Delete(newPath);
                                                         File.Move(pathToRename, newPath);
-                                                        RenameBlueprint(newPath, newName);
-                                                        FillLibraryGrid(false);
+                                                        RenameBlueprint(newPath, Path.GetFileName(newName));
+                                                        FillLibraryGrid(relativePath, false);
                                                     }
                                                     catch (System.Exception) { }
                                                 });
@@ -1745,8 +1882,8 @@ namespace Duplicationer
                                                 {
                                                     DuplicationerPlugin.log.Log($"Renaming blueprint '{nameToRename}' to '{newName}'");
                                                     File.Move(pathToRename, newPath);
-                                                    RenameBlueprint(newPath, newName);
-                                                    FillLibraryGrid(false);
+                                                    RenameBlueprint(newPath, Path.GetFileName(newName));
+                                                    FillLibraryGrid(relativePath, false);
                                                 }
                                                 catch (System.Exception) { }
                                             }

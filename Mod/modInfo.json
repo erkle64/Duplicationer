@@ -1,0 +1,10 @@
+{
+  "identifier": "erkle64.duplicationer",
+  "displayName": "Duplicationer",
+  "assetBundles": [
+    "duplicationer.bundle"
+  ],
+  "assemblies": [
+    "Duplicationer.dll"
+  ]
+}
