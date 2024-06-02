@@ -1155,7 +1155,7 @@ namespace Duplicationer
 
                             if (buildableObjectData.TryGetCustomData("modularBuildingData", out var modularBuildingDataJSON))
                             {
-                                var pattern = PlaceholderPattern.Instance(template.placeholderPrefab);
+                                var pattern = PlaceholderPattern.Instance(template.placeholderPrefab, template);
                                 var handles = new List<BatchRenderingHandle>(pattern.Entries.Length);
                                 for (int i = 0; i < pattern.Entries.Length; i++)
                                 {
@@ -1179,7 +1179,7 @@ namespace Duplicationer
                             }
                             else
                             {
-                                var pattern = PlaceholderPattern.Instance(template.placeholderPrefab);
+                                var pattern = PlaceholderPattern.Instance(template.placeholderPrefab, template);
                                 var handles = new BatchRenderingHandle[pattern.Entries.Length];
                                 for (int i = 0; i < pattern.Entries.Length; i++)
                                 {
@@ -1220,7 +1220,7 @@ namespace Duplicationer
                                         {
                                             var baseTransform = Matrix4x4.Translate(worldPos);
 
-                                            var pattern = PlaceholderPattern.Instance(template.placeholderPrefab);
+                                            var pattern = PlaceholderPattern.Instance(template.placeholderPrefab, template);
                                             var handles = new BatchRenderingHandle[pattern.Entries.Length];
                                             for (int i = 0; i < pattern.Entries.Length; i++)
                                             {
@@ -1294,7 +1294,7 @@ namespace Duplicationer
                         var attachmentRotation = Quaternion.Euler(0.0f, (int)attachmentOrientation * 90.0f, 0.0f);
                         var attachmentTransform = Matrix4x4.TRS(attachmentPosition, attachmentRotation, Vector3.one);
 
-                        var attachmentPattern = PlaceholderPattern.Instance(attachmentTemplate.placeholderPrefab);
+                        var attachmentPattern = PlaceholderPattern.Instance(attachmentTemplate.placeholderPrefab, attachmentTemplate);
                         foreach (var entry in attachmentPattern.Entries)
                         {
                             var transform = attachmentTransform * entry.relativeTransform;

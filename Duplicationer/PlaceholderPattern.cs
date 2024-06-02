@@ -7,24 +7,52 @@ namespace Duplicationer
     {
         private static Dictionary<int, PlaceholderPattern> instances = new Dictionary<int, PlaceholderPattern>();
 
-        public static PlaceholderPattern Instance(GameObject source)
+        public static PlaceholderPattern Instance(GameObject source, BuildableObjectTemplate template)
         {
             PlaceholderPattern instance;
             int instanceId = source.GetInstanceID();
             if (instances.TryGetValue(instanceId, out instance)) return instance;
 
-            return instances[instanceId] = new PlaceholderPattern(source);
+            return instances[instanceId] = new PlaceholderPattern(source, template);
         }
 
         public Entry[] Entries { get; private set; }
 
-        private PlaceholderPattern(GameObject source)
+        private PlaceholderPattern(GameObject source, BuildableObjectTemplate template)
         {
             var meshFilters = source.GetComponentsInChildren<MeshFilter>(true);
 
             var entryCount = 0;
             foreach (var meshFilter in meshFilters) if (IsValidMeshFilter(meshFilter, source)) entryCount++;
-            Entries = new Entry[entryCount];
+            if (source.TryGetComponent<ConveyorGO>(out var conveyorGO))
+            {
+                Matrix4x4 relativeTransform;
+                if (template.conveyor_isSlope)
+                {
+                    if (template.identifier.Contains("down"))
+                    {
+                        relativeTransform = Matrix4x4.TRS(new Vector3(0.0f, 1.0f, 0.0f), Quaternion.Euler(0.0f, 180.0f, 22.0f), Vector3.one);
+                    }
+                    else
+                    {
+                        relativeTransform = Matrix4x4.TRS(new Vector3(0.0f, 1.0f, 0.0f), Quaternion.Euler(0.0f, 180.0f, -22.0f), Vector3.one);
+                    }
+                }
+                else
+                {
+                    relativeTransform = Matrix4x4.TRS(new Vector3(0.0f, 0.5f, 0.0f), Quaternion.Euler(0.0f, 180.0f, 0.0f), Vector3.one);
+                }
+
+                Entries = new Entry[entryCount + 1];
+                Entries[Entries.Length - 1] = new Entry(
+                    ResourceDB.resourceLinker.mesh_arrow_centerPivot,
+                    relativeTransform
+                    );
+            }
+            else
+            {
+                Entries = new Entry[entryCount];
+            }
 
             var localToWorldMatrix = source.transform.localToWorldMatrix;
             var worldToLocalMatrix = source.transform.worldToLocalMatrix;
