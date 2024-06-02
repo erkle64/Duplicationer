@@ -31,11 +31,11 @@ namespace Duplicationer
                 {
                     if (template.identifier.Contains("down"))
                     {
-                        relativeTransform = Matrix4x4.TRS(new Vector3(0.0f, 1.0f, 0.0f), Quaternion.Euler(0.0f, 180.0f, 22.0f), Vector3.one);
+                        relativeTransform = Matrix4x4.TRS(new Vector3(0.0f, 1.0f, 0.0f), Quaternion.Euler(0.0f, 180.0f, 26.0f), Vector3.one);
                     }
                     else
                     {
-                        relativeTransform = Matrix4x4.TRS(new Vector3(0.0f, 1.0f, 0.0f), Quaternion.Euler(0.0f, 180.0f, -22.0f), Vector3.one);
+                        relativeTransform = Matrix4x4.TRS(new Vector3(0.0f, 1.0f, 0.0f), Quaternion.Euler(0.0f, 180.0f, -26.0f), Vector3.one);
                     }
                 }
                 else
