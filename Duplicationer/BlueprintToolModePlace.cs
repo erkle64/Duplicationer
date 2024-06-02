@@ -279,11 +279,6 @@ namespace Duplicationer
                             break;
                     }
                 }
-
-                //if (CustomHandheldMode.GetTargetCube(0.01f, out targetPoint, out targetCoord, out targetNormal))
-                //{
-                //    tool.ShowBlueprint(targetCoord - new Vector3Int(tool.CurrentBlueprint.SizeX / 2, 0, tool.CurrentBlueprint.SizeZ / 2));
-                //}
             }
             if (Input.GetKeyUp(KeyCode.Mouse0) && tool.IsBlueprintActive && InputHelpers.IsMouseInputAllowed && !tool.IsAnyFrameOpen)
             {

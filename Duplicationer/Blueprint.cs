@@ -1,4 +1,5 @@
-﻿using HarmonyLib;
+﻿using C3;
+using HarmonyLib;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -44,6 +45,31 @@ namespace Duplicationer
         {
             get => (powerlineItemTemplate == null) ? powerlineItemTemplate = ItemTemplateManager.getItemTemplate("_base_power_line_i") : powerlineItemTemplate;
         }
+
+        private struct PowerlineConnectionPair
+        {
+            public ulong fromEntityId;
+            public ulong toEntityId;
+
+            public PowerlineConnectionPair(ulong fromEntityId, ulong toEntityId)
+            {
+                this.fromEntityId = fromEntityId;
+                this.toEntityId = toEntityId;
+            }
+
+            public override bool Equals(object obj)
+            {
+                if (!(obj is PowerlineConnectionPair)) return false;
+                var other = (PowerlineConnectionPair)obj;
+                return fromEntityId == other.fromEntityId && toEntityId == other.toEntityId;
+            }
+
+            public override int GetHashCode()
+            {
+                return fromEntityId.GetHashCode() ^ toEntityId.GetHashCode();
+            }
+        }
+        private static HashSet<PowerlineConnectionPair> _powerlineConnectionPairs = new HashSet<PowerlineConnectionPair>();
 
         public Blueprint(string name, BlueprintData data, int[] minecartDepotIndices, Dictionary<ulong, ShoppingListData> shoppingList, ItemTemplate[] iconItemTemplates)
         {
@@ -292,72 +318,6 @@ namespace Duplicationer
                     }
                 }
 
-                //void HandleParenting<T>(T module) where T : BuildableObjectGO
-                //{
-                //    var searchPos = (Vector3Int)generalData.pos;
-                //    var pbogo = quadTree.queryPointXYZ(BuildableEntity.getWorldPositionByLocalOffset(bogo.template, bogo.aabb, module.template.modularBuildingLocalSearchAnchor, bogo.buildOrientation, bogo.transform.rotation));
-                //    int nodeIndex = 0;
-                //    int matchIndex = -1;
-                //    foreach (var node in pbogo.template.modularBuildingConnectionNodes)
-                //    {
-                //        foreach (var nodeData in node.nodeData)
-                //        {
-                //            if (nodeData.botId == bogo.template.id)
-                //            {
-                //                var nodePos = BuildableEntity.getWorldPositionByLocalOffset(pbogo.template, pbogo.aabb, nodeData.positionData.offset, pbogo.buildOrientation, pbogo.transform.rotation);
-                //                if (nodePos == searchPos)
-                //                {
-                //                    matchIndex = nodeIndex;
-                //                    break;
-                //                }
-                //            }
-                //        }
-                //        if (matchIndex >= 0) break;
-                //        ++nodeIndex;
-                //    }
-                //    if (matchIndex >= 0)
-                //    {
-                //        customData.Add(new BlueprintData.BuildableObjectData.CustomData("modularNodeIndex", matchIndex));
-                //        customData.Add(new BlueprintData.BuildableObjectData.CustomData("modularParentId", pbogo.relatedEntityId));
-                //    }
-                //}
-
-                //if (typeof(ModularGO_Module).IsAssignableFrom(bogoType))
-                //{
-                //    var modularModule = bogo.Cast<ModularGO_Module>();
-                //    HandleParenting(modularModule);
-                //}
-                //if (typeof(ModularGO_ModuleWithInteractable).IsAssignableFrom(bogoType))
-                //{
-                //    var modularModule = bogo.Cast<ModularGO_ModuleWithInteractable>();
-                //    HandleParenting(modularModule);
-
-                //    int interactableCount = 0;
-                //    var interactables = modularModule.GetInteractableObjects(ref interactableCount);
-                //    if (interactableCount > 0)
-                //    {
-                //        customData.Add(new BlueprintData.BuildableObjectData.CustomData("interactableCount", interactableCount));
-                //        for (int j = 0; j < interactableCount; ++j)
-                //        {
-                //            var interactable = interactables[j];
-                //            if (interactable.eventType == InteractableObject.InteractableEventType.NoEvent)
-                //            {
-                //                ulong filterTemplateId = 0;
-                //                BuildableEntity.buildableEntity_getFilterTemplate(bogo.relatedEntityId, 0, ref filterTemplateId, interactable.filterIdx);
-                //                if (filterTemplateId > 0) customData.Add(new BlueprintData.BuildableObjectData.CustomData("itemFilter", $"{interactable.filterIdx}={filterTemplateId}"));
-
-                //                BuildableEntity.buildableEntity_getFilterTemplate(bogo.relatedEntityId, 1, ref filterTemplateId, interactable.filterIdx);
-                //                if (filterTemplateId > 0) customData.Add(new BlueprintData.BuildableObjectData.CustomData("elementFilter", $"{interactable.filterIdx}={filterTemplateId}"));
-                //            }
-                //        }
-                //    }
-                //}
-                //if (typeof(ModularGO_ModuleWithScreenPanel).IsAssignableFrom(bogoType))
-                //{
-                //    var modularModule = bogo.Cast<ModularGO_ModuleWithScreenPanel>();
-                //    HandleParenting(modularModule);
-                //}
-
                 buildingDataArray[buildingIndex].customData = customData.ToArray();
 
                 if (bogo.template.parentItemTemplate != null)
@@ -543,11 +503,8 @@ namespace Duplicationer
             this.iconItemTemplates = iconItemTemplates;
 
             var json = JSON.Dump(data, EncodeOptions.PrettyPrint | EncodeOptions.NoTypeHints);
-            //var json = JsonConvert.SerializeObject(data);
 
-            //var compressed = SaveManager.compressByteArray(json, out dataSize);
             var compressed = SaveManager.compressByteArray(Encoding.UTF8.GetBytes(json), out ulong dataSize);
-            //File.WriteAllBytes(path, compressed.Take((int)dataSize).ToArray());
 
             var writer = new BinaryWriter(new FileStream(path, FileMode.Create, FileAccess.Write));
 
@@ -576,7 +533,113 @@ namespace Duplicationer
         public void Place(Character character, Vector3Int anchorPosition, ConstructionTaskGroup constructionTaskGroup) => Place(character.usernameHash, anchorPosition, constructionTaskGroup);
         public void Place(ulong usernameHash, Vector3Int anchorPosition, ConstructionTaskGroup constructionTaskGroup)
         {
+            _powerlineConnectionPairs.Clear();
+            var entityIdMap = new Dictionary<ulong, ulong>();
+
             AABB3D aabb = ObjectPoolManager.aabb3ds.getObject();
+
+            if (data.blocks.ids == null) throw new System.ArgumentNullException(nameof(data.blocks.ids));
+
+            var quadTreeArray = StreamingSystem.getBuildableObjectGOQuadtreeArray();
+            int blockIndex = 0;
+            for (int z = 0; z < data.blocks.sizeZ; z++)
+            {
+                for (int y = 0; y < data.blocks.sizeY; y++)
+                {
+                    for (int x = 0; x < data.blocks.sizeX; x++)
+                    {
+                        var blockId = data.blocks.ids[blockIndex++];
+                        if (blockId > 0)
+                        {
+                            var worldPos = new Vector3Int(x, y, z) + anchorPosition;
+                            ChunkManager.getChunkIdxAndTerrainArrayIdxFromWorldCoords(worldPos.x, worldPos.y, worldPos.z, out ulong worldChunkIndex, out uint worldBlockIndex);
+                            var terrainData = ChunkManager.chunks_getTerrainData(worldChunkIndex, worldBlockIndex);
+
+                            if (terrainData == 0 && quadTreeArray.queryPointXYZ(worldPos) == null)
+                            {
+                                if (blockId >= GameRoot.BUILDING_PART_ARRAY_IDX_START)
+                                {
+                                    var partTemplate = ItemTemplateManager.getBuildingPartTemplate(GameRoot.BuildingPartIdxLookupTable.table[blockId]);
+                                    if (partTemplate != null && partTemplate.parentItemTemplate != null)
+                                    {
+                                        ActionManager.AddQueuedEvent(() =>
+                                        {
+                                            int mode = 0;
+                                            if (partTemplate.parentItemTemplate.toggleableModes != null && partTemplate.parentItemTemplate.toggleableModes.Length != 0 && partTemplate.parentItemTemplate.toggleableModeType == ItemTemplate.ItemTemplateToggleableModeTypes.MultipleBuildings)
+                                            {
+                                                for (int index = 0; index < partTemplate.parentItemTemplate.toggleableModes.Length; ++index)
+                                                {
+                                                    if (partTemplate.parentItemTemplate.toggleableModes[index].buildableObjectTemplate == partTemplate)
+                                                    {
+                                                        mode = index;
+                                                        break;
+                                                    }
+                                                }
+                                            }
+                                            GameRoot.addLockstepEvent(new BuildEntityEvent(usernameHash, partTemplate.parentItemTemplate.id, mode, worldPos, 0, Quaternion.identity, DuplicationerPlugin.IsCheatModeEnabled ? 0 : 1, 0, false));
+                                        });
+                                    }
+                                }
+                                else
+                                {
+                                    var blockTemplate = ItemTemplateManager.getTerrainBlockTemplateByByteIdx(blockId);
+                                    if (blockTemplate != null && blockTemplate.yieldItemOnDig_template != null && blockTemplate.yieldItemOnDig_template.buildableObjectTemplate != null)
+                                    {
+                                        ActionManager.AddQueuedEvent(() =>
+                                        {
+                                            int mode = 0;
+                                            if (blockTemplate.yieldItemOnDig_template.toggleableModes != null && blockTemplate.yieldItemOnDig_template.toggleableModes.Length != 0 && blockTemplate.yieldItemOnDig_template.toggleableModeType == ItemTemplate.ItemTemplateToggleableModeTypes.MultipleBuildings)
+                                            {
+                                                for (int index = 0; index < blockTemplate.yieldItemOnDig_template.toggleableModes.Length; ++index)
+                                                {
+                                                    if (blockTemplate.yieldItemOnDig_template.toggleableModes[index].buildableObjectTemplate == blockTemplate.parentBOT)
+                                                    {
+                                                        mode = index;
+                                                        break;
+                                                    }
+                                                }
+                                            }
+                                            GameRoot.addLockstepEvent(new BuildEntityEvent(usernameHash, blockTemplate.yieldItemOnDig_template.id, mode, worldPos, 0, Quaternion.identity, DuplicationerPlugin.IsCheatModeEnabled ? 0 : 1, 0, false));
+                                        });
+                                    }
+                                    else if (blockTemplate != null && blockTemplate.parentBOT != null)
+                                    {
+                                        var itemTemplate = blockTemplate.parentBOT.parentItemTemplate;
+                                        if (itemTemplate != null)
+                                        {
+                                            ActionManager.AddQueuedEvent(() =>
+                                            {
+                                                int mode = 0;
+                                                if (itemTemplate.toggleableModes != null && itemTemplate.toggleableModes.Length != 0 && itemTemplate.toggleableModeType == ItemTemplate.ItemTemplateToggleableModeTypes.MultipleBuildings)
+                                                {
+                                                    for (int index = 0; index < itemTemplate.toggleableModes.Length; ++index)
+                                                    {
+                                                        if (itemTemplate.toggleableModes[index].buildableObjectTemplate == blockTemplate.parentBOT)
+                                                        {
+                                                            mode = index;
+                                                            break;
+                                                        }
+                                                    }
+                                                }
+                                                GameRoot.addLockstepEvent(new BuildEntityEvent(usernameHash, itemTemplate.id, mode, worldPos, 0, Quaternion.identity, DuplicationerPlugin.IsCheatModeEnabled ? 0 : 1, 0, false));
+                                            });
+                                        }
+                                        else
+                                        {
+                                            DuplicationerPlugin.log.LogWarning((string)$"No item template for terrain index {blockId}");
+                                        }
+                                    }
+                                    else
+                                    {
+                                        DuplicationerPlugin.log.LogWarning((string)$"No block template for terrain index {blockId}");
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             int buildingIndex = 0;
             foreach (var buildableObjectData in data.buildableObjects)
             {
@@ -603,8 +666,12 @@ namespace Duplicationer
                 var craftingRecipeId = GetCustomData<ulong>(buildingIndex, "craftingRecipeId");
                 if (craftingRecipeId != 0)
                 {
-                    usePasteConfigSettings = true;
-                    pasteConfigSettings_01 = craftingRecipeId;
+                    var recipe = ItemTemplateManager.getCraftingRecipeById(craftingRecipeId);
+                    if (recipe != null && (DuplicationerPlugin.configAllowUnresearchedRecipes.Get() || recipe.isResearched()))
+                    {
+                        usePasteConfigSettings = true;
+                        pasteConfigSettings_01 = craftingRecipeId;
+                    }
                 }
 
                 if (HasCustomData(buildingIndex, "isInputLoader"))
@@ -705,6 +772,14 @@ namespace Duplicationer
                             {
                                 GameRoot.addLockstepEvent(new SetSoftLockForInventory(usernameHash, inventoryId, firstSoftLockedSlotIdx));
                             }
+                            else
+                            {
+                                DuplicationerPlugin.log.LogWarning("Failed to get inventory accessor for storage");
+                            }
+                        }
+                        else
+                        {
+                            DuplicationerPlugin.log.LogWarning("Failed to get entity id for storage");
                         }
                     });
                 }
@@ -721,6 +796,10 @@ namespace Duplicationer
                         {
                             GameRoot.addLockstepEvent(new DroneTransportLoadConditionEvent(usernameHash, task.entityId, loadConditionFlags, loadCondition_fillRatePercentage, loadCondition_seconds, loadCondition_comparisonType));
                         }
+                        else
+                        {
+                            DuplicationerPlugin.log.LogWarning("Failed to get entity id for drone transport");
+                        }
                     });
                 }
 
@@ -733,6 +812,10 @@ namespace Duplicationer
                         if (task.entityId > 0)
                         {
                             GameRoot.addLockstepEvent(new DroneTransportSetNameEvent(usernameHash, stationName, task.entityId, stationType));
+                        }
+                        else
+                        {
+                            DuplicationerPlugin.log.LogWarning("Failed to get entity id for drone transport");
                         }
                     });
                 }
@@ -751,31 +834,6 @@ namespace Duplicationer
                     });
                 }
 
-                //if (HasCustomData(buildingIndex, "interactableCount"))
-                //{
-                //    var elementFilters = new List<string>();
-                //    GetCustomDataList(buildingIndex, "elementFilter", elementFilters);
-                //    foreach (var elementFilter in elementFilters)
-                //    {
-                //        var parts = elementFilter.Split('=');
-                //        if (parts.Length == 2)
-                //        {
-                //            var filterIdx = Convert.ToUInt32(parts[0]);
-                //            var elementFilterTemplateId = Convert.ToUInt64(parts[1]);
-                //            if (string.IsNullOrEmpty(template.modularBuildingPipeConnectionData[(int)filterIdx].modularBuildingFixedElementTemplateFilter))
-                //            {
-                //                postBuildActions.Add((ConstructionTaskGroup taskGroup, ConstructionTaskGroup.ConstructionTask task) =>
-                //                {
-                //                    if (task.entityId > 0)
-                //                    {
-                //                        GameRoot.addLockstepEvent(new SetFilterEvent(usernameHash, task.entityId, elementFilterTemplateId, 1, filterIdx));
-                //                    }
-                //                });
-                //            }
-                //        }
-                //    }
-                //}
-
                 var powerlineEntityIds = new List<ulong>();
                 GetCustomDataList(buildingIndex, "powerline", powerlineEntityIds);
                 foreach (var powerlineEntityId in powerlineEntityIds)
@@ -785,15 +843,14 @@ namespace Duplicationer
                     {
                         var fromPos = worldPos;
                         var toBuildableObjectData = data.buildableObjects[powerlineIndex];
-                        var toPos = new Vector3Int(toBuildableObjectData.worldX, toBuildableObjectData.worldY, toBuildableObjectData.worldZ) + anchorPosition;
                         postBuildActions.Add((ConstructionTaskGroup taskGroup, ConstructionTaskGroup.ConstructionTask task) =>
                         {
-                            //var fromBogo = StreamingSystem.getBuildableObjectGOQuadtreeArray().queryPointXYZ(fromPos);
-                            var fromBogo = StreamingSystem.getBuildableObjectGOByEntityId(task.entityId);
-                            var toBogo = StreamingSystem.getBuildableObjectGOQuadtreeArray().queryPointXYZ(toPos);
-                            if (fromBogo != null && toBogo != null && PowerLineHH.buildingManager_powerlineHandheld_checkIfAlreadyConnected(fromBogo.relatedEntityId, toBogo.relatedEntityId) == IOBool.iofalse)
+                            if (entityIdMap.TryGetValue(toBuildableObjectData.originalEntityId, out var toEntityId))
                             {
-                                GameRoot.addLockstepEvent(new PoleConnectionEvent(usernameHash, PowerlineItemTemplate.id, fromBogo.Id, toBogo.Id));
+                                if (PowerLineHH.buildingManager_powerlineHandheld_checkIfAlreadyConnected(task.entityId, toEntityId) == IOBool.iofalse)
+                                {
+                                    GameRoot.addLockstepEvent(new PoleConnectionEvent(usernameHash, PowerlineItemTemplate.id, task.entityId, toEntityId));
+                                }
                             }
                         });
                     }
@@ -803,6 +860,7 @@ namespace Duplicationer
                 var existingEntityId = CheckIfBuildingExists(aabb, worldPos, buildableObjectData);
                 if (existingEntityId > 0)
                 {
+                    entityIdMap[buildableObjectData.originalEntityId] = existingEntityId;
                     var postBuildActionsArray = postBuildActions.ToArray();
                     constructionTaskGroup.AddTask(buildableObjectData.originalEntityId, (ConstructionTaskGroup taskGroup, ConstructionTaskGroup.ConstructionTask task) => {
                         ActionManager.AddQueuedEvent(() =>
@@ -816,7 +874,8 @@ namespace Duplicationer
                 else
                 {
                     var postBuildActionsArray = postBuildActions.ToArray();
-                    constructionTaskGroup.AddTask(buildableObjectData.originalEntityId, (ConstructionTaskGroup taskGroup, ConstructionTaskGroup.ConstructionTask task) => {
+                    var originalEntityId = buildableObjectData.originalEntityId;
+                    constructionTaskGroup.AddTask(originalEntityId, (ConstructionTaskGroup taskGroup, ConstructionTaskGroup.ConstructionTask task) => {
                         var buildEntityEvent = new BuildEntityEvent(
                             usernameHash,
                             template.parentItemTemplate.id,
@@ -840,6 +899,7 @@ namespace Duplicationer
                         {
                             ActionManager.AddBuildEvent(buildEntityEvent, (ulong entityId) =>
                             {
+                                entityIdMap[originalEntityId] = entityId;
                                 ActionManager.AddQueuedEvent(() =>
                                 {
                                     task.entityId = entityId;
@@ -867,7 +927,7 @@ namespace Duplicationer
 
                     var dependency = constructionTaskGroup.GetTask(parentId);
                     if (dependency != null) dependenciesTemp.Add(dependency);
-                    else DuplicationerPlugin.log.LogWarning((string)$"Entity id {parentId} not found in blueprint");
+                    else DuplicationerPlugin.log.LogWarning($"Entity id {parentId} not found in blueprint");
                 }
 
                 var powerlineEntityIds = new List<ulong>();
@@ -876,7 +936,7 @@ namespace Duplicationer
                 {
                     var dependency = constructionTaskGroup.GetTask(powerlineEntityId);
                     if (dependency != null) dependenciesTemp.Add(dependency);
-                    else DuplicationerPlugin.log.LogWarning((string)$"Entity id {powerlineEntityId} not found in blueprint");
+                    else DuplicationerPlugin.log.LogWarning($"Entity id {powerlineEntityId} not found in blueprint");
                 }
 
                 if (dependenciesTemp.Count > 0)
@@ -886,114 +946,6 @@ namespace Duplicationer
                 }
 
                 buildingIndex++;
-            }
-
-            if (data.blocks.ids == null) throw new System.ArgumentNullException(nameof(data.blocks.ids));
-
-            var quadTreeArray = StreamingSystem.getBuildableObjectGOQuadtreeArray();
-            int blockIndex = 0;
-            for (int z = 0; z < data.blocks.sizeZ; z++)
-            {
-                for (int y = 0; y < data.blocks.sizeY; y++)
-                {
-                    for (int x = 0; x < data.blocks.sizeX; x++)
-                    {
-                        //var blockId = currentBlueprint.blocks.ids[x + (y + z * currentBlueprint.blocks.sizeY) * currentBlueprint.blocks.sizeX];
-                        var blockId = data.blocks.ids[blockIndex++];
-                        if (blockId > 0)
-                        {
-                            var worldPos = new Vector3Int(x, y, z) + anchorPosition;
-                            ChunkManager.getChunkIdxAndTerrainArrayIdxFromWorldCoords(worldPos.x, worldPos.y, worldPos.z, out ulong worldChunkIndex, out uint worldBlockIndex);
-                            var terrainData = ChunkManager.chunks_getTerrainData(worldChunkIndex, worldBlockIndex);
-
-                            if (terrainData == 0 && quadTreeArray.queryPointXYZ(worldPos) == null)
-                            {
-                                if (blockId >= GameRoot.BUILDING_PART_ARRAY_IDX_START)
-                                {
-                                    var partTemplate = ItemTemplateManager.getBuildingPartTemplate(GameRoot.BuildingPartIdxLookupTable.table[blockId]);
-                                    if (partTemplate != null && partTemplate.parentItemTemplate != null)
-                                    {
-                                        //DuplicationerPlugin.log.Log((string)$"Place building part {partTemplate.parentItemTemplate.name} at ({worldPos.x}, {worldPos.y}, {worldPos.z})");
-
-                                        ActionManager.AddQueuedEvent(() =>
-                                        {
-                                            //BuildingManager.client_tryBuild(worldPos, BuildingManager.BuildOrientation.xPos, partTemplate.parentItemTemplate);
-                                            int mode = 0;
-                                            if (partTemplate.parentItemTemplate.toggleableModes != null && partTemplate.parentItemTemplate.toggleableModes.Length != 0 && partTemplate.parentItemTemplate.toggleableModeType == ItemTemplate.ItemTemplateToggleableModeTypes.MultipleBuildings)
-                                            {
-                                                for (int index = 0; index < partTemplate.parentItemTemplate.toggleableModes.Length; ++index)
-                                                {
-                                                    if (partTemplate.parentItemTemplate.toggleableModes[index].buildableObjectTemplate == partTemplate)
-                                                    {
-                                                        mode = index;
-                                                        break;
-                                                    }
-                                                }
-                                            }
-                                            GameRoot.addLockstepEvent(new BuildEntityEvent(usernameHash, partTemplate.parentItemTemplate.id, mode, worldPos, 0, Quaternion.identity, 1, 0, false));
-                                        });
-                                    }
-                                }
-                                else
-                                {
-                                    var blockTemplate = ItemTemplateManager.getTerrainBlockTemplateByByteIdx(blockId);
-                                    if (blockTemplate != null && blockTemplate.yieldItemOnDig_template != null && blockTemplate.yieldItemOnDig_template.buildableObjectTemplate != null)
-                                    {
-                                        ActionManager.AddQueuedEvent(() =>
-                                        {
-                                            int mode = 0;
-                                            if (blockTemplate.yieldItemOnDig_template.toggleableModes != null && blockTemplate.yieldItemOnDig_template.toggleableModes.Length != 0 && blockTemplate.yieldItemOnDig_template.toggleableModeType == ItemTemplate.ItemTemplateToggleableModeTypes.MultipleBuildings)
-                                            {
-                                                for (int index = 0; index < blockTemplate.yieldItemOnDig_template.toggleableModes.Length; ++index)
-                                                {
-                                                    if (blockTemplate.yieldItemOnDig_template.toggleableModes[index].buildableObjectTemplate == blockTemplate.parentBOT)
-                                                    {
-                                                        mode = index;
-                                                        break;
-                                                    }
-                                                }
-                                            }
-                                            GameRoot.addLockstepEvent(new BuildEntityEvent(usernameHash, blockTemplate.yieldItemOnDig_template.id, mode, worldPos, 0, Quaternion.identity, 1, 0, false));
-                                        });
-                                    }
-                                    else if (blockTemplate != null && blockTemplate.parentBOT != null)
-                                    {
-                                        var itemTemplate = blockTemplate.parentBOT.parentItemTemplate;
-                                        if (itemTemplate != null)
-                                        {
-                                            //DuplicationerPlugin.log.Log((string)$"Place terrain {itemTemplate.name} at ({worldPos.x}, {worldPos.y}, {worldPos.z})");
-
-                                            ActionManager.AddQueuedEvent(() =>
-                                            {
-                                                int mode = 0;
-                                                if (itemTemplate.toggleableModes != null && itemTemplate.toggleableModes.Length != 0 && itemTemplate.toggleableModeType == ItemTemplate.ItemTemplateToggleableModeTypes.MultipleBuildings)
-                                                {
-                                                    for (int index = 0; index < itemTemplate.toggleableModes.Length; ++index)
-                                                    {
-                                                        if (itemTemplate.toggleableModes[index].buildableObjectTemplate == blockTemplate.parentBOT)
-                                                        {
-                                                            mode = index;
-                                                            break;
-                                                        }
-                                                    }
-                                                }
-                                                GameRoot.addLockstepEvent(new BuildEntityEvent(usernameHash, itemTemplate.id, mode, worldPos, 0, Quaternion.identity, 1, 0, false));
-                                            });
-                                        }
-                                        else
-                                        {
-                                            DuplicationerPlugin.log.LogWarning((string)$"No item template for terrain index {blockId}");
-                                        }
-                                    }
-                                    else
-                                    {
-                                        DuplicationerPlugin.log.LogWarning((string)$"No block template for terrain index {blockId}");
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
             }
         }
 

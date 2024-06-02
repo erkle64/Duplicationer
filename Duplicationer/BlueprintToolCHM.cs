@@ -95,7 +95,17 @@ namespace Duplicationer
         private GameObject libraryGridObject = null;
         private string lastLibraryRelativePath = "";
 
-        public bool IsAnyFrameOpen => IsBlueprintFrameOpen || IsSaveFrameOpen || IsLibraryFrameOpen;
+        public bool IsFolderFrameOpen => folderFrame != null && folderFrame.activeSelf;
+        private GameObject folderFrame = null;
+        private GameObject folderGridObject = null;
+        private GameObject folderFramePreviewContainer = null;
+        private Image folderFrameIconImage = null;
+        private Image folderFramePreviewIconImage = null;
+        private TMP_InputField folderFrameNameInputField = null;
+        private TextMeshProUGUI folderFramePreviewLabel = null;
+        private ItemTemplate folderFrameIconItemTemplate = null;
+
+        public bool IsAnyFrameOpen => IsBlueprintFrameOpen || IsSaveFrameOpen || IsLibraryFrameOpen || IsFolderFrameOpen;
 
         private int NudgeX => CurrentBlueprint != null && InputHelpers.IsAltHeld ? CurrentBlueprint.SizeX : 1;
         private int NudgeY => CurrentBlueprint != null && InputHelpers.IsAltHeld ? CurrentBlueprint.SizeY : 1;
@@ -319,7 +329,6 @@ namespace Duplicationer
                                 break;
                             }
 
-                            DuplicationerPlugin.log.Log($"aabb: {aabb.x0} {aabb.y0} {aabb.z0} {aabb.wx} {aabb.wy} {aabb.wz}");
                             bogoQueryResult.Clear();
                             quadTree.queryAABB3D(aabb, bogoQueryResult, true);
                             foreach (var bogo in bogoQueryResult)
@@ -612,23 +621,6 @@ namespace Duplicationer
                     break;
             }
 
-            //if (railMinerRow != null)
-            //{
-            //    if (boxMode == BoxMode.Blueprint)
-            //    {
-            //        if (Time.time >= nextUpdateTimeRailMiners)
-            //        {
-            //            nextUpdateTimeRailMiners = Time.time + 0.5f;
-            //            bool hasDepots = HasExistingMinecartDepots(CurrentBlueprintAnchor, repeatFrom, repeatTo);
-            //            railMinerRow.SetActive(hasDepots);
-            //        }
-            //    }
-            //    else
-            //    {
-            //        railMinerRow.SetActive(false);
-            //    }
-            //}
-
             if (isDragArrowVisible)
             {
                 DrawArrow(dragFaceRay.origin, dragFaceRay.direction, dragArrowMaterial, dragArrowScale, dragArrowOffset);
@@ -779,7 +771,6 @@ namespace Duplicationer
                     {
                         totalItemCount += itemCount;
 
-                        //var template = (kv.Key > 0) ? ItemTemplateManager.getItemTemplate(kv.Key) : null;
                         var name = kv.Value.name;
                         var templateId = kv.Value.itemTemplateId;
                         if (templateId != 0)
@@ -836,6 +827,8 @@ namespace Duplicationer
         internal void HideBlueprintFrame()
         {
             if (duplicationerFrame == null || !duplicationerFrame.activeSelf) return;
+
+            AudioManager.playUISoundEffect(ResourceDB.resourceLinker.audioClip_UIClose);
 
             duplicationerFrame.SetActive(false);
             GlobalStateManager.removeCursorRequirement();
@@ -1066,6 +1059,8 @@ namespace Duplicationer
                 }
             }
 
+            AudioManager.playUISoundEffect(ResourceDB.resourceLinker.audioClip_UIOpen);
+
             duplicationerFrame.SetActive(true);
             GlobalStateManager.addCursorRequirement();
 
@@ -1126,6 +1121,8 @@ namespace Duplicationer
         internal void HideSaveFrame()
         {
             if (saveFrame == null || !saveFrame.activeSelf) return;
+
+            AudioManager.playUISoundEffect(ResourceDB.resourceLinker.audioClip_UIClose);
 
             saveFrame.SetActive(false);
             GlobalStateManager.removeCursorRequirement();
@@ -1309,6 +1306,8 @@ namespace Duplicationer
             FillSaveFrameIcons();
             FillSaveMaterialReport();
 
+            AudioManager.playUISoundEffect(ResourceDB.resourceLinker.audioClip_UIOpen);
+
             saveFrame.SetActive(true);
             GlobalStateManager.addCursorRequirement();
         }
@@ -1442,7 +1441,6 @@ namespace Duplicationer
             foreach (var kv in ItemTemplateManager.getAllItemTemplates())
             {
                 var itemTemplate = kv.Value;
-                //if (!itemTemplate.includeInBuild) continue;
                 if (itemTemplate.isHiddenItem) continue;
 
                 var gameObject = UnityEngine.Object.Instantiate(prefabBlueprintButtonIcon.Prefab, saveGridObject.transform);
@@ -1484,6 +1482,8 @@ namespace Duplicationer
             if (itemTemplate == null) throw new System.ArgumentNullException(nameof(itemTemplate));
             if (saveFrameIconCount >= 4) return;
 
+            AudioManager.playUISoundEffect(ResourceDB.resourceLinker.audioClip_UIButtonClick);
+
             saveFrameIconItemTemplates[saveFrameIconCount] = itemTemplate;
             saveFrameIconCount++;
 
@@ -1494,6 +1494,8 @@ namespace Duplicationer
         private void SaveFrameRemoveIcon(int iconIndex)
         {
             if (iconIndex >= saveFrameIconCount) return;
+
+            AudioManager.playUISoundEffect(ResourceDB.resourceLinker.audioClip_UIButtonClick);
 
             for (int i = iconIndex; i < 3; i++) saveFrameIconItemTemplates[i] = saveFrameIconItemTemplates[i + 1];
             saveFrameIconItemTemplates[3] = null;
@@ -1522,6 +1524,8 @@ namespace Duplicationer
         internal void HideLibraryFrame()
         {
             if (libraryFrame == null || !libraryFrame.activeSelf) return;
+
+            AudioManager.playUISoundEffect(ResourceDB.resourceLinker.audioClip_UIClose);
 
             libraryFrame.SetActive(false);
             GlobalStateManager.removeCursorRequirement();
@@ -1576,7 +1580,7 @@ namespace Duplicationer
                             .SetRectTransform(10.0f, 10.0f, -10.0f, -10.0f, 0.5f, 0.5f, 0.0f, 0.0f, 1.0f, 1.0f)
                             .Do(builder =>
                             {
-                                var gameObject = UnityEngine.Object.Instantiate(prefabGridScrollView.Prefab, builder.GameObject.transform);
+                                var gameObject = Object.Instantiate(prefabGridScrollView.Prefab, builder.GameObject.transform);
                                 var grid = gameObject.GetComponentInChildren<GridLayoutGroup>();
                                 if (grid == null) throw new System.Exception("Grid not found.");
                                 libraryGridObject = grid.gameObject;
@@ -1587,6 +1591,8 @@ namespace Duplicationer
             .End();
 
             FillLibraryGrid(lastLibraryRelativePath, isForSaveInfo);
+
+            AudioManager.playUISoundEffect(ResourceDB.resourceLinker.audioClip_UIOpen);
 
             libraryFrame.SetActive(true);
             GlobalStateManager.addCursorRequirement();
@@ -1615,6 +1621,8 @@ namespace Duplicationer
                 {
                     backButton.onClick.AddListener(new UnityAction(() =>
                     {
+                        AudioManager.playUISoundEffect(ResourceDB.resourceLinker.audioClip_UIButtonClick);
+
                         var backPath = Path.GetDirectoryName(relativePath);
                         FillLibraryGrid(backPath, isForSaveInfo);
                     }));
@@ -1629,14 +1637,15 @@ namespace Duplicationer
                 {
                     newFolderButton.onClick.AddListener(new UnityAction(() =>
                     {
-                        TextEntryFrame.Show("Enter folder name:", "", "Create Folder", (name) =>
-                        {
-                            if (string.IsNullOrWhiteSpace(name)) return;
-                            var path = Path.Combine(DuplicationerPlugin.BlueprintFolder, relativePath, name);
-                            if (Directory.Exists(path)) return;
-                            Directory.CreateDirectory(path);
-                            FillLibraryGrid(Path.Combine(relativePath, name), false);
-                        });
+                        ShowFolderFrame(relativePath, "");
+                        //TextEntryFrame.Show("Enter folder name:", "", "Create Folder", (name) =>
+                        //{
+                        //    if (string.IsNullOrWhiteSpace(name)) return;
+                        //    var path = Path.Combine(DuplicationerPlugin.BlueprintFolder, relativePath, name);
+                        //    if (Directory.Exists(path)) return;
+                        //    Directory.CreateDirectory(path);
+                        //    FillLibraryGrid(Path.Combine(relativePath, name), false);
+                        //});
                     }));
                 }
             }
@@ -1651,9 +1660,20 @@ namespace Duplicationer
                 var label = gameObject.transform.Find("Label")?.GetComponent<TextMeshProUGUI>();
                 if (label != null) label.text = name;
 
+                ItemTemplate iconItemTemplate = null;
+                var iconNamePath = Path.Combine(path, "__folder_icon.txt");
+                if (File.Exists(iconNamePath))
+                {
+                    var identifier = File.ReadAllText(iconNamePath).Trim();
+                    var hash = ItemTemplate.generateStringHash(identifier);
+                    iconItemTemplate = ItemTemplateManager.getItemTemplate(hash);
+                }
+
                 var iconImage = gameObject.transform.Find("Icon1")?.GetComponent<Image>();
-                iconImage.gameObject.SetActive(false);
-                //iconImage.sprite = iconItemTemplate.icon;
+                if (iconImage != null)
+                {
+                    iconImage.sprite = iconItemTemplate?.icon ?? iconEmpty.Sprite;
+                }
 
                 var button = gameObject.GetComponent<Button>();
                 if (button != null)
@@ -1662,6 +1682,8 @@ namespace Duplicationer
                     {
                         ActionManager.AddQueuedEvent(() =>
                         {
+                            AudioManager.playUISoundEffect(ResourceDB.resourceLinker.audioClip_UIButtonClick);
+
                             FillLibraryGrid(Path.Combine(relativePath, name), isForSaveInfo);
                         });
                     }));
@@ -1710,21 +1732,22 @@ namespace Duplicationer
                             {
                                 ActionManager.AddQueuedEvent(() =>
                                 {
-                                    TextEntryFrame.Show($"Rename Folder", nameToRename, "Rename", (string newName) =>
-                                    {
-                                        string filenameBase = Path.Combine(Path.GetDirectoryName(newName), PathHelpers.MakeValidFileName(Path.GetFileName(newName)));
-                                        string newPath = Path.Combine(DuplicationerPlugin.BlueprintFolder, relativePath, filenameBase);
-                                        if (!File.Exists(newPath))
-                                        {
-                                            try
-                                            {
-                                                DuplicationerPlugin.log.Log($"Renaming folder '{pathToRename}' to '{newPath}'");
-                                                Directory.Move(pathToRename, newPath);
-                                                FillLibraryGrid(relativePath, false);
-                                            }
-                                            catch (System.Exception) { }
-                                        }
-                                    });
+                                    ShowFolderFrame(relativePath, nameToRename);
+                                    //TextEntryFrame.Show($"Rename Folder", nameToRename, "Rename", (string newName) =>
+                                    //{
+                                    //    string filenameBase = Path.Combine(Path.GetDirectoryName(newName), PathHelpers.MakeValidFileName(Path.GetFileName(newName)));
+                                    //    string newPath = Path.Combine(DuplicationerPlugin.BlueprintFolder, relativePath, filenameBase);
+                                    //    if (!File.Exists(newPath))
+                                    //    {
+                                    //        try
+                                    //        {
+                                    //            DuplicationerPlugin.log.Log($"Renaming folder '{pathToRename}' to '{newPath}'");
+                                    //            Directory.Move(pathToRename, newPath);
+                                    //            FillLibraryGrid(relativePath, false);
+                                    //        }
+                                    //        catch (System.Exception) { }
+                                    //    }
+                                    //});
                                 });
                             }));
                         }
@@ -1933,6 +1956,274 @@ namespace Duplicationer
             writer.Dispose();
         }
 
+        internal void HideFolderFrame()
+        {
+            if (folderFrame == null || !folderFrame.activeSelf) return;
+
+            AudioManager.playUISoundEffect(ResourceDB.resourceLinker.audioClip_UIClose);
+
+            folderFrame.SetActive(false);
+            GlobalStateManager.removeCursorRequirement();
+        }
+
+        internal void ShowFolderFrame(string relativePath, string folderName)
+        {
+            if (folderFrame != null && folderFrame.activeSelf) return;
+
+            var originalPath = Path.Combine(DuplicationerPlugin.BlueprintFolder, relativePath, folderName);
+
+            if (folderFrame != null)
+            {
+                Object.Destroy(folderFrame);
+                folderFrame = null;
+            }
+
+            ulong usernameHash = GameRoot.getClientCharacter().usernameHash;
+            UIBuilder.BeginWith(GameRoot.getDefaultCanvas())
+                .Element_Panel("Folder Frame", "corner_cut_outline", new Color(0.133f, 0.133f, 0.133f, 1.0f), new Vector4(13, 10, 8, 13))
+                    .Keep(out folderFrame)
+                    .SetRectTransform(100, 100, -100, -100, 0.5f, 0.5f, 0, 0, 1, 1)
+                    .Element_Header("HeaderBar", "corner_cut_outline", new Color(0.0f, 0.6f, 1.0f, 1.0f), new Vector4(13, 3, 8, 13))
+                        .SetRectTransform(0.0f, -60.0f, 0.0f, 0.0f, 0.5f, 1.0f, 0.0f, 1.0f, 1.0f, 1.0f)
+                        .Element("Heading")
+                            .SetRectTransform(0.0f, 0.0f, -60.0f, 0.0f, 0.0f, 0.5f, 0.0f, 0.0f, 1.0f, 1.0f)
+                            .Component_Text($"Folder - /{relativePath}", "OpenSansSemibold SDF", 34.0f, Color.white)
+                        .Done
+                        .Element_Button("Button Close", "corner_cut_fully_inset", Color.white, new Vector4(13.0f, 1.0f, 4.0f, 13.0f))
+                            .SetOnClick(HideFolderFrame)
+                            .SetRectTransform(-60.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.5f, 1.0f, 0.0f, 1.0f, 1.0f)
+                            .SetTransitionColors(new Color(1.0f, 1.0f, 1.0f, 1.0f), new Color(1.0f, 0.25f, 0.0f, 1.0f), new Color(1.0f, 0.0f, 0.0f, 1.0f), new Color(1.0f, 0.25f, 0.0f, 1.0f), new Color(0.5f, 0.5f, 0.5f, 1.0f), 1.0f, 0.1f)
+                            .Element("Image")
+                                .SetRectTransform(5.0f, 5.0f, -5.0f, -5.0f, 0.5f, 0.5f, 0.0f, 0.0f, 1.0f, 1.0f)
+                                .Component_Image("cross", Color.white, Image.Type.Sliced, Vector4.zero)
+                            .Done
+                        .Done
+                    .Done
+                    .Element("Content")
+                        .SetRectTransform(0.0f, 0.0f, 0.0f, -60.0f, 0.5f, 0.5f, 0.0f, 0.0f, 1.0f, 1.0f)
+                        .SetHorizontalLayout(new RectOffset(0, 0, 0, 0), 0, TextAnchor.UpperLeft, false, true, true, false, true, false, false)
+                        .Element("ContentLeft")
+                            .Layout()
+                                .FlexibleWidth(1)
+                            .Done
+                            .Element("Padding")
+                                .SetRectTransform(10.0f, 10.0f, -10.0f, -10.0f, 0.5f, 0.5f, 0.0f, 0.0f, 1.0f, 1.0f)
+                                .Do(builder =>
+                                {
+                                    var gameObject = Object.Instantiate(prefabGridScrollView.Prefab, builder.GameObject.transform);
+                                    var grid = gameObject.GetComponentInChildren<GridLayoutGroup>();
+                                    if (grid == null) throw new System.Exception("Grid not found.");
+                                    folderGridObject = grid.gameObject;
+                                    grid.cellSize = new Vector2(80.0f, 80.0f);
+                                    grid.padding = new RectOffset(4, 4, 4, 4);
+                                    grid.spacing = new Vector2(0.0f, 0.0f);
+                                })
+                            .Done
+                        .Done
+                        .Element("ContentRight")
+                            .Layout()
+                                .MinWidth(132 + 4 + 132 + 4 + 132 + 10)
+                                .FlexibleWidth(0)
+                            .Done
+                            .SetVerticalLayout(new RectOffset(0, 10, 10, 10), 10, TextAnchor.UpperLeft, false, true, true, true, false, false, false)
+                            .Element("Icons Row")
+                                .Layout()
+                                    .MinHeight(132 + 6 + 132)
+                                    .FlexibleHeight(0)
+                                .Done
+                                .Element_Button("Icon 1 Button", iconBlack.Sprite, Color.white, Vector4.zero, Image.Type.Simple)
+                                    .SetRectTransform(0, -270, 270, 0, 0, 1, 0, 1, 0, 1)
+                                    .SetOnClick(() => {
+                                        folderFrameIconImage.sprite = iconEmpty.Sprite;
+                                        folderFrameIconItemTemplate = null;
+                                        FillFolderPreview();
+                                        AudioManager.playUISoundEffect(ResourceDB.resourceLinker.audioClip_UIButtonClick);
+                                    })
+                                    .SetTransitionColors(new Color(0.2f, 0.2f, 0.2f, 1.0f), new Color(0.0f, 0.6f, 1.0f, 1.0f), new Color(0.222f, 0.667f, 1.0f, 1.0f), new Color(0.0f, 0.6f, 1.0f, 1.0f), new Color(0.5f, 0.5f, 0.5f, 1.0f), 1.0f, 0.1f)
+                                    .Element("Image")
+                                        .SetRectTransform(0, 0, 0, 0, 0.5f, 0.5f, 0, 0, 1, 1)
+                                        .Component_Image(iconEmpty.Sprite, Color.white, Image.Type.Sliced, Vector4.zero)
+                                        .Keep(out folderFrameIconImage)
+                                    .Done
+                                .Done
+                                .Element("Preview")
+                                    .SetRectTransform(132 + 4 + 132 + 10 + 64 - 50, -(132 + 5 - 60), 132 + 4 + 132 + 10 + 64 - 50, -(132 + 5 - 60), 0, 1, 0, 1, 0, 1)
+                                    .SetSizeDelta(100, 120)
+                                    .Keep(out folderFramePreviewContainer)
+                                .Done
+                            .Done
+                            .Element("Name Row")
+                                .Layout()
+                                    .MinHeight(40)
+                                    .FlexibleHeight(0)
+                                .Done
+                                .Do(builder =>
+                                {
+                                    var gameObject = Object.Instantiate(prefabBlueprintNameInputField.Prefab, builder.GameObject.transform);
+                                    folderFrameNameInputField = gameObject.GetComponentInChildren<TMP_InputField>();
+                                    if (folderFrameNameInputField == null) throw new System.Exception("TextMeshPro Input field not found.");
+                                    folderFrameNameInputField.text = "";
+                                    folderFrameNameInputField.onValueChanged.AddListener(new UnityAction<string>((string value) =>
+                                    {
+                                        if (folderFramePreviewLabel != null) folderFramePreviewLabel.text = Path.GetFileName(value);
+                                    }));
+                                    EventSystem.current.SetSelectedGameObject(folderFrameNameInputField.gameObject, null);
+                                })
+                            .Done
+                            .Element("Row Buttons")
+                                .Layout()
+                                    .MinHeight(40)
+                                    .FlexibleHeight(0)
+                                .Done
+                                .SetHorizontalLayout(new RectOffset(0, 0, 0, 0), 5.0f, TextAnchor.UpperLeft, false, true, true, false, true, false, false)
+                                .Element_TextButton("Button Confirm", "Confirm")
+                                    .Updater<Button>(guiUpdaters, () => !string.IsNullOrWhiteSpace(folderFrameNameInputField?.text))
+                                    .SetOnClick(() => { ConfirmFolderEdit(relativePath, folderName, folderFrameNameInputField?.text); })
+                                .Done
+                                .Element_TextButton("Button Cancel", "Cancel")
+                                    .SetOnClick(HideFolderFrame)
+                                .Done
+                            .Done
+                        .Done
+                    .Done
+                .Done
+            .End();
+
+            FillFolderGrid();
+
+            if (folderFrameNameInputField != null) folderFrameNameInputField.text = folderName;
+
+            folderFrameIconItemTemplate = null;
+
+            if (!string.IsNullOrEmpty(folderName))
+            {
+                string iconNamePath = Path.Combine(originalPath, "__folder_icon.txt");
+                if (File.Exists(iconNamePath))
+                {
+                    var iconName = File.ReadAllText(iconNamePath).Trim();
+                    var iconHash = ItemTemplate.generateStringHash(iconName);
+                    folderFrameIconItemTemplate = ItemTemplateManager.getItemTemplate(iconHash);
+                }
+            }
+
+            AudioManager.playUISoundEffect(ResourceDB.resourceLinker.audioClip_UIOpen);
+
+            FillFolderPreview();
+            FillFolderFrameIcons();
+
+            folderFrame.SetActive(true);
+            GlobalStateManager.addCursorRequirement();
+        }
+
+        private void ConfirmFolderEdit(string relativePath, string originalName, string newName)
+        {
+            var newPath = Path.Combine(DuplicationerPlugin.BlueprintFolder, relativePath, newName);
+            var iconNamePath = Path.Combine(newPath, "__folder_icon.txt");
+            if (string.IsNullOrWhiteSpace(originalName))
+            {
+                try
+                {
+                    Directory.CreateDirectory(newPath);
+                    if (Directory.Exists(newPath))
+                    {
+                        if (folderFrameIconItemTemplate != null)
+                        {
+                            File.WriteAllText(iconNamePath, folderFrameIconItemTemplate.identifier);
+                        }
+
+                        HideFolderFrame();
+                        FillLibraryGrid(relativePath, false);
+                    }
+                }
+                catch { }
+            }
+            else
+            {
+                var originalPath = Path.Combine(DuplicationerPlugin.BlueprintFolder, relativePath, originalName);
+
+                try
+                {
+                    if (originalPath != newPath && Directory.Exists(originalPath) && !Directory.Exists(newPath))
+                    {
+                        Directory.Move(originalPath, newPath);
+                    }
+
+                    if (File.Exists(iconNamePath)) File.Delete(iconNamePath);
+
+                    if (folderFrameIconItemTemplate != null)
+                    {
+                        File.WriteAllText(iconNamePath, folderFrameIconItemTemplate.identifier);
+                    }
+
+                    HideFolderFrame();
+                    FillLibraryGrid(relativePath, false);
+                }
+                catch { }
+            }
+        }
+
+        private void FillFolderGrid()
+        {
+            if (folderGridObject == null) return;
+
+            DestroyAllTransformChildren(folderGridObject.transform);
+
+            foreach (var kv in ItemTemplateManager.getAllItemTemplates())
+            {
+                var itemTemplate = kv.Value;
+                if (itemTemplate.isHiddenItem) continue;
+
+                var gameObject = Object.Instantiate(prefabBlueprintButtonIcon.Prefab, folderGridObject.transform);
+
+                var iconImage = gameObject.transform.Find("Icon1")?.GetComponent<Image>();
+                if (iconImage != null) iconImage.sprite = itemTemplate.icon;
+
+                var button = gameObject.GetComponentInChildren<Button>();
+                if (button != null)
+                {
+                    button.onClick.AddListener(new UnityAction(() => {
+                        AudioManager.playUISoundEffect(ResourceDB.resourceLinker.audioClip_UIButtonClick);
+                        folderFrameIconItemTemplate = itemTemplate;
+                        folderFrameIconImage.sprite = itemTemplate?.icon ?? iconEmpty.Sprite;
+                        FillFolderPreview();
+                    }));
+                }
+
+                var panel = gameObject.GetComponent<Image>();
+                if (panel != null) panel.color = Color.clear;
+            }
+        }
+
+        private void FillFolderPreview()
+        {
+            DestroyAllTransformChildren(folderFramePreviewContainer.transform);
+            var gameObject = Object.Instantiate(prefabBlueprintButtonFolder.Prefab, folderFramePreviewContainer.transform);
+            var deleteButton = gameObject.transform.Find("DeleteButton")?.gameObject;
+            if (deleteButton != null) deleteButton.SetActive(false);
+            var renameButton = gameObject.transform.Find("RenameButton")?.gameObject;
+            if (renameButton != null) renameButton.SetActive(false);
+            folderFramePreviewLabel = gameObject.GetComponentInChildren<TextMeshProUGUI>();
+            folderFramePreviewIconImage = gameObject.transform.Find("Icon1")?.GetComponent<Image>();
+
+            if (folderFramePreviewLabel != null && folderFrameNameInputField != null)
+            {
+                folderFramePreviewLabel.text = Path.GetFileName(folderFrameNameInputField.text);
+            }
+
+            if (folderFramePreviewIconImage != null)
+            {
+                folderFramePreviewIconImage.sprite = folderFrameIconItemTemplate?.icon ?? iconEmpty.Sprite;
+            }
+        }
+
+        private void FillFolderFrameIcons()
+        {
+            if (folderFrameIconImage != null)
+            {
+                folderFrameIconImage.sprite = folderFrameIconItemTemplate?.icon_256 ?? iconEmpty.Sprite;
+            }
+        }
+
         private static List<bool> GetTerrainTypeRemovalMask()
         {
             if (terrainTypeRemovalMask == null)
@@ -1956,8 +2247,6 @@ namespace Duplicationer
         {
             if (TryGetSelectedArea(out Vector3Int from, out Vector3Int to))
             {
-                //GameRoot.addLockstepEvent(new Character.BulkDemolishBuildingEvent(GameRoot.getClientCharacter().usernameHash, from, to - from + Vector3Int.one));
-
                 ulong characterHash = GameRoot.getClientCharacter().usernameHash;
 
                 if (doBuildings || doDecor)
@@ -2024,8 +2313,6 @@ namespace Duplicationer
         {
             if (TryGetSelectedArea(out Vector3Int from, out Vector3Int to))
             {
-                //GameRoot.addLockstepEvent(new Character.BulkDemolishBuildingEvent(GameRoot.getClientCharacter().usernameHash, from, to - from + Vector3Int.one));
-
                 ulong characterHash = GameRoot.getClientCharacter().usernameHash;
 
                 if (doBuildings || doDecor)
@@ -2115,69 +2402,6 @@ namespace Duplicationer
             return false;
         }
 
-        //private void InsertRailMiners(ItemTemplate railMinerItemTemplate)
-        //{
-        //    AudioManager.playUISoundEffect(ResourceDB.resourceLinker.audioClip_recipeCopyTool_paste);
-
-        //    MinecartDepotPollingUpdateData data = default;
-        //    ulong playerInventoryPtr = (GameRoot.getClientCharacter().inventoryId != 0) ? InventoryManager.inventoryManager_getInventoryPtr(GameRoot.getClientCharacter().inventoryId) : 0;
-        //    if (playerInventoryPtr != 0)
-        //    {
-        //        uint inventorySlotCount = InventoryManager.inventoryManager_getInventorySlotCountByPtr(playerInventoryPtr);
-        //        int slotIndex = (int)inventorySlotCount;
-
-        //        var inventoryCount = InventoryManager.inventoryManager_countByItemTemplateByPtr(playerInventoryPtr, railMinerItemTemplate.id, IOBool.iotrue);
-        //        if (inventoryCount > 0)
-        //        {
-        //            var depots = GetExistingMinecartDepots(CurrentBlueprintAnchor, repeatFrom, repeatTo);
-        //            foreach (var depot in depots)
-        //            {
-        //                if (!AdvanceToNextValidSlot(railMinerItemTemplate, playerInventoryPtr, ref slotIndex, inventorySlotCount)) return;
-
-        //                MinecartDepotGO.minecartDepotEntity_queryPollingData(depot.relatedEntityId, ref data);
-        //                if (data.transitionState == 0 || data.transitionState == 3 && data.inventorySlot_railMiner.itemCount == 0)
-        //                {
-        //                    var character = GameRoot.getClientCharacter();
-
-        //                    ulong depotInventoryId = 0;
-        //                    //ulong depotInventoryPtr = 0;
-        //                    if (BuildingManager.buildingManager_getInventoryAccessors(depot.relatedEntityId, 1, ref depotInventoryId) == IOBool.iotrue && depotInventoryId > 0)
-        //                    {
-        //                        GameRoot.addLockstepEvent(new ItemQuickMoveEvent(character, depotInventoryId, character.inventoryId, (uint)slotIndex));
-        //                        GameRoot.addLockstepEvent(new MinecartDepotTransitionEvent(depot.relatedEntityId));
-        //                    }
-        //                }
-        //            }
-        //        }
-        //    }
-        //}
-
-        //private static bool AdvanceToNextValidSlot(ItemTemplate railMinerItemTemplate, ulong playerInventoryPtr, ref int slotIndex, uint inventorySlotCount)
-        //{
-        //    ushort itemTemplateRunningIdx = 0;
-        //    uint itemCount = 0;
-        //    ushort lockedTemplateRunningIdx = 0;
-        //    IOBool isLocked = default;
-
-        //    for (--slotIndex; slotIndex >= 0; --slotIndex)
-        //    {
-        //        InventoryManager.inventoryManager_getSingleSlotDataByPtr(playerInventoryPtr, (uint)slotIndex, ref itemTemplateRunningIdx, ref itemCount, ref lockedTemplateRunningIdx, ref isLocked, IOBool.iofalse);
-        //        if (itemCount > 0)
-        //        {
-        //            var playerInventorySlotItemTemplate = GameRoot.RunningIdxTable_itemTemplates_all.getDataByRunningIdx(itemTemplateRunningIdx);
-        //            if (playerInventorySlotItemTemplate != null)
-        //            {
-        //                if (playerInventorySlotItemTemplate.id == railMinerItemTemplate.id)
-        //                {
-        //                    return true;
-        //                }
-        //            }
-        //        }
-        //    }
-
-        //    return false;
-        //}
-
         internal void UpdateBlueprintPositionText()
         {
             if (textPositionX != null) textPositionX.text = string.Format("Position X: {0}", CurrentBlueprintAnchor.x);
@@ -2200,24 +2424,6 @@ namespace Duplicationer
             iconResize = new LazyIconSprite(DuplicationerPlugin.bundleMainAssets, "resize");
             iconSelectArea = new LazyIconSprite(DuplicationerPlugin.bundleMainAssets, "select-area");
         }
-
-        //private List<ItemTemplate> GetRailMinerTemplates()
-        //{
-        //    if (railMinerTemplates == null)
-        //    {
-        //        railMinerTemplates = new List<ItemTemplate>();
-        //        foreach (var kv in ItemTemplateManager.getAllItemTemplates())
-        //        {
-        //            var itemTemplate = kv.Value;
-        //            if ((itemTemplate.flags & ItemTemplate.ItemTemplateFlags.RAIL_MINER) != 0)
-        //            {
-        //                railMinerTemplates.Add(itemTemplate);
-        //            }
-        //        }
-        //    }
-
-        //    return railMinerTemplates;
-        //}
 
         private void OnGameInitializationDone()
         {
@@ -2282,41 +2488,6 @@ namespace Duplicationer
         {
             CurrentBlueprint = Blueprint.LoadFromFile(path);
         }
-
-        //public enum Mode
-        //{
-        //    Place,
-        //    MoveIdle,
-        //    MoveXPos,
-        //    MoveXNeg,
-        //    MoveYPos,
-        //    MoveYNeg,
-        //    MoveZPos,
-        //    MoveZNeg,
-        //    VerticalMoveIdle,
-        //    VerticalMove,
-        //    RepeatIdle,
-        //    RepeatXPos,
-        //    RepeatXNeg,
-        //    RepeatYPos,
-        //    RepeatYNeg,
-        //    RepeatZPos,
-        //    RepeatZNeg,
-        //    DragAreaIdle,
-        //    DragAreaStart,
-        //    DragAreaVerticalUp,
-        //    DragAreaVerticalDown,
-        //    DragFacesIdle,
-        //    DragFacesXPos,
-        //    DragFacesXNeg,
-        //    DragFacesYPos,
-        //    DragFacesYNeg,
-        //    DragFacesZPos,
-        //    DragFacesZNeg,
-        //    DragFacesVerticalIdle,
-        //    DragFacesVerticalPos,
-        //    DragFacesVerticalNeg
-        //}
 
         internal enum BoxMode
         {

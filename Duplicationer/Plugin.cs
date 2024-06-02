@@ -15,7 +15,7 @@ namespace Duplicationer
             MODNAME = "duplicationer",
             AUTHOR = "erkle64",
             GUID = AUTHOR + "." + MODNAME,
-            VERSION = "0.4.10";
+            VERSION = "0.4.11";
 
         public static LogSource log;
 
@@ -33,6 +33,7 @@ namespace Duplicationer
         public static TypedConfigEntry<KeyCode> configLoadBlueprintKey;
         public static TypedConfigEntry<bool> configCheatModeAllowed;
         public static TypedConfigEntry<bool> configCheatModeEnabled;
+        public static TypedConfigEntry<bool> configAllowUnresearchedRecipes;
 
         internal static Dictionary<string, UnityEngine.Object> bundleMainAssets;
 
@@ -68,6 +69,7 @@ namespace Duplicationer
                 .Group("Cheats")
                     .Entry(out configCheatModeAllowed, "CheatModeAllowed", false, "Enable the cheat mode button.")
                     .Entry(out configCheatModeEnabled, "CheatModeEnabled", false, "Enable cheat mode if allowed.")
+                    .Entry(out configAllowUnresearchedRecipes, "AllowUnresearchedRecipes", false, "Allow setting unresearched recipes on production machines.")
                 .EndGroup()
                 .Group("Input",
                     "Key Codes: Backspace, Tab, Clear, Return, Pause, Escape, Space, Exclaim,",
@@ -107,14 +109,9 @@ namespace Duplicationer
             if (!Directory.Exists(BlueprintFolder)) Directory.CreateDirectory(BlueprintFolder);
 
             bundleMainAssets = typeof(Mod).GetField("assets", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(mod) as Dictionary<string, UnityEngine.Object>;
-            //foreach (var asset in bundleMainAssets)
-            //{
-            //    log.Log($"Duplicationer Asset: {asset.Key} {asset.Value.name}");
-            //}
 
             blueprintTool = new BlueprintToolCHM();
             blueprintTool.LoadIconSprites();
-            //CommonEvents.OnGameInitializationDone += () => blueprintTool.LoadBlueprintFromFile(Path.Combine(BlueprintFolder, "blueprint.test"));
             CommonEvents.OnDeselectTool += CustomHandheldModeManager.ExitCurrentMode2;
             CommonEvents.OnUpdate += OnUpdate;
 
@@ -133,77 +130,5 @@ namespace Duplicationer
         }
 
         public static bool IsCheatModeEnabled => configCheatModeAllowed.Get() && configCheatModeEnabled.Get();
-
-        [HarmonyPatch]
-        public static class Patch
-        {
-            [HarmonyPatch(typeof(BuildEntityEvent), nameof(BuildEntityEvent.processEvent))]
-            [HarmonyPrefix]
-            private static void BuildEntityEvent_processEvent_prefix(BuildEntityEvent __instance)
-            {
-                if (__instance == null) return;
-                if (!(GameRoot.getClientCharacter() is Character character)) return;
-                if (__instance.characterHash != character.usernameHash) return;
-                lastSpawnedBuildableWrapperEntityId = 0;
-            }
-
-            [HarmonyPatch(typeof(BuildEntityEvent), nameof(BuildEntityEvent.processEvent))]
-            [HarmonyPostfix]
-            private static void BuildEntityEvent_processEvent_postfix(BuildEntityEvent __instance)
-            {
-                if (__instance == null) return;
-                if (!(GameRoot.getClientCharacter() is Character character)) return;
-                if (__instance.characterHash != character.usernameHash) return;
-                ActionManager.InvokeAndRemoveBuildEvent(__instance, lastSpawnedBuildableWrapperEntityId);
-            }
-
-            [HarmonyPatch(typeof(BuildingManager), nameof(BuildingManager.buildingManager_constructBuildableWrapper))]
-            [HarmonyPostfix]
-            private static void BuildingManager_buildingManager_constructBuildableWrapper(v3i pos, ulong buildableObjectTemplateId, ulong __result)
-            {
-                lastSpawnedBuildableWrapperEntityId = __result;
-            }
-
-            [HarmonyPatch(typeof(Character.DemolishBuildingEvent), nameof(Character.DemolishBuildingEvent.processEvent))]
-            [HarmonyPrefix]
-            private static bool DemolishBuildingEvent_processEvent(Character.DemolishBuildingEvent __instance)
-            {
-                if (__instance.clientPlaceholderId == -2)
-                {
-                    __instance.clientPlaceholderId = 0;
-                    BuildingManager.buildingManager_demolishBuildingEntityForDynamite(__instance.entityId);
-                    return false;
-                }
-
-                return true;
-            }
-
-            [HarmonyPatch(typeof(Character.RemoveTerrainEvent), nameof(Character.RemoveTerrainEvent.processEvent))]
-            [HarmonyPrefix]
-            private static bool RemoveTerrainEvent_processEvent(Character.RemoveTerrainEvent __instance)
-            {
-                if (__instance.terrainRemovalPlaceholderId == ulong.MaxValue)
-                {
-                    __instance.terrainRemovalPlaceholderId = 0ul;
-
-                    ChunkManager.getChunkIdxAndTerrainArrayIdxFromWorldCoords(__instance.worldPos.x, __instance.worldPos.y, __instance.worldPos.z, out ulong chunkIndex, out uint blockIndex);
-
-                    byte terrainType = 0;
-                    ChunkManager.chunks_removeTerrainBlock(chunkIndex, blockIndex, ref terrainType);
-                    ChunkManager.flagChunkVisualsAsDirty(chunkIndex, true, true);
-                    return false;
-                }
-
-                return true;
-            }
-
-            //[HarmonyPatch(typeof(GameRoot), nameof(GameRoot.addLockstepEvent))]
-            //[HarmonyPostfix]
-            //private static void GameRoot_addLockstepEvent(GameRoot.LockstepEvent e)
-            //{
-            //    log.Log("====== GameRoot.addLockstepEvent ======");
-            //    log.Log(e.getDbgInfo());
-            //}
-        }
     }
 }
