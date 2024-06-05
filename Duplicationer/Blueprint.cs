@@ -828,8 +828,21 @@ namespace Duplicationer
                     {
                         if (task.entityId > 0)
                         {
-                            var mbmfData = modularBuildingData.BuildMBMFData();
-                            GameRoot.addLockstepEvent(new SetModularEntityConstructionStateDataEvent(usernameHash, 0U, task.entityId, mbmfData));
+                            byte out_mbState = 0;
+                            byte out_isEnabled = 0;
+                            byte out_canBeEnabled = 0;
+                            byte out_constructionIsDismantle = 0;
+                            uint out_assignedConstructionDronePorts = 0;
+                            ModularBuildingManagerFrame.modularEntityBase_getGenericData(task.entityId, ref out_mbState, ref out_isEnabled, ref out_canBeEnabled, ref out_constructionIsDismantle, ref out_assignedConstructionDronePorts);
+                            if (out_mbState == (byte)ModularBuildingManagerFrame.MBState.ConstructionSiteInactive)
+                            {
+                                var moduleCount = ModularBuildingManagerFrame.modularEntityBase_getTotalModuleCount(task.entityId, 0);
+                                if (moduleCount <= 1)
+                                {
+                                    var mbmfData = modularBuildingData.BuildMBMFData();
+                                    GameRoot.addLockstepEvent(new SetModularEntityConstructionStateDataEvent(usernameHash, 0U, task.entityId, mbmfData));
+                                }
+                            }
                         }
                     });
                 }

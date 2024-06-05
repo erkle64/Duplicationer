@@ -1063,6 +1063,7 @@ namespace Duplicationer
 
             duplicationerFrame.SetActive(true);
             GlobalStateManager.addCursorRequirement();
+            EscapeCloseProxy.Register(HideBlueprintFrame);
 
             UpdateBlueprintPositionText();
         }
@@ -1310,6 +1311,7 @@ namespace Duplicationer
 
             saveFrame.SetActive(true);
             GlobalStateManager.addCursorRequirement();
+            EscapeCloseProxy.Register(HideSaveFrame);
         }
 
         private void FillSaveMaterialReport()
@@ -1596,6 +1598,7 @@ namespace Duplicationer
 
             libraryFrame.SetActive(true);
             GlobalStateManager.addCursorRequirement();
+            EscapeCloseProxy.Register(HideLibraryFrame);
         }
 
         private void FillLibraryGrid(string relativePath, bool isForSaveInfo)
@@ -2113,6 +2116,7 @@ namespace Duplicationer
 
             folderFrame.SetActive(true);
             GlobalStateManager.addCursorRequirement();
+            EscapeCloseProxy.Register(HideFolderFrame);
         }
 
         private void ConfirmFolderEdit(string relativePath, string originalName, string newName)
@@ -2505,6 +2509,28 @@ namespace Duplicationer
             transform.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, width);
             transform.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, height);
             return builder;
+        }
+    }
+
+    public class EscapeCloseProxy : IEscapeCloseable
+    {
+        public delegate void EscapeCloseDelegate();
+        private readonly EscapeCloseDelegate _onClose;
+
+        public EscapeCloseProxy(EscapeCloseDelegate onClose)
+        {
+            _onClose = onClose;
+        }
+
+        public void iec_triggerFrameClose()
+        {
+            _onClose?.Invoke();
+            GlobalStateManager.deRegisterEscapeCloseable(this);
+        }
+
+        public static void Register(EscapeCloseDelegate onClose)
+        {
+            GlobalStateManager.registerEscapeCloseable(new EscapeCloseProxy(onClose));
         }
     }
 }
