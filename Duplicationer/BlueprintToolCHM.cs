@@ -9,6 +9,7 @@ using HarmonyLib;
 using System.Linq;
 using System.IO;
 using System.Xml.Linq;
+using System.CodeDom;
 
 namespace Duplicationer
 {
@@ -73,6 +74,7 @@ namespace Duplicationer
         private TextMeshProUGUI textPositionY = null;
         private TextMeshProUGUI textPositionZ = null;
         private float nextUpdateTimeCountTexts = 0.0f;
+        private EscapeCloseProxy blueprintFrameEscapeCloseProxy = null;
 
         private GameObject rowCheats;
         private Button buttonCheatMode;
@@ -88,12 +90,14 @@ namespace Duplicationer
         private TextMeshProUGUI saveFrameMaterialReportText = null;
         private ItemTemplate[] saveFrameIconItemTemplates = new ItemTemplate[4] { null, null, null, null };
         private int saveFrameIconCount = 0;
+        private EscapeCloseProxy saveFrameEscapeCloseProxy = null;
 
         public bool IsLibraryFrameOpen => libraryFrame != null && libraryFrame.activeSelf;
         private GameObject libraryFrame = null;
         private TextMeshProUGUI libraryFrameHeading = null;
         private GameObject libraryGridObject = null;
         private string lastLibraryRelativePath = "";
+        private EscapeCloseProxy libraryFrameEscapeCloseProxy = null;
 
         public bool IsFolderFrameOpen => folderFrame != null && folderFrame.activeSelf;
         private GameObject folderFrame = null;
@@ -104,6 +108,7 @@ namespace Duplicationer
         private TMP_InputField folderFrameNameInputField = null;
         private TextMeshProUGUI folderFramePreviewLabel = null;
         private ItemTemplate folderFrameIconItemTemplate = null;
+        private EscapeCloseProxy folderFrameEscapeCloseProxy = null;
 
         public bool IsAnyFrameOpen => IsBlueprintFrameOpen || IsSaveFrameOpen || IsLibraryFrameOpen || IsFolderFrameOpen;
 
@@ -147,6 +152,7 @@ namespace Duplicationer
         private LazyIconSprite iconResizeVertical = null;
         private LazyIconSprite iconResize = null;
         private LazyIconSprite iconSelectArea = null;
+        private LazyIconSprite iconMirror = null;
 
         private LazyMaterial materialDragBox = new LazyMaterial(() =>
         {
@@ -255,6 +261,11 @@ namespace Duplicationer
                         () => CurrentMode != null && CurrentMode.AllowPaste(this)),
 
                     new CustomRadialMenuOption(
+                        "Mirror", iconMirror.Sprite, "",
+                        () => MirrorBlueprint(),
+                        () => CurrentMode != null && CurrentMode.AllowMirror(this) && CurrentBlueprint != null && CurrentBlueprint.IsMirrorable),
+
+                    new CustomRadialMenuOption(
                         "Open Panel", iconPanel.Sprite, "",
                         ShowBlueprintFrame)
                 );
@@ -278,7 +289,18 @@ namespace Duplicationer
         {
             ClearBlueprintPlaceholders();
             CurrentBlueprint = Blueprint.Create(DragMin, DragSize);
-            TabletHelper.SetTabletTextQuickActions("LMB: Place Blueprint");
+            TabletHelper.SetTabletTextQuickActions($"{GameRoot.getHotkeyStringFromAction("Action")}: Place Blueprint");
+            isDragArrowVisible = false;
+            SelectMode(modePlace);
+            boxMode = BoxMode.None;
+            AudioManager.playUISoundEffect(ResourceDB.resourceLinker.audioClip_recipeCopyTool_copy);
+        }
+
+        public void CopyCustomSelection(Vector3Int from, Vector3Int size, IEnumerable<BuildableObjectGO> buildings, byte[] blocks)
+        {
+            ClearBlueprintPlaceholders();
+            CurrentBlueprint = Blueprint.Create(from, size, buildings, blocks);
+            TabletHelper.SetTabletTextQuickActions($"{GameRoot.getHotkeyStringFromAction("Action")}: Place Blueprint");
             isDragArrowVisible = false;
             SelectMode(modePlace);
             boxMode = BoxMode.None;
@@ -632,6 +654,7 @@ namespace Duplicationer
         public override bool OnRotateY()
         {
             if (!IsBlueprintLoaded || !IsBlueprintActive) return true;
+            if (CurrentMode == null || !CurrentMode.AllowRotate(this)) return false;
 
             RotateBlueprint();
             ClearBlueprintPlaceholders();
@@ -704,6 +727,16 @@ namespace Duplicationer
         internal void RotateBlueprint()
         {
             CurrentBlueprint?.Rotate();
+        }
+
+        internal void MirrorBlueprint()
+        {
+            if (!IsBlueprintLoaded || !IsBlueprintActive) ;
+            if (CurrentMode == null || !CurrentMode.AllowRotate(this)) ;
+
+            CurrentBlueprint?.Mirror();
+            ClearBlueprintPlaceholders();
+            ShowBlueprint(CurrentBlueprintAnchor);
         }
 
         internal void HideBlueprint()
@@ -826,6 +859,12 @@ namespace Duplicationer
 
         internal void HideBlueprintFrame()
         {
+            if (blueprintFrameEscapeCloseProxy != null)
+            {
+                blueprintFrameEscapeCloseProxy.Dispose();
+                blueprintFrameEscapeCloseProxy = null;
+            }
+
             if (duplicationerFrame == null || !duplicationerFrame.activeSelf) return;
 
             AudioManager.playUISoundEffect(ResourceDB.resourceLinker.audioClip_UIClose);
@@ -1063,7 +1102,7 @@ namespace Duplicationer
 
             duplicationerFrame.SetActive(true);
             GlobalStateManager.addCursorRequirement();
-            EscapeCloseProxy.Register(HideBlueprintFrame);
+            blueprintFrameEscapeCloseProxy = EscapeCloseProxy.Register(HideBlueprintFrame);
 
             UpdateBlueprintPositionText();
         }
@@ -1121,6 +1160,12 @@ namespace Duplicationer
 
         internal void HideSaveFrame()
         {
+            if (saveFrameEscapeCloseProxy != null)
+            {
+                saveFrameEscapeCloseProxy.Dispose();
+                saveFrameEscapeCloseProxy = null;
+            }
+
             if (saveFrame == null || !saveFrame.activeSelf) return;
 
             AudioManager.playUISoundEffect(ResourceDB.resourceLinker.audioClip_UIClose);
@@ -1311,7 +1356,7 @@ namespace Duplicationer
 
             saveFrame.SetActive(true);
             GlobalStateManager.addCursorRequirement();
-            EscapeCloseProxy.Register(HideSaveFrame);
+            saveFrameEscapeCloseProxy = EscapeCloseProxy.Register(HideSaveFrame);
         }
 
         private void FillSaveMaterialReport()
@@ -1525,6 +1570,12 @@ namespace Duplicationer
 
         internal void HideLibraryFrame()
         {
+            if (libraryFrameEscapeCloseProxy != null)
+            {
+                libraryFrameEscapeCloseProxy.Dispose();
+                libraryFrameEscapeCloseProxy = null;
+            }
+
             if (libraryFrame == null || !libraryFrame.activeSelf) return;
 
             AudioManager.playUISoundEffect(ResourceDB.resourceLinker.audioClip_UIClose);
@@ -1598,7 +1649,7 @@ namespace Duplicationer
 
             libraryFrame.SetActive(true);
             GlobalStateManager.addCursorRequirement();
-            EscapeCloseProxy.Register(HideLibraryFrame);
+            libraryFrameEscapeCloseProxy = EscapeCloseProxy.Register(HideLibraryFrame);
         }
 
         private void FillLibraryGrid(string relativePath, bool isForSaveInfo)
@@ -1961,6 +2012,12 @@ namespace Duplicationer
 
         internal void HideFolderFrame()
         {
+            if (folderFrameEscapeCloseProxy != null)
+            {
+                folderFrameEscapeCloseProxy.Dispose();
+                folderFrameEscapeCloseProxy = null;
+            }
+
             if (folderFrame == null || !folderFrame.activeSelf) return;
 
             AudioManager.playUISoundEffect(ResourceDB.resourceLinker.audioClip_UIClose);
@@ -2116,7 +2173,7 @@ namespace Duplicationer
 
             folderFrame.SetActive(true);
             GlobalStateManager.addCursorRequirement();
-            EscapeCloseProxy.Register(HideFolderFrame);
+            folderFrameEscapeCloseProxy = EscapeCloseProxy.Register(HideFolderFrame);
         }
 
         private void ConfirmFolderEdit(string relativePath, string originalName, string newName)
@@ -2427,6 +2484,7 @@ namespace Duplicationer
             iconResizeVertical = new LazyIconSprite(DuplicationerPlugin.bundleMainAssets, "resize-vertical");
             iconResize = new LazyIconSprite(DuplicationerPlugin.bundleMainAssets, "resize");
             iconSelectArea = new LazyIconSprite(DuplicationerPlugin.bundleMainAssets, "select-area");
+            iconMirror = new LazyIconSprite(DuplicationerPlugin.bundleMainAssets, "mirror");
         }
 
         private void OnGameInitializationDone()
@@ -2525,12 +2583,18 @@ namespace Duplicationer
         public void iec_triggerFrameClose()
         {
             _onClose?.Invoke();
-            GlobalStateManager.deRegisterEscapeCloseable(this);
         }
 
-        public static void Register(EscapeCloseDelegate onClose)
+        public static EscapeCloseProxy Register(EscapeCloseDelegate onClose)
         {
-            GlobalStateManager.registerEscapeCloseable(new EscapeCloseProxy(onClose));
+            var iec = new EscapeCloseProxy(onClose);
+            GlobalStateManager.registerEscapeCloseable(iec);
+            return iec;
+        }
+
+        internal void Dispose()
+        {
+            GlobalStateManager.deRegisterEscapeCloseable(this);
         }
     }
 }

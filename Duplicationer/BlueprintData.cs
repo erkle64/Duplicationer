@@ -81,6 +81,22 @@ namespace Duplicationer
                 value = null;
                 return false;
             }
+
+            public bool ReplaceCustomData(string identifier, string value)
+            {
+                for (int i = 0; i < customData.Length; i++)
+                {
+                    var customDataEntry = customData[i];
+                    if (customDataEntry.identifier == identifier)
+                    {
+                        customDataEntry.value = value;
+                        customData[i] = customDataEntry;
+                        return true;
+                    }
+                }
+
+                return false;
+            }
         }
 
         public struct BlockData

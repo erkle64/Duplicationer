@@ -22,22 +22,24 @@ namespace Duplicationer
                 return;
             }
 
-            TabletHelper.SetTabletTextQuickActions("LMB: Place Blueprint");
+            TabletHelper.SetTabletTextQuickActions($"{GameRoot.getHotkeyStringFromAction("Action")}: Place Blueprint");
             tool.HideBlueprint();
             tool.boxMode = BlueprintToolCHM.BoxMode.None;
         }
 
         public override bool AllowCopy(BlueprintToolCHM tool) => false;
         public override bool AllowPaste(BlueprintToolCHM tool) => false;
+        public override bool AllowRotate(BlueprintToolCHM tool) => false;
+        public override bool AllowMirror(BlueprintToolCHM tool) => false;
 
         public override void Update(BlueprintToolCHM tool)
         {
-            if (Input.GetKeyDown(KeyCode.Mouse0) && InputHelpers.IsMouseInputAllowed && !tool.IsAnyFrameOpen)
+            if (GlobalStateManager.getRewiredPlayer0().GetButtonDown("Action") && InputHelpers.IsMouseInputAllowed && !tool.IsAnyFrameOpen)
             {
                 tool.boxMode = BlueprintToolCHM.BoxMode.None;
                 tool.HideBlueprint();
             }
-            if (Input.GetKey(KeyCode.Mouse0) && InputHelpers.IsMouseInputAllowed && !tool.IsAnyFrameOpen)
+            if (GlobalStateManager.getRewiredPlayer0().GetButton("Action") && InputHelpers.IsMouseInputAllowed && !tool.IsAnyFrameOpen)
             {
                 tool.repeatFrom = tool.repeatTo = Vector3Int.zero;
                 tool.boxMode = BlueprintToolCHM.BoxMode.Blueprint;
@@ -280,7 +282,7 @@ namespace Duplicationer
                     }
                 }
             }
-            if (Input.GetKeyUp(KeyCode.Mouse0) && tool.IsBlueprintActive && InputHelpers.IsMouseInputAllowed && !tool.IsAnyFrameOpen)
+            if (GlobalStateManager.getRewiredPlayer0().GetButtonUp("Action") && tool.IsBlueprintActive && InputHelpers.IsMouseInputAllowed && !tool.IsAnyFrameOpen)
             {
                 tool.SelectMode(NextMode);
                 TabletHelper.SetTabletTextQuickActions("");

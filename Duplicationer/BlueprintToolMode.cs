@@ -7,6 +7,8 @@ namespace Duplicationer
     {
         public abstract bool AllowCopy(BlueprintToolCHM tool);
         public abstract bool AllowPaste(BlueprintToolCHM tool);
+        public abstract bool AllowRotate(BlueprintToolCHM tool);
+        public abstract bool AllowMirror(BlueprintToolCHM tool);
 
         public virtual void Enter(BlueprintToolCHM tool, BlueprintToolMode fromMode)
         {

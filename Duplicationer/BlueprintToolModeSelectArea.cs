@@ -1,4 +1,7 @@
-﻿using Unfoundry;
+﻿using HarmonyLib;
+using System.Collections.Generic;
+using System.Linq;
+using Unfoundry;
 using UnityEngine;
 
 namespace Duplicationer
@@ -10,10 +13,12 @@ namespace Duplicationer
             Idle,
             Start,
             Up,
-            Down
+            Down,
+            QuickCopy
         };
 
         private Mode mode = Mode.Idle;
+        private float _timeOfStart = 0.0f;
 
         public BlueprintToolMode NextMode { get; private set; } = null;
 
@@ -26,20 +31,26 @@ namespace Duplicationer
         public override void Enter(BlueprintToolCHM tool, BlueprintToolMode fromMode)
         {
             mode = Mode.Idle;
-            TabletHelper.SetTabletTextQuickActions("LMB: Select Start\nAlt+LMB: Select Block with Offset");
+            TabletHelper.SetTabletTextQuickActions($"{GameRoot.getHotkeyStringFromAction("Action")}: Select Start\nAlt+{GameRoot.getHotkeyStringFromAction("Action")}: Select Block with Offset\nDouble click {GameRoot.getHotkeyStringFromAction("Action")} to copy machine and loaders.");
             tool.boxMode = BlueprintToolCHM.BoxMode.None;
             tool.HideBlueprint();
         }
 
         public override bool AllowCopy(BlueprintToolCHM tool) => false;
         public override bool AllowPaste(BlueprintToolCHM tool) => false;
+        public override bool AllowRotate(BlueprintToolCHM tool) => false;
+        public override bool AllowMirror(BlueprintToolCHM tool) => false;
 
         public override void Update(BlueprintToolCHM tool)
         {
+            if (GlobalStateManager.getRewiredPlayer0().GetButtonDown("Action"))
+                DuplicationerPlugin.log.Log($"{mode}: {Time.time} {_timeOfStart}");
+
             switch (mode)
             {
                 case Mode.Idle:
                     tool.isDragArrowVisible = false;
+
                     Vector3 targetPoint;
                     Vector3Int targetCoord, targetNormal;
                     if (CustomHandheldMode.GetTargetCube(-0.01f, out targetPoint, out targetCoord, out targetNormal))
@@ -49,12 +60,13 @@ namespace Duplicationer
                         tool.boxMode = BlueprintToolCHM.BoxMode.Selection;
                         tool.selectionFrom = tool.selectionTo = targetCoord;
 
-                        if (Input.GetKeyDown(KeyCode.Mouse0) && InputHelpers.IsMouseInputAllowed && !tool.IsAnyFrameOpen)
+                        if (GlobalStateManager.getRewiredPlayer0().GetButtonDown("Action") && InputHelpers.IsMouseInputAllowed && !tool.IsAnyFrameOpen)
                         {
                             tool.dragPlane = new Plane(Vector3.up, targetPoint);
 
                             mode = Mode.Start;
-                            TabletHelper.SetTabletTextQuickActions("Release LMB: Confirm Start");
+                            TabletHelper.SetTabletTextQuickActions($"Release {GameRoot.getHotkeyStringFromAction("Action")}: Confirm Start");
+                            _timeOfStart = Time.time;
                         }
                     }
                     else
@@ -64,7 +76,18 @@ namespace Duplicationer
                     break;
 
                 case Mode.Start:
-                    if ((Input.GetKeyDown(KeyCode.Mouse0) || Input.GetKeyUp(KeyCode.Mouse0) && tool.selectionFrom != tool.selectionTo) && InputHelpers.IsMouseInputAllowed && !tool.IsAnyFrameOpen)
+                    if (GlobalStateManager.getRewiredPlayer0().GetButtonDown("Action") && Time.time < _timeOfStart + 0.5f && InputHelpers.IsMouseInputAllowed && !tool.IsAnyFrameOpen)
+                    {
+                        mode = Mode.QuickCopy;
+                        break;
+                    }
+
+
+                    if ((GlobalStateManager.getRewiredPlayer0().GetButtonDown("Action")
+                        || GlobalStateManager.getRewiredPlayer0().GetButtonUp("Action")
+                            && tool.selectionFrom != tool.selectionTo)
+                            && InputHelpers.IsMouseInputAllowed
+                            && !tool.IsAnyFrameOpen)
                     {
                         var lookRay = CustomHandheldMode.GetLookRay();
                         float distance;
@@ -77,19 +100,19 @@ namespace Duplicationer
                             tool.dragArrowMaterial = ResourceDB.material_glow_yellow;
 
                             mode = Mode.Up;
-                            TabletHelper.SetTabletTextQuickActions("LMB: Select Height");
+                            TabletHelper.SetTabletTextQuickActions($"{GameRoot.getHotkeyStringFromAction("Action")}: Select Height");
                         }
                         else
                         {
                             mode = Mode.Idle;
-                            TabletHelper.SetTabletTextQuickActions("LMB: Select Start\nAlt+LMB: Select Start with Offset");
+                            TabletHelper.SetTabletTextQuickActions($"{GameRoot.getHotkeyStringFromAction("Action")}: Select Start\nAlt+{GameRoot.getHotkeyStringFromAction("Action")}: Select Block with Offset\nDouble click {GameRoot.getHotkeyStringFromAction("Action")} to copy machine and loaders.");
                         }
                     }
                     else
                     {
-                        if (Input.GetKeyUp(KeyCode.Mouse0))
+                        if (GlobalStateManager.getRewiredPlayer0().GetButtonUp("Action"))
                         {
-                            TabletHelper.SetTabletTextQuickActions("LMB: Select Other Corner");
+                            TabletHelper.SetTabletTextQuickActions($"{GameRoot.getHotkeyStringFromAction("Action")}: Select Other Corner");
                         }
 
                         var lookRay = CustomHandheldMode.GetLookRay();
@@ -99,14 +122,14 @@ namespace Duplicationer
                             var point = lookRay.GetPoint(distance);
                             tool.selectionTo = new Vector3Int(Mathf.FloorToInt(point.x - tool.dragPlane.normal.x * 0.01f), tool.selectionFrom.y, Mathf.FloorToInt(point.z - tool.dragPlane.normal.z * 0.01f));
 
-                            if (tool.selectionFrom == tool.selectionTo) TabletHelper.SetTabletTextQuickActions("Release LMB: Confirm Start");
-                            else TabletHelper.SetTabletTextQuickActions("Release LMB: Select Other Corner");
+                            if (tool.selectionFrom == tool.selectionTo) TabletHelper.SetTabletTextQuickActions($"Release {GameRoot.getHotkeyStringFromAction("Action")}: Confirm Start");
+                            else TabletHelper.SetTabletTextQuickActions($"Release {GameRoot.getHotkeyStringFromAction("Action")}: Select Other Corner");
                         }
                     }
                     break;
 
                 case Mode.Up:
-                    if (Input.GetKeyDown(KeyCode.Mouse0) && InputHelpers.IsMouseInputAllowed && !tool.IsAnyFrameOpen)
+                    if (GlobalStateManager.getRewiredPlayer0().GetButtonDown("Action") && InputHelpers.IsMouseInputAllowed && !tool.IsAnyFrameOpen)
                     {
                         tool.SelectMode(NextMode);
                     }
@@ -142,7 +165,7 @@ namespace Duplicationer
                     break;
 
                 case Mode.Down:
-                    if (Input.GetKeyDown(KeyCode.Mouse0) && InputHelpers.IsMouseInputAllowed && !tool.IsAnyFrameOpen)
+                    if (GlobalStateManager.getRewiredPlayer0().GetButtonDown("Action") && InputHelpers.IsMouseInputAllowed && !tool.IsAnyFrameOpen)
                     {
                         tool.SelectMode(NextMode);
                     }
@@ -176,7 +199,75 @@ namespace Duplicationer
                         }
                     }
                     break;
+
+                case Mode.QuickCopy:
+                    if (!GlobalStateManager.getRewiredPlayer0().GetButton("Action"))
+                    {
+                        var bogo = StreamingSystem.getBuildableObjectGOQuadtreeArray().queryPointXYZ(tool.selectionFrom);
+                        if (bogo != null)
+                        {
+                            var bot = bogo.template;
+
+                            var invalidTarget = false;
+                            if (bogo.gameObject.CompareTag("BUILDING_PLACEHOLDER_DISSOLVE")) invalidTarget = true;
+                            if (bot.type == BuildableObjectTemplate.BuildableObjectType.WorldDecorMineAble) invalidTarget = true;
+                            if (!bot.canBeCopiedByTablet) invalidTarget = true;
+
+                            if (!invalidTarget)
+                            {
+                                var position = new Vector3Int(bogo.aabb.x0, bogo.aabb.y0, bogo.aabb.z0);
+                                var size = new Vector3Int(bogo.aabb.wx, bogo.aabb.wy, bogo.aabb.wz);
+                                var blocks = new byte[size.x * size.y * size.z];
+                                var buildings = new List<BuildableObjectGO>
+                                    {
+                                        bogo
+                                    };
+
+                                if (!bot.disableLoaders)
+                                {
+                                    void AddLoaderIfNotBlocked(Vector3Int localOffset, BuildingManager.BuildOrientation localOrientation)
+                                    {
+                                        if (bot.blockedLoaderPositions.Any(x => x == localOffset)) return;
+
+                                        var loader = FindLoader(
+                                            BuildableEntity.getWorldPositionByLocalOffset(
+                                                bot,
+                                                bogo.aabb,
+                                                localOffset,
+                                                bogo.buildOrientation,
+                                                bogo.transform.rotation),
+                                            (BuildingManager.BuildOrientation)(((int)bogo.buildOrientation + (int)localOrientation) % 4)
+                                            );
+                                        if (loader != null) buildings.Add(loader);
+                                    }
+
+                                    for (int x = 0; x < bot.size.x; x++)
+                                    {
+                                        AddLoaderIfNotBlocked(new Vector3Int(x, bot.loaderLevel, -1), BuildingManager.BuildOrientation.zNeg);
+                                        AddLoaderIfNotBlocked(new Vector3Int(x, bot.loaderLevel, bot.size.z), BuildingManager.BuildOrientation.zPos);
+                                    }
+
+                                    for (int z = 0; z < bot.size.z; z++)
+                                    {
+                                        AddLoaderIfNotBlocked(new Vector3Int(-1, bot.loaderLevel, z), BuildingManager.BuildOrientation.xNeg);
+                                        AddLoaderIfNotBlocked(new Vector3Int(bot.size.x, bot.loaderLevel, z), BuildingManager.BuildOrientation.xPos);
+                                    }
+
+                                    tool.CopyCustomSelection(position, size, buildings, blocks);
+                                }
+                            }
+                        }
+
+                        mode = Mode.Idle;
+                    }
+                    break;
             }
+        }
+
+        private LoaderGO FindLoader(Vector3Int worldPos, BuildingManager.BuildOrientation buildOrientation)
+        {
+            var bogo = StreamingSystem.getBuildableObjectGOQuadtreeArray().queryPointXYZ(worldPos);
+            return bogo is LoaderGO loader && loader.buildOrientation == buildOrientation ? loader : null;
         }
 
         internal void Connect(BlueprintToolMode nextMode)

@@ -30,6 +30,8 @@ namespace Duplicationer
 
         public override bool AllowCopy(BlueprintToolCHM tool) => false;
         public override bool AllowPaste(BlueprintToolCHM tool) => mode == Mode.Idle;
+        public override bool AllowRotate(BlueprintToolCHM tool) => mode == Mode.Idle;
+        public override bool AllowMirror(BlueprintToolCHM tool) => mode == Mode.Idle;
 
         public override void Update(BlueprintToolCHM tool)
         {
@@ -48,19 +50,19 @@ namespace Duplicationer
                         tool.dragFaceRay = new Ray(point, Vector3.up);
                         tool.dragArrowMaterial = ResourceDB.material_glow_yellow;
                         tool.dragArrowOffset = 0.0f;
-                        TabletHelper.SetTabletTextQuickActions($"LMB: Drag Y\nAlt+LMB: Drag Y*{tool.CurrentBlueprint.SizeY}");
+                        TabletHelper.SetTabletTextQuickActions($"{GameRoot.getHotkeyStringFromAction("Action")}: Drag Y\nAlt+{GameRoot.getHotkeyStringFromAction("Action")}: Drag Y*{tool.CurrentBlueprint.SizeY}\n{GameRoot.getHotkeyStringFromAction("RotateY")}: Rotate");
 
-                        if (Input.GetKeyDown(KeyCode.Mouse0) && InputHelpers.IsMouseInputAllowed && !tool.IsAnyFrameOpen) mode = Mode.Move;
+                        if (GlobalStateManager.getRewiredPlayer0().GetButtonDown("Action") && InputHelpers.IsMouseInputAllowed && !tool.IsAnyFrameOpen) mode = Mode.Move;
                     }
                     else
                     {
                         tool.isDragArrowVisible = false;
-                        TabletHelper.SetTabletTextQuickActions("");
+                        TabletHelper.SetTabletTextQuickActions($"{GameRoot.getHotkeyStringFromAction("RotateY")}: Rotate");
                     }
                     break;
 
                 case Mode.Move:
-                    if (!Input.GetKey(KeyCode.Mouse0))
+                    if (!GlobalStateManager.getRewiredPlayer0().GetButton("Action"))
                     {
                         mode = Mode.Idle;
                     }

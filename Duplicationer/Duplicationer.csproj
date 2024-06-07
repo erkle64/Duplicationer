@@ -26,64 +26,67 @@
   <ItemGroup>
     <Reference Include="0Harmony, Version=2.2.2.0, Culture=neutral, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>G:\SteamLibrary\steamapps\common\FOUNDRY\foundry_Data\Managed\0Harmony.dll</HintPath>
+      <HintPath>$(FoundryAssembliesPath)0Harmony.dll</HintPath>
     </Reference>
     <Reference Include="Main">
-      <HintPath>G:\SteamLibrary\steamapps\common\FOUNDRY\foundry_Data\Managed\Main.dll</HintPath>
+      <HintPath>$(FoundryAssembliesPath)Main.dll</HintPath>
     </Reference>
     <Reference Include="Channel3">
-      <HintPath>G:\SteamLibrary\steamapps\common\FOUNDRY\foundry_Data\Managed\Channel3.dll</HintPath>
+      <HintPath>$(FoundryAssembliesPath)Channel3.dll</HintPath>
     </Reference>
     <Reference Include="Newtonsoft.Json">
-      <HintPath>G:\SteamLibrary\steamapps\common\FOUNDRY\foundry_Data\Managed\Newtonsoft.Json.dll</HintPath>
+      <HintPath>$(FoundryAssembliesPath)Newtonsoft.Json.dll</HintPath>
     </Reference>
     <Reference Include="Unity.TextMeshPro">
-      <HintPath>G:\SteamLibrary\steamapps\common\FOUNDRY\foundry_Data\Managed\Unity.TextMeshPro.dll</HintPath>
+      <HintPath>$(FoundryAssembliesPath)Unity.TextMeshPro.dll</HintPath>
     </Reference>
     <Reference Include="UnityEngine.AssetBundleModule">
-      <HintPath>G:\SteamLibrary\steamapps\common\FOUNDRY\foundry_Data\Managed\UnityEngine.AssetBundleModule.dll</HintPath>
+      <HintPath>$(FoundryAssembliesPath)UnityEngine.AssetBundleModule.dll</HintPath>
     </Reference>
     <Reference Include="UnityEngine.AudioModule">
-      <HintPath>G:\SteamLibrary\steamapps\common\FOUNDRY\foundry_Data\Managed\UnityEngine.AudioModule.dll</HintPath>
+      <HintPath>$(FoundryAssembliesPath)UnityEngine.AudioModule.dll</HintPath>
     </Reference>
     <Reference Include="UnityEngine.CoreModule">
-      <HintPath>G:\SteamLibrary\steamapps\common\FOUNDRY\foundry_Data\Managed\UnityEngine.CoreModule.dll</HintPath>
+      <HintPath>$(FoundryAssembliesPath)UnityEngine.CoreModule.dll</HintPath>
     </Reference>
     <Reference Include="UnityEngine.ImageConversionModule">
-      <HintPath>G:\SteamLibrary\steamapps\common\FOUNDRY\foundry_Data\Managed\UnityEngine.ImageConversionModule.dll</HintPath>
+      <HintPath>$(FoundryAssembliesPath)UnityEngine.ImageConversionModule.dll</HintPath>
     </Reference>
     <Reference Include="UnityEngine.InputLegacyModule">
-      <HintPath>G:\SteamLibrary\steamapps\common\FOUNDRY\foundry_Data\Managed\UnityEngine.InputLegacyModule.dll</HintPath>
+      <HintPath>$(FoundryAssembliesPath)UnityEngine.InputLegacyModule.dll</HintPath>
     </Reference>
     <Reference Include="UnityEngine.InputModule">
-      <HintPath>G:\SteamLibrary\steamapps\common\FOUNDRY\foundry_Data\Managed\UnityEngine.InputModule.dll</HintPath>
+      <HintPath>$(FoundryAssembliesPath)UnityEngine.InputModule.dll</HintPath>
     </Reference>
     <Reference Include="UnityEngine.JSONSerializeModule">
-      <HintPath>G:\SteamLibrary\steamapps\common\FOUNDRY\foundry_Data\Managed\UnityEngine.JSONSerializeModule.dll</HintPath>
+      <HintPath>$(FoundryAssembliesPath)UnityEngine.JSONSerializeModule.dll</HintPath>
     </Reference>
     <Reference Include="UnityEngine.PhysicsModule">
-      <HintPath>G:\SteamLibrary\steamapps\common\FOUNDRY\foundry_Data\Managed\UnityEngine.PhysicsModule.dll</HintPath>
+      <HintPath>$(FoundryAssembliesPath)UnityEngine.PhysicsModule.dll</HintPath>
     </Reference>
     <Reference Include="UnityEngine.TextCoreFontEngineModule">
-      <HintPath>G:\SteamLibrary\steamapps\common\FOUNDRY\foundry_Data\Managed\UnityEngine.TextCoreFontEngineModule.dll</HintPath>
+      <HintPath>$(FoundryAssembliesPath)UnityEngine.TextCoreFontEngineModule.dll</HintPath>
     </Reference>
     <Reference Include="UnityEngine.TextCoreTextEngineModule">
-      <HintPath>G:\SteamLibrary\steamapps\common\FOUNDRY\foundry_Data\Managed\UnityEngine.TextCoreTextEngineModule.dll</HintPath>
+      <HintPath>$(FoundryAssembliesPath)UnityEngine.TextCoreTextEngineModule.dll</HintPath>
     </Reference>
     <Reference Include="UnityEngine.TextRenderingModule">
-      <HintPath>G:\SteamLibrary\steamapps\common\FOUNDRY\foundry_Data\Managed\UnityEngine.TextRenderingModule.dll</HintPath>
+      <HintPath>$(FoundryAssembliesPath)UnityEngine.TextRenderingModule.dll</HintPath>
     </Reference>
     <Reference Include="UnityEngine.UI">
-      <HintPath>G:\SteamLibrary\steamapps\common\FOUNDRY\foundry_Data\Managed\UnityEngine.UI.dll</HintPath>
+      <HintPath>$(FoundryAssembliesPath)UnityEngine.UI.dll</HintPath>
     </Reference>
     <Reference Include="UnityEngine.UIModule">
-      <HintPath>G:\SteamLibrary\steamapps\common\FOUNDRY\foundry_Data\Managed\UnityEngine.UIModule.dll</HintPath>
+      <HintPath>$(FoundryAssembliesPath)UnityEngine.UIModule.dll</HintPath>
+    </Reference>
+    <Reference Include="Rewired_Core">
+      <HintPath>$(FoundryAssembliesPath)Rewired_Core.dll</HintPath>
     </Reference>
     <Reference Include="mscorlib">
-      <HintPath>G:\SteamLibrary\steamapps\common\FOUNDRY\foundry_Data\Managed\mscorlib.dll</HintPath>
+      <HintPath>$(FoundryAssembliesPath)mscorlib.dll</HintPath>
     </Reference>
     <Reference Include="Unfoundry">
-      <HintPath>G:\SteamLibrary\steamapps\common\FOUNDRY\Mods\A_Unfoundry\Unfoundry.dll</HintPath>
+      <HintPath>$(UnfoundryAssemblyPath)</HintPath>
     </Reference>
   </ItemGroup>
 

@@ -8,6 +8,7 @@ using System.Text;
 using TinyJSON;
 using Unfoundry;
 using UnityEngine;
+using static Duplicationer.BlueprintData;
 
 namespace Duplicationer
 {
@@ -31,6 +32,9 @@ namespace Duplicationer
         private string name;
         private BlueprintData data;
         private int[] minecartDepotIndices;
+
+        private bool isMirrorable = false;
+        public bool IsMirrorable => isMirrorable;
 
         private static List<BuildableObjectGO> bogoQueryResult = new List<BuildableObjectGO>(0);
         private static List<ConstructionTaskGroup.ConstructionTask> dependenciesTemp = new List<ConstructionTaskGroup.ConstructionTask>();
@@ -78,14 +82,23 @@ namespace Duplicationer
             this.minecartDepotIndices = minecartDepotIndices;
             this.ShoppingList = shoppingList;
             this.iconItemTemplates = iconItemTemplates;
+
+            isMirrorable = true;
+            foreach (var buildableObjectData in data.buildableObjects)
+            {
+                var template = ItemTemplateManager.getBuildableObjectTemplate(buildableObjectData.templateId);
+                if (template != null && template.canBeRotatedAroundXAxis)
+                {
+                    isMirrorable = false;
+                    break;
+                }
+            }
         }
 
         public static Blueprint Create(Vector3Int from, Vector3Int size)
         {
             var to = from + size;
 
-            var shoppingList = new Dictionary<ulong, ShoppingListData>();
-            var minecartDepotIndices = new List<int>();
             var blocks = new byte[size.x * size.y * size.z];
             var blocksIndex = 0;
             for (int wz = from.z; wz < to.z; ++wz)
@@ -98,23 +111,6 @@ namespace Duplicationer
 
                         var blockId = ChunkManager.chunks_getTerrainData(chunkIndex, blockIndex);
                         blocks[blocksIndex++] = blockId;
-
-                        if (blockId >= GameRoot.BUILDING_PART_ARRAY_IDX_START)
-                        {
-                            var partTemplate = ItemTemplateManager.getBuildingPartTemplate(GameRoot.BuildingPartIdxLookupTable.table[blockId]);
-                            if (partTemplate.parentItemTemplate != null)
-                            {
-                                AddToShoppingList(shoppingList, partTemplate.parentItemTemplate);
-                            }
-                        }
-                        else if (blockId > 0)
-                        {
-                            var blockTemplate = ItemTemplateManager.getTerrainBlockTemplateByByteIdx(blockId);
-                            if (blockTemplate != null && blockTemplate.parentBOT != null && blockTemplate.parentBOT.parentItemTemplate != null)
-                            {
-                                AddToShoppingList(shoppingList, blockTemplate.parentBOT.parentItemTemplate);
-                            }
-                        }
                     }
                 }
             }
@@ -144,7 +140,37 @@ namespace Duplicationer
             }
             ObjectPoolManager.aabb3ds.returnObject(aabb); aabb = null;
 
-            var buildingDataArray = new BlueprintData.BuildableObjectData[buildings.Count];
+            return Create(from, size, buildings, blocks);
+        }
+
+        public static Blueprint Create(Vector3Int from, Vector3Int size, IEnumerable<BuildableObjectGO> buildings, byte[] blocks)
+        {
+            var to = from + size;
+
+            var shoppingList = new Dictionary<ulong, ShoppingListData>();
+            var minecartDepotIndices = new List<int>();
+
+            foreach (var blockId in blocks)
+            {
+                if (blockId >= GameRoot.BUILDING_PART_ARRAY_IDX_START)
+                {
+                    var partTemplate = ItemTemplateManager.getBuildingPartTemplate(GameRoot.BuildingPartIdxLookupTable.table[blockId]);
+                    if (partTemplate.parentItemTemplate != null)
+                    {
+                        AddToShoppingList(shoppingList, partTemplate.parentItemTemplate);
+                    }
+                }
+                else if (blockId > 0)
+                {
+                    var blockTemplate = ItemTemplateManager.getTerrainBlockTemplateByByteIdx(blockId);
+                    if (blockTemplate != null && blockTemplate.parentBOT != null && blockTemplate.parentBOT.parentItemTemplate != null)
+                    {
+                        AddToShoppingList(shoppingList, blockTemplate.parentBOT.parentItemTemplate);
+                    }
+                }
+            }
+
+            var buildingDataArray = new BlueprintData.BuildableObjectData[buildings.Count()];
             var customData = new List<BlueprintData.BuildableObjectData.CustomData>();
             var powerGridBuildings = new HashSet<BuildableObjectGO>(new BuildableObjectGOComparer());
             int buildingIndex = 0;
@@ -1076,14 +1102,14 @@ namespace Duplicationer
             return 0ul;
         }
 
-        internal void Rotate()
+        public void Rotate()
         {
             var oldSize = Size;
             var newSize = new Vector3Int(oldSize.z, oldSize.y, oldSize.x);
             var oldCenter = ((Vector3)oldSize) / 2.0f;
             var newCenter = ((Vector3)newSize) / 2.0f;
 
-            BlueprintData rotatedData = new BlueprintData(data.buildableObjects.Length, data.blocks.Size);
+            var rotatedData = new BlueprintData(data.buildableObjects.Length, data.blocks.Size);
             rotatedData.buildableObjects = new BlueprintData.BuildableObjectData[data.buildableObjects.Length];
             rotatedData.blocks.ids = new byte[data.blocks.ids.Length];
             for (int i = 0; i < data.buildableObjects.Length; ++i)
@@ -1136,6 +1162,62 @@ namespace Duplicationer
             rotatedData.blocks = new BlueprintData.BlockData(newSize, newBlockIds);
 
             data = rotatedData;
+        }
+
+        public void Mirror()
+        {
+            var size = Size;
+
+            var mirroredData = new BlueprintData(data.buildableObjects.Length, data.blocks.Size);
+            mirroredData.buildableObjects = new BlueprintData.BuildableObjectData[data.buildableObjects.Length];
+            mirroredData.blocks.ids = new byte[data.blocks.ids.Length];
+            for (int i = 0; i < data.buildableObjects.Length; ++i)
+            {
+                var buildableObjectData = data.buildableObjects[i];
+                var newX = size.x - buildableObjectData.worldX;
+
+                var template = ItemTemplateManager.getBuildableObjectTemplate(buildableObjectData.templateId);
+                if (template != null)
+                {
+                    var oldOrientation = buildableObjectData.orientationY;
+                    var needsRotation = buildableObjectData.orientationY == 0 || buildableObjectData.orientationY == 2;
+                    var newOrientation = needsRotation ? (byte)((oldOrientation + 2) & 0x3) : oldOrientation;
+                    BuildingManager.getWidthFromOrientation(template, (BuildingManager.BuildOrientation)newOrientation, out var wx, out _, out _);
+                    newX -= wx;
+                    buildableObjectData.orientationY = newOrientation;
+
+                    if (template.type == BuildableObjectTemplate.BuildableObjectType.ConveyorBalancer)
+                    {
+                        var inputPriority = GetCustomData<int>(i, "balancerInputPriority");
+                        if (inputPriority < 2) inputPriority = 1 - inputPriority;
+                        buildableObjectData.ReplaceCustomData("balancerInputPriority", inputPriority.ToString());
+
+                        var outputPriority = GetCustomData<int>(i, "balancerOutputPriority");
+                        if (outputPriority < 2) outputPriority = 1 - outputPriority;
+                        buildableObjectData.ReplaceCustomData("balancerOutputPriority", outputPriority.ToString());
+                    }
+                }
+
+                buildableObjectData.worldX = newX;
+                mirroredData.buildableObjects[i] = buildableObjectData;
+            }
+
+            var newBlockIds = new byte[data.blocks.ids.Length];
+            int fromIndex = 0;
+            for (int z = 0; z < size.z; z++)
+            {
+                for (int y = 0; y < size.y; y++)
+                {
+                    for (int x = size.x - 1; x >= 0; x--)
+                    {
+                        newBlockIds[x + (y + z * size.y) * size.x] = data.blocks.ids[fromIndex++];
+                    }
+                }
+            }
+
+            mirroredData.blocks = new BlueprintData.BlockData(size, newBlockIds);
+
+            data = mirroredData;
         }
 
         public void Show(Vector3Int anchorPosition, Vector3Int repeatFrom, Vector3Int repeatTo, Vector3Int repeatStepSize, BatchRenderingGroup placeholderRenderGroup, List<BlueprintPlaceholder> buildingPlaceholders, List<BlueprintPlaceholder> terrainPlaceholders)
