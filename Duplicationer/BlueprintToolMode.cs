@@ -20,6 +20,7 @@ namespace Duplicationer
             tool.HideBlueprint();
             tool.boxMode = BlueprintToolCHM.BoxMode.None;
             tool.isDragArrowVisible = false;
+            tool.isDragArrowDouble = false;
             tool.HideBlueprintFrame();
         }
 

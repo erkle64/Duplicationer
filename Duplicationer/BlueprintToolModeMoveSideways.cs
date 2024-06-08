@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace Duplicationer
 {
-    internal class BlueprintToolModeMove : BlueprintToolMode
+    internal class BlueprintToolModeMoveSideways : BlueprintToolMode
     {
         private enum Mode
         {
@@ -22,11 +22,11 @@ namespace Duplicationer
         private int _idModifier2 = -1;
         private double _altHeldTime;
 
-        public BlueprintToolModeMove()
+        public BlueprintToolModeMoveSideways()
         {
         }
 
-        public override string TabletTitle(BlueprintToolCHM tool) => "Place Blueprint - Move";
+        public override string TabletTitle(BlueprintToolCHM tool) => "Place Blueprint - Move Sideways";
 
         public override void Enter(BlueprintToolCHM tool, BlueprintToolMode fromMode)
         {
@@ -57,40 +57,40 @@ namespace Duplicationer
                     float distance = CustomHandheldMode.BoxRayIntersection(tool.RepeatBlueprintMin, tool.RepeatBlueprintMax + Vector3Int.one, lookRay, out normal, out faceIndex);
                     if (distance >= 0.0f)
                     {
-                        var point = lookRay.GetPoint(distance);
+                        var point = lookRay.GetPoint(distance) + (Vector3)normal * 0.5f;
                         tool.isDragArrowVisible = true;
-                        tool.dragFaceRay = new Ray(point, normal);
-                        tool.dragArrowOffset = 0.5f;
+                        tool.isDragArrowDouble = true;
+                        tool.dragArrowOffset = 0.25f;
                         switch (faceIndex)
                         {
                             case 0:
-                                tool.dragArrowMaterial = ResourceDB.material_glow_red;
-                                SetQuickActionsIdle("X", tool.CurrentBlueprint.SizeX);
-                                break;
-
                             case 1:
-                                tool.dragArrowMaterial = ResourceDB.material_glow_red;
-                                SetQuickActionsIdle("X", tool.CurrentBlueprint.SizeX);
+                                tool.dragArrowMaterial = ResourceDB.material_glow_purple;
+                                tool.dragFaceRay = new Ray(point, Vector3.forward);
+                                SetQuickActionsIdle("Z", tool.CurrentBlueprint.SizeZ);
                                 break;
 
                             case 2:
-                                tool.dragArrowMaterial = ResourceDB.material_glow_yellow;
-                                SetQuickActionsIdle("Y", tool.CurrentBlueprint.SizeY);
-                                break;
-
                             case 3:
-                                tool.dragArrowMaterial = ResourceDB.material_glow_yellow;
-                                SetQuickActionsIdle("Y", tool.CurrentBlueprint.SizeY);
+                                if (Mathf.Abs(lookRay.direction.z) > Mathf.Abs(lookRay.direction.x))
+                                {
+                                    tool.dragArrowMaterial = ResourceDB.material_glow_red;
+                                    tool.dragFaceRay = new Ray(point, Vector3.right);
+                                    SetQuickActionsIdle("X", tool.CurrentBlueprint.SizeX);
+                                }
+                                else
+                                {
+                                    tool.dragArrowMaterial = ResourceDB.material_glow_purple;
+                                    tool.dragFaceRay = new Ray(point, Vector3.forward);
+                                    SetQuickActionsIdle("Z", tool.CurrentBlueprint.SizeZ);
+                                }
                                 break;
 
                             case 4:
-                                tool.dragArrowMaterial = ResourceDB.material_glow_purple;
-                                SetQuickActionsIdle("Z", tool.CurrentBlueprint.SizeZ);
-                                break;
-
                             case 5:
-                                tool.dragArrowMaterial = ResourceDB.material_glow_purple;
-                                SetQuickActionsIdle("Z", tool.CurrentBlueprint.SizeZ);
+                                tool.dragArrowMaterial = ResourceDB.material_glow_red;
+                                tool.dragFaceRay = new Ray(point, Vector3.right);
+                                SetQuickActionsIdle("X", tool.CurrentBlueprint.SizeX);
                                 break;
                         }
 
@@ -98,13 +98,29 @@ namespace Duplicationer
                         {
                             if (GlobalStateManager.getRewiredPlayer0().GetButtonDown(_idAction))
                             {
-                                mode = Mode.XPos + faceIndex;
+                                switch (faceIndex)
+                                {
+                                    case 0:
+                                    case 1:
+                                        mode = Mode.ZPos;
+                                        break;
+
+                                    case 2:
+                                    case 3:
+                                        mode = Mathf.Abs(lookRay.direction.z) > Mathf.Abs(lookRay.direction.x) ? Mode.XPos : Mode.ZPos;
+                                        break;
+
+                                    case 4:
+                                    case 5:
+                                        mode = Mode.XPos;
+                                        break;
+                                }
                             }
                             else if (GlobalStateManager.getRewiredPlayer0().GetButtonUp(_idModifier2))
                             {
                                 if (_altHeldTime < 0.5)
                                 {
-                                    tool.SelectMode(tool.modeMoveSideways);
+                                    tool.SelectMode(tool.modeMoveVertical);
                                     AudioManager.playUISoundEffect(ResourceDB.resourceLinker.audioClip_UIButtonClick);
                                     return;
                                 }

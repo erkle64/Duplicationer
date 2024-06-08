@@ -8,8 +8,6 @@ using UnityEngine.Events;
 using HarmonyLib;
 using System.Linq;
 using System.IO;
-using System.Xml.Linq;
-using System.CodeDom;
 
 namespace Duplicationer
 {
@@ -31,13 +29,14 @@ namespace Duplicationer
 
         private CustomRadialMenuStateControl menuStateControl = null;
         public BlueprintToolMode CurrentMode { get; private set; } = null;
-        private BlueprintToolModePlace modePlace;
-        private BlueprintToolModeSelectArea modeSelectArea;
-        private BlueprintToolModeResize modeResize;
-        private BlueprintToolModeResizeVertical modeResizeVertical;
-        private BlueprintToolModeMove modeMove;
-        private BlueprintToolModeMoveVertical modeMoveVertical;
-        private BlueprintToolModeRepeat modeRepeat;
+        public readonly BlueprintToolModePlace modePlace;
+        public readonly BlueprintToolModeSelectArea modeSelectArea;
+        public readonly BlueprintToolModeResize modeResize;
+        public readonly BlueprintToolModeResizeVertical modeResizeVertical;
+        public readonly BlueprintToolModeMove modeMove;
+        public readonly BlueprintToolModeMoveSideways modeMoveSideways;
+        public readonly BlueprintToolModeMoveVertical modeMoveVertical;
+        public readonly BlueprintToolModeRepeat modeRepeat;
         private BlueprintToolMode[] blueprintToolModes;
 
         public bool HasMinecartDepots => CurrentBlueprint?.HasMinecartDepots ?? false;
@@ -66,6 +65,7 @@ namespace Duplicationer
         internal Material dragArrowMaterial = null;
         internal float dragArrowScale = 1.0f;
         internal float dragArrowOffset = 0.5f;
+        internal bool isDragArrowDouble = false;
 
         public bool IsBlueprintFrameOpen => duplicationerFrame != null && duplicationerFrame.activeSelf;
         private GameObject duplicationerFrame = null;
@@ -145,6 +145,7 @@ namespace Duplicationer
         private LazyIconSprite iconCopy = null;
         private LazyIconSprite iconMoveVertical = null;
         private LazyIconSprite iconMove = null;
+        private LazyIconSprite iconMoveSideways = null;
         private LazyIconSprite iconPanel = null;
         private LazyIconSprite iconPaste = null;
         private LazyIconSprite iconPlace = null;
@@ -182,6 +183,7 @@ namespace Duplicationer
                 modeResizeVertical = new BlueprintToolModeResizeVertical(),
                 modePlace = new BlueprintToolModePlace(),
                 modeMove = new BlueprintToolModeMove(),
+                modeMoveSideways = new BlueprintToolModeMoveSideways(),
                 modeMoveVertical = new BlueprintToolModeMoveVertical(),
                 modeRepeat = new BlueprintToolModeRepeat()
             };
@@ -238,6 +240,11 @@ namespace Duplicationer
                     new CustomRadialMenuOption(
                         "Move", iconMove.Sprite, "",
                         () => SelectMode(modeMove),
+                        () => CurrentMode != null && CurrentMode.AllowPaste(this)),
+
+                    new CustomRadialMenuOption(
+                        "Move Sideways", iconMoveSideways.Sprite, "",
+                        () => SelectMode(modeMoveSideways),
                         () => CurrentMode != null && CurrentMode.AllowPaste(this)),
 
                     new CustomRadialMenuOption(
@@ -646,6 +653,7 @@ namespace Duplicationer
             if (isDragArrowVisible)
             {
                 DrawArrow(dragFaceRay.origin, dragFaceRay.direction, dragArrowMaterial, dragArrowScale, dragArrowOffset);
+                if (isDragArrowDouble) DrawArrow(dragFaceRay.origin, -dragFaceRay.direction, dragArrowMaterial, dragArrowScale, dragArrowOffset);
             }
 
             foreach (var updater in guiUpdaters) updater();
@@ -737,6 +745,8 @@ namespace Duplicationer
             CurrentBlueprint?.Mirror();
             ClearBlueprintPlaceholders();
             ShowBlueprint(CurrentBlueprintAnchor);
+
+            AudioManager.playUISoundEffect(ResourceDB.resourceLinker.audioClip_construction);
         }
 
         internal void HideBlueprint()
@@ -2475,8 +2485,9 @@ namespace Duplicationer
             iconBlack = new LazyIconSprite(DuplicationerPlugin.bundleMainAssets, "black");
             iconEmpty = new LazyIconSprite(DuplicationerPlugin.bundleMainAssets, "empty");
             iconCopy = new LazyIconSprite(DuplicationerPlugin.bundleMainAssets, "copy");
-            iconMoveVertical = new LazyIconSprite(DuplicationerPlugin.bundleMainAssets, "move-vertical");
             iconMove = new LazyIconSprite(DuplicationerPlugin.bundleMainAssets, "move");
+            iconMoveSideways = new LazyIconSprite(DuplicationerPlugin.bundleMainAssets, "move-sideways");
+            iconMoveVertical = new LazyIconSprite(DuplicationerPlugin.bundleMainAssets, "move-vertical");
             iconPanel = new LazyIconSprite(DuplicationerPlugin.bundleMainAssets, "panel");
             iconPaste = new LazyIconSprite(DuplicationerPlugin.bundleMainAssets, "paste");
             iconPlace = new LazyIconSprite(DuplicationerPlugin.bundleMainAssets, "place");

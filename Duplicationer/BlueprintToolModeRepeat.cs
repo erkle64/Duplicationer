@@ -67,32 +67,38 @@ namespace Duplicationer
                             {
                                 case 0:
                                     tool.dragArrowMaterial = ResourceDB.material_glow_red;
-                                    TabletHelper.SetTabletTextQuickActions($"{GameRoot.getHotkeyStringFromAction("Action")}: Drag +X*{tool.CurrentBlueprint.SizeX}\nAlt+{GameRoot.getHotkeyStringFromAction("Action")}: Drag -X*{tool.CurrentBlueprint.SizeX}\n{GameRoot.getHotkeyStringFromAction("RotateY")}: Rotate");
+                                    TabletHelper.SetTabletTextQuickActions($@"{GameRoot.getHotkeyStringFromAction("Action")}: Drag X*{tool.CurrentBlueprint.SizeX}
+{GameRoot.getHotkeyStringFromAction("RotateY")}: Rotate");
                                     break;
 
                                 case 1:
                                     tool.dragArrowMaterial = ResourceDB.material_glow_red;
-                                    TabletHelper.SetTabletTextQuickActions($"{GameRoot.getHotkeyStringFromAction("Action")}: Drag -X*{tool.CurrentBlueprint.SizeX}\nAlt+{GameRoot.getHotkeyStringFromAction("Action")}: Drag +X*{tool.CurrentBlueprint.SizeX}\n{GameRoot.getHotkeyStringFromAction("RotateY")}: Rotate");
+                                    TabletHelper.SetTabletTextQuickActions($@"{GameRoot.getHotkeyStringFromAction("Action")}: Drag X*{tool.CurrentBlueprint.SizeX}
+{GameRoot.getHotkeyStringFromAction("RotateY")}: Rotate");
                                     break;
 
                                 case 2:
                                     tool.dragArrowMaterial = ResourceDB.material_glow_yellow;
-                                    TabletHelper.SetTabletTextQuickActions($"{GameRoot.getHotkeyStringFromAction("Action")}: Drag +Y*{tool.CurrentBlueprint.SizeY}\nAlt+{GameRoot.getHotkeyStringFromAction("Action")}: Drag -Y*{tool.CurrentBlueprint.SizeY}\n{GameRoot.getHotkeyStringFromAction("RotateY")}: Rotate");
+                                    TabletHelper.SetTabletTextQuickActions($@"{GameRoot.getHotkeyStringFromAction("Action")}: Drag Y*{tool.CurrentBlueprint.SizeY}
+{GameRoot.getHotkeyStringFromAction("RotateY")}: Rotate");
                                     break;
 
                                 case 3:
                                     tool.dragArrowMaterial = ResourceDB.material_glow_yellow;
-                                    TabletHelper.SetTabletTextQuickActions($"{GameRoot.getHotkeyStringFromAction("Action")}: Drag -Y*{tool.CurrentBlueprint.SizeY}\nAlt+{GameRoot.getHotkeyStringFromAction("Action")}: Drag +Y*{tool.CurrentBlueprint.SizeY}\n{GameRoot.getHotkeyStringFromAction("RotateY")}: Rotate");
+                                    TabletHelper.SetTabletTextQuickActions($@"{GameRoot.getHotkeyStringFromAction("Action")}: Drag Y*{tool.CurrentBlueprint.SizeY}
+{GameRoot.getHotkeyStringFromAction("RotateY")}: Rotate");
                                     break;
 
                                 case 4:
                                     tool.dragArrowMaterial = ResourceDB.material_glow_purple;
-                                    TabletHelper.SetTabletTextQuickActions($"{GameRoot.getHotkeyStringFromAction("Action")}: Drag +Z*{tool.CurrentBlueprint.SizeZ}\nAlt+{GameRoot.getHotkeyStringFromAction("Action")}: Drag -Z*{tool.CurrentBlueprint.SizeZ}\n{GameRoot.getHotkeyStringFromAction("RotateY")}: Rotate");
+                                    TabletHelper.SetTabletTextQuickActions($@"{GameRoot.getHotkeyStringFromAction("Action")}: Drag Z*{tool.CurrentBlueprint.SizeZ}
+{GameRoot.getHotkeyStringFromAction("RotateY")}: Rotate");
                                     break;
 
                                 case 5:
                                     tool.dragArrowMaterial = ResourceDB.material_glow_purple;
-                                    TabletHelper.SetTabletTextQuickActions($"{GameRoot.getHotkeyStringFromAction("Action")}: Drag -Z*{tool.CurrentBlueprint.SizeZ}\nAlt+{GameRoot.getHotkeyStringFromAction("Action")}: Drag +Z*{tool.CurrentBlueprint.SizeZ}\n{GameRoot.getHotkeyStringFromAction("RotateY")}: Rotate");
+                                    TabletHelper.SetTabletTextQuickActions($@"{GameRoot.getHotkeyStringFromAction("Action")}: Drag Z*{tool.CurrentBlueprint.SizeZ}
+{GameRoot.getHotkeyStringFromAction("RotateY")}: Rotate");
                                     break;
                             }
 
@@ -150,12 +156,22 @@ namespace Duplicationer
                                     var old = tool.repeatTo;
                                     tool.repeatTo = Vector3Int.Max(Vector3Int.zero, tool.repeatTo + offsetVector);
                                     if (tool.repeatTo != old) changed = true;
+                                    else
+                                    {
+                                        mode = Mode.XPos + (direction ^ 0x1);
+                                        tool.dragFaceRay = new Ray(tool.dragFaceRay.origin, -tool.dragFaceRay.direction);
+                                    }
                                 }
                                 else
                                 {
                                     var old = tool.repeatFrom;
                                     tool.repeatFrom = Vector3Int.Min(Vector3Int.zero, tool.repeatFrom + offsetVector);
                                     if (tool.repeatFrom != old) changed = true;
+                                    else
+                                    {
+                                        mode = Mode.XPos + (direction ^ 0x1);
+                                        tool.dragFaceRay = new Ray(tool.dragFaceRay.origin, -tool.dragFaceRay.direction);
+                                    }
                                 }
 
                                 tool.dragFaceRay.origin += CustomHandheldMode.faceNormals[direction] * (roundedOffset * dragStep);

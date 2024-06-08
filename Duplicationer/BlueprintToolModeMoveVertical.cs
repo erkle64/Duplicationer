@@ -13,6 +13,10 @@ namespace Duplicationer
 
         private Mode mode = Mode.Idle;
 
+        private int _idAction = -1;
+        private int _idModifier2 = -1;
+        private double _altHeldTime;
+
         public BlueprintToolModeMoveVertical()
         {
         }
@@ -21,6 +25,9 @@ namespace Duplicationer
 
         public override void Enter(BlueprintToolCHM tool, BlueprintToolMode fromMode)
         {
+            _idAction = InputHelpers.GetActionId("Action");
+            _idModifier2 = InputHelpers.GetActionId("Modifier 2");
+
             mode = Mode.Idle;
             tool.isDragArrowVisible = false;
             TabletHelper.SetTabletTextQuickActions("");
@@ -47,29 +54,55 @@ namespace Duplicationer
                     {
                         var point = lookRay.GetPoint(distance) + (Vector3)normal * 0.5f;
                         tool.isDragArrowVisible = true;
-                        tool.dragFaceRay = new Ray(point, Vector3.up);
+                        tool.isDragArrowDouble = faceIndex != 2 && faceIndex != 3;
+                        tool.dragFaceRay = new Ray(point, faceIndex != 3 ? Vector3.up : Vector3.down);
                         tool.dragArrowMaterial = ResourceDB.material_glow_yellow;
-                        tool.dragArrowOffset = 0.0f;
-                        TabletHelper.SetTabletTextQuickActions($"{GameRoot.getHotkeyStringFromAction("Action")}: Drag Y\nAlt+{GameRoot.getHotkeyStringFromAction("Action")}: Drag Y*{tool.CurrentBlueprint.SizeY}\n{GameRoot.getHotkeyStringFromAction("RotateY")}: Rotate");
+                        tool.dragArrowOffset = tool.isDragArrowDouble ? 0.25f : 0.0f;
+                        TabletHelper.SetTabletTextQuickActions($@"{GameRoot.getHotkeyStringFromAction("Action")}: Drag Y
+Alt+{GameRoot.getHotkeyStringFromAction("Action")}: Drag Y*{tool.CurrentBlueprint.SizeY}
+{GameRoot.getHotkeyStringFromAction("RotateY")}: Rotate
+Tap {GameRoot.getHotkeyStringFromAction("Modifier 2")}: Move Mode");
 
-                        if (GlobalStateManager.getRewiredPlayer0().GetButtonDown("Action") && InputHelpers.IsMouseInputAllowed && !tool.IsAnyFrameOpen) mode = Mode.Move;
+                        if (InputHelpers.IsMouseInputAllowed && !tool.IsAnyFrameOpen)
+                        {
+                            if (GlobalStateManager.getRewiredPlayer0().GetButtonDown(_idAction))
+                            {
+                                mode = Mode.Move;
+                            }
+                            else if (GlobalStateManager.getRewiredPlayer0().GetButtonUp(_idModifier2))
+                            {
+                                if (_altHeldTime < 0.5)
+                                {
+                                    tool.SelectMode(tool.modeMove);
+                                    AudioManager.playUISoundEffect(ResourceDB.resourceLinker.audioClip_UIButtonClick);
+                                    return;
+                                }
+                            }
+                            else if (GlobalStateManager.getRewiredPlayer0().GetButton(_idModifier2))
+                            {
+                                _altHeldTime = GlobalStateManager.getRewiredPlayer0().GetButtonTimePressed(_idModifier2);
+                            }
+                        }
                     }
                     else
                     {
                         tool.isDragArrowVisible = false;
-                        TabletHelper.SetTabletTextQuickActions($"{GameRoot.getHotkeyStringFromAction("RotateY")}: Rotate");
+                        TabletHelper.SetTabletTextQuickActions($@"{GameRoot.getHotkeyStringFromAction("RotateY")}: Rotate
+Tap {GameRoot.getHotkeyStringFromAction("Modifier 2")}: Move Mode");
                     }
                     break;
 
                 case Mode.Move:
-                    if (!GlobalStateManager.getRewiredPlayer0().GetButton("Action"))
+                    if (!GlobalStateManager.getRewiredPlayer0().GetButton(_idAction))
                     {
                         mode = Mode.Idle;
                     }
                     else
                     {
+                        TabletHelper.SetTabletTextQuickActions($@"{GameRoot.getHotkeyStringFromAction("Action")}: Drag Y
+Alt+{GameRoot.getHotkeyStringFromAction("Action")}: Drag Y*{tool.CurrentBlueprint.SizeY}");
                         float offset;
-                        if (CustomHandheldMode.TryGetAxialDragOffset(tool.dragFaceRay, CustomHandheldMode.GetLookRay(), out offset))
+                        if (CustomHandheldMode.TryGetAxialDragOffset(new Ray(tool.dragFaceRay.origin, Vector3.up), CustomHandheldMode.GetLookRay(), out offset))
                         {
                             int dragStep = InputHelpers.IsAltHeld ? tool.CurrentBlueprintSize.y : 1;
                             var roundedOffset = Mathf.RoundToInt(offset / dragStep) * dragStep;
