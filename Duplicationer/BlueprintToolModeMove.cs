@@ -171,7 +171,7 @@ namespace Duplicationer
         private static void SetQuickActionsIdle()
         {
             TabletHelper.SetTabletTextQuickActions($@"{GameRoot.getHotkeyStringFromAction("RotateY")}: Rotate
-Tap {GameRoot.getHotkeyStringFromAction("Modifier 2")}: Move Vertical Mode");
+Tap {GameRoot.getHotkeyStringFromAction("Modifier 2")}: Move Sideways Mode");
         }
 
         private static void SetQuickActionsIdle(string axis, int size)
@@ -179,7 +179,7 @@ Tap {GameRoot.getHotkeyStringFromAction("Modifier 2")}: Move Vertical Mode");
             TabletHelper.SetTabletTextQuickActions($@"{GameRoot.getHotkeyStringFromAction("Action")}: Drag {axis}
 Alt+{GameRoot.getHotkeyStringFromAction("Action")}: Drag {axis}*{size}
 {GameRoot.getHotkeyStringFromAction("RotateY")}: Rotate
-Tap {GameRoot.getHotkeyStringFromAction("Modifier 2")}: Move Vertical Mode");
+Tap {GameRoot.getHotkeyStringFromAction("Modifier 2")}: Move Sideways Mode");
         }
 
         private static void SetQuickActionsMoving(string axis, int size)

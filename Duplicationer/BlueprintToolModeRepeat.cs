@@ -53,16 +53,8 @@ namespace Duplicationer
                         {
                             var point = lookRay.GetPoint(distance);
                             tool.isDragArrowVisible = true;
-                            if (InputHelpers.IsAltHeld)
-                            {
-                                tool.dragFaceRay = new Ray(point, -normal);
-                                tool.dragArrowOffset = -0.5f;
-                            }
-                            else
-                            {
-                                tool.dragFaceRay = new Ray(point, normal);
-                                tool.dragArrowOffset = 0.5f;
-                            }
+                            tool.dragFaceRay = new Ray(point, normal);
+                            tool.dragArrowOffset = 0.5f;
                             switch (faceIndex)
                             {
                                 case 0:
@@ -104,18 +96,9 @@ namespace Duplicationer
 
                             if (GlobalStateManager.getRewiredPlayer0().GetButtonDown("Action") && InputHelpers.IsMouseInputAllowed && !tool.IsAnyFrameOpen)
                             {
-                                if (InputHelpers.IsAltHeld)
-                                {
-                                    mode = Mode.XPos + (faceIndex ^ 1);
-                                    tool.dragFaceRay = new Ray(tool.dragFaceRay.origin, -normal);
-                                    tool.dragArrowOffset = -0.5f;
-                                }
-                                else
-                                {
-                                    mode = Mode.XPos + faceIndex;
-                                    tool.dragFaceRay = new Ray(tool.dragFaceRay.origin, normal);
-                                    tool.dragArrowOffset = 0.5f;
-                                }
+                                mode = Mode.XPos + faceIndex;
+                                tool.dragFaceRay = new Ray(tool.dragFaceRay.origin, normal);
+                                tool.dragArrowOffset = 0.5f;
                             }
                         }
                         else
@@ -154,7 +137,7 @@ namespace Duplicationer
                                 if (positive)
                                 {
                                     var old = tool.repeatTo;
-                                    tool.repeatTo = Vector3Int.Max(Vector3Int.zero, tool.repeatTo + offsetVector);
+                                    tool.repeatTo = Vector3Int.Max(tool.repeatFrom, tool.repeatTo + offsetVector);
                                     if (tool.repeatTo != old) changed = true;
                                     else
                                     {
@@ -165,7 +148,7 @@ namespace Duplicationer
                                 else
                                 {
                                     var old = tool.repeatFrom;
-                                    tool.repeatFrom = Vector3Int.Min(Vector3Int.zero, tool.repeatFrom + offsetVector);
+                                    tool.repeatFrom = Vector3Int.Min(tool.repeatTo, tool.repeatFrom + offsetVector);
                                     if (tool.repeatFrom != old) changed = true;
                                     else
                                     {
