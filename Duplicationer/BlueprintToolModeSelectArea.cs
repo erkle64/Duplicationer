@@ -34,6 +34,7 @@ namespace Duplicationer
             TabletHelper.SetTabletTextQuickActions($"{GameRoot.getHotkeyStringFromAction("Action")}: Select Start\nAlt+{GameRoot.getHotkeyStringFromAction("Action")}: Select Block with Offset\nDouble click {GameRoot.getHotkeyStringFromAction("Action")} to copy machine and loaders.");
             tool.boxMode = BlueprintToolCHM.BoxMode.None;
             tool.HideBlueprint();
+            tool.ClearBlueprint();
         }
 
         public override bool AllowCopy(BlueprintToolCHM tool) => false;

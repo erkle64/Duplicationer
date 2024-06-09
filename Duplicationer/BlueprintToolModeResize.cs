@@ -1,4 +1,5 @@
-﻿using Unfoundry;
+﻿using Microsoft.SqlServer.Server;
+using Unfoundry;
 using UnityEngine;
 
 namespace Duplicationer
@@ -42,9 +43,7 @@ namespace Duplicationer
             {
                 case Mode.Idle:
                     var lookRay = CustomHandheldMode.GetLookRay();
-                    Vector3Int normal;
-                    int faceIndex;
-                    float distance = CustomHandheldMode.BoxRayIntersection(tool.DragMin, tool.DragMax + Vector3Int.one, lookRay, out normal, out faceIndex);
+                    var distance = CustomHandheldMode.BoxRayIntersection(tool.DragMin, tool.DragMax + Vector3Int.one, lookRay, out var normal, out var faceIndex, out var isInternal);
                     if (distance >= 0.0f)
                     {
                         var point = lookRay.GetPoint(distance);
@@ -52,12 +51,12 @@ namespace Duplicationer
                         if (InputHelpers.IsAltHeld)
                         {
                             tool.dragFaceRay = new Ray(point, -normal);
-                            tool.dragArrowOffset = -0.5f;
+                            tool.dragArrowOffset = isInternal ? 0.5f : -0.5f;
                         }
                         else
                         {
                             tool.dragFaceRay = new Ray(point, normal);
-                            tool.dragArrowOffset = 0.5f;
+                            tool.dragArrowOffset = isInternal ? -0.5f : 0.5f;
                         }
                         switch (faceIndex)
                         {

@@ -47,12 +47,10 @@ namespace Duplicationer
                 case Mode.Idle:
                     tool.boxMode = BlueprintToolCHM.BoxMode.Blueprint;
                     var lookRay = CustomHandheldMode.GetLookRay();
-                    Vector3Int normal;
-                    int faceIndex;
-                    float distance = CustomHandheldMode.BoxRayIntersection(tool.RepeatBlueprintMin, tool.RepeatBlueprintMax + Vector3Int.one, lookRay, out normal, out faceIndex);
+                    var distance = CustomHandheldMode.BoxRayIntersection(tool.RepeatBlueprintMin, tool.RepeatBlueprintMax + Vector3Int.one, lookRay, out var normal, out var faceIndex, out var isInternal);
                     if (distance >= 0.0f)
                     {
-                        var point = lookRay.GetPoint(distance) + (Vector3)normal * 0.5f;
+                        var point = lookRay.GetPoint(distance) + (Vector3)normal * (isInternal ? -0.5f : 0.5f);
                         tool.isDragArrowVisible = true;
                         tool.isDragArrowDouble = faceIndex != 2 && faceIndex != 3;
                         tool.dragFaceRay = new Ray(point, faceIndex != 3 ? Vector3.up : Vector3.down);

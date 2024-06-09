@@ -38,12 +38,10 @@ namespace Duplicationer
             {
                 case Mode.Idle:
                     var lookRay = CustomHandheldMode.GetLookRay();
-                    Vector3Int normal;
-                    int faceIndex;
-                    float distance = CustomHandheldMode.BoxRayIntersection(tool.DragMin, tool.DragMax + Vector3Int.one, lookRay, out normal, out faceIndex);
+                    var distance = CustomHandheldMode.BoxRayIntersection(tool.DragMin, tool.DragMax + Vector3Int.one, lookRay, out var normal, out var faceIndex, out var isInternal);
                     if (distance >= 0.0f)
                     {
-                        var point = lookRay.GetPoint(distance) + (Vector3)normal * 0.5f;
+                        var point = lookRay.GetPoint(distance) + (Vector3)normal * (isInternal ? -0.5f : 0.5f);
                         tool.isDragArrowVisible = true;
                         tool.dragFaceRay = new Ray(point, InputHelpers.IsAltHeld ? Vector3.down : Vector3.up);
                         tool.dragArrowMaterial = ResourceDB.material_glow_yellow;

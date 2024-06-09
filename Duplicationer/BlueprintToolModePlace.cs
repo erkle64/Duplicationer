@@ -39,12 +39,10 @@ namespace Duplicationer
                 tool.boxMode = BlueprintToolCHM.BoxMode.None;
                 tool.HideBlueprint();
             }
-            if (GlobalStateManager.getRewiredPlayer0().GetButton("Action") && InputHelpers.IsMouseInputAllowed && !tool.IsAnyFrameOpen)
+            if (/*GlobalStateManager.getRewiredPlayer0().GetButton("Action") && */InputHelpers.IsMouseInputAllowed && !tool.IsAnyFrameOpen)
             {
                 tool.repeatFrom = tool.repeatTo = Vector3Int.zero;
                 tool.boxMode = BlueprintToolCHM.BoxMode.Blueprint;
-                Vector3 targetPoint;
-                Vector3Int targetCoord, targetNormal;
 
                 var character = GameRoot.getClientRenderCharacter();
                 if (character != null)

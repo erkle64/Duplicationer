@@ -1,11 +1,6 @@
 ﻿using System.Collections.Generic;
-using TMPro;
 using UnityEngine;
-using UnityEngine.UI;
-using UnityEngine.EventSystems;
 using Unfoundry;
-using UnityEngine.Events;
-using HarmonyLib;
 using System.Linq;
 using System.IO;
 
@@ -37,10 +32,7 @@ namespace Duplicationer
         public readonly BlueprintToolModeMoveSideways modeMoveSideways;
         public readonly BlueprintToolModeMoveVertical modeMoveVertical;
         public readonly BlueprintToolModeRepeat modeRepeat;
-        private BlueprintToolMode[] blueprintToolModes;
-
-        public bool HasMinecartDepots => CurrentBlueprint?.HasMinecartDepots ?? false;
-        private static List<MinecartDepotGO> existingMinecartDepots = new List<MinecartDepotGO>();
+        private BlueprintToolMode[] _blueprintToolModes;
 
         internal BoxMode boxMode = BoxMode.None;
         public Vector3Int BlueprintMin => CurrentBlueprintAnchor;
@@ -67,93 +59,58 @@ namespace Duplicationer
         internal float dragArrowOffset = 0.5f;
         internal bool isDragArrowDouble = false;
 
-        public bool IsBlueprintFrameOpen => duplicationerFrame != null && duplicationerFrame.activeSelf;
-        private GameObject duplicationerFrame = null;
-        private TextMeshProUGUI textMaterialReport = null;
-        private TextMeshProUGUI textPositionX = null;
-        private TextMeshProUGUI textPositionY = null;
-        private TextMeshProUGUI textPositionZ = null;
-        private float nextUpdateTimeCountTexts = 0.0f;
-        private EscapeCloseProxy blueprintFrameEscapeCloseProxy = null;
+        private BlueprintFrame _blueprintFrame;
+        private SaveFrame _saveFrame;
+        private LibraryFrame _libraryFrame;
+        private FolderFrame _folderFrame;
+        private List<BaseFrame> _frames = new List<BaseFrame>();
 
-        private GameObject rowCheats;
-        private Button buttonCheatMode;
+        public bool IsBlueprintFrameOpen => _blueprintFrame.IsOpen;
+        public bool IsSaveFrameOpen => _saveFrame.IsOpen;
+        public bool IsLibraryFrameOpen => _libraryFrame.IsOpen;
+        public bool IsFolderFrameOpen => _folderFrame.IsOpen;
+        public bool IsAnyFrameOpen => _frames.Any(x => x.IsOpen);
 
-        public bool IsSaveFrameOpen => saveFrame != null && saveFrame.activeSelf;
-        private GameObject saveFrame = null;
-        private GameObject saveGridObject = null;
-        private GameObject saveFramePreviewContainer = null;
-        private Image[] saveFrameIconImages = new Image[4] { null, null, null, null };
-        private Image[] saveFramePreviewIconImages = new Image[4] { null, null, null, null };
-        private TMP_InputField saveFrameNameInputField = null;
-        private TextMeshProUGUI saveFramePreviewLabel = null;
-        private TextMeshProUGUI saveFrameMaterialReportText = null;
-        private ItemTemplate[] saveFrameIconItemTemplates = new ItemTemplate[4] { null, null, null, null };
-        private int saveFrameIconCount = 0;
-        private EscapeCloseProxy saveFrameEscapeCloseProxy = null;
+        internal int NudgeX => CurrentBlueprint != null && InputHelpers.IsAltHeld ? CurrentBlueprint.SizeX : 1;
+        internal int NudgeY => CurrentBlueprint != null && InputHelpers.IsAltHeld ? CurrentBlueprint.SizeY : 1;
+        internal int NudgeZ => CurrentBlueprint != null && InputHelpers.IsAltHeld ? CurrentBlueprint.SizeZ : 1;
 
-        public bool IsLibraryFrameOpen => libraryFrame != null && libraryFrame.activeSelf;
-        private GameObject libraryFrame = null;
-        private TextMeshProUGUI libraryFrameHeading = null;
-        private GameObject libraryGridObject = null;
-        private string lastLibraryRelativePath = "";
-        private EscapeCloseProxy libraryFrameEscapeCloseProxy = null;
+        private static List<BuildableObjectGO> _bogoQueryResult = new List<BuildableObjectGO>(0);
 
-        public bool IsFolderFrameOpen => folderFrame != null && folderFrame.activeSelf;
-        private GameObject folderFrame = null;
-        private GameObject folderGridObject = null;
-        private GameObject folderFramePreviewContainer = null;
-        private Image folderFrameIconImage = null;
-        private Image folderFramePreviewIconImage = null;
-        private TMP_InputField folderFrameNameInputField = null;
-        private TextMeshProUGUI folderFramePreviewLabel = null;
-        private ItemTemplate folderFrameIconItemTemplate = null;
-        private EscapeCloseProxy folderFrameEscapeCloseProxy = null;
+        private static List<ConstructionTaskGroup> _activeConstructionTaskGroups = new List<ConstructionTaskGroup>();
 
-        public bool IsAnyFrameOpen => IsBlueprintFrameOpen || IsSaveFrameOpen || IsLibraryFrameOpen || IsFolderFrameOpen;
+        private static List<bool> _terrainTypeRemovalMask = null;
 
-        private int NudgeX => CurrentBlueprint != null && InputHelpers.IsAltHeld ? CurrentBlueprint.SizeX : 1;
-        private int NudgeY => CurrentBlueprint != null && InputHelpers.IsAltHeld ? CurrentBlueprint.SizeY : 1;
-        private int NudgeZ => CurrentBlueprint != null && InputHelpers.IsAltHeld ? CurrentBlueprint.SizeZ : 1;
+        internal LazyPrefab prefabGridScrollView = new LazyPrefab("GridScrollView");
+        internal LazyPrefab prefabBlueprintNameInputField = new LazyPrefab("BlueprintNameInputField");
+        internal LazyPrefab prefabBlueprintButtonDefaultIcon = new LazyPrefab("BlueprintButtonDefaultIcon");
+        internal LazyPrefab prefabBlueprintButtonIcon = new LazyPrefab("BlueprintButtonIcon");
+        internal LazyPrefab prefabBlueprintButton1Icon = new LazyPrefab("BlueprintButton1Icon");
+        internal LazyPrefab prefabBlueprintButton2Icon = new LazyPrefab("BlueprintButton2Icon");
+        internal LazyPrefab prefabBlueprintButton3Icon = new LazyPrefab("BlueprintButton3Icon");
+        internal LazyPrefab prefabBlueprintButton4Icon = new LazyPrefab("BlueprintButton4Icon");
+        internal LazyPrefab prefabBlueprintButtonFolder = new LazyPrefab("BlueprintButtonFolder");
+        internal LazyPrefab prefabBlueprintButtonFolderNew = new LazyPrefab("BlueprintButtonFolderNew");
+        internal LazyPrefab prefabBlueprintButtonFolderBack = new LazyPrefab("BlueprintButtonFolderBack");
 
-        private static List<BuildableObjectGO> bogoQueryResult = new List<BuildableObjectGO>(0);
+        private static Material _placeholderMaterial = null;
+        private static Material _placeholderPrepassMaterial = null;
+        private static Material _placeholderSolidMaterial = null;
 
-        private List<UIBuilder.GenericUpdateDelegate> guiUpdaters = new List<UIBuilder.GenericUpdateDelegate>();
-
-        private static List<ConstructionTaskGroup> activeConstructionTaskGroups = new List<ConstructionTaskGroup>();
-
-        private static List<bool> terrainTypeRemovalMask = null;
-
-        private LazyPrefab prefabGridScrollView = new LazyPrefab("GridScrollView");
-        private LazyPrefab prefabBlueprintNameInputField = new LazyPrefab("BlueprintNameInputField");
-        private LazyPrefab prefabBlueprintButtonDefaultIcon = new LazyPrefab("BlueprintButtonDefaultIcon");
-        private LazyPrefab prefabBlueprintButtonIcon = new LazyPrefab("BlueprintButtonIcon");
-        private LazyPrefab prefabBlueprintButton1Icon = new LazyPrefab("BlueprintButton1Icon");
-        private LazyPrefab prefabBlueprintButton2Icon = new LazyPrefab("BlueprintButton2Icon");
-        private LazyPrefab prefabBlueprintButton3Icon = new LazyPrefab("BlueprintButton3Icon");
-        private LazyPrefab prefabBlueprintButton4Icon = new LazyPrefab("BlueprintButton4Icon");
-        private LazyPrefab prefabBlueprintButtonFolder = new LazyPrefab("BlueprintButtonFolder");
-        private LazyPrefab prefabBlueprintButtonFolderNew = new LazyPrefab("BlueprintButtonFolderNew");
-        private LazyPrefab prefabBlueprintButtonFolderBack = new LazyPrefab("BlueprintButtonFolderBack");
-
-        private static Material placeholderMaterial = null;
-        private static Material placeholderPrepassMaterial = null;
-        private static Material placeholderSolidMaterial = null;
-
-        private LazyIconSprite iconBlack = null;
-        private LazyIconSprite iconEmpty = null;
-        private LazyIconSprite iconCopy = null;
-        private LazyIconSprite iconMoveVertical = null;
-        private LazyIconSprite iconMove = null;
-        private LazyIconSprite iconMoveSideways = null;
-        private LazyIconSprite iconPanel = null;
-        private LazyIconSprite iconPaste = null;
-        private LazyIconSprite iconPlace = null;
-        private LazyIconSprite iconRepeat = null;
-        private LazyIconSprite iconResizeVertical = null;
-        private LazyIconSprite iconResize = null;
-        private LazyIconSprite iconSelectArea = null;
-        private LazyIconSprite iconMirror = null;
+        internal LazyIconSprite iconBlack = null;
+        internal LazyIconSprite iconEmpty = null;
+        internal LazyIconSprite iconCopy = null;
+        internal LazyIconSprite iconMoveVertical = null;
+        internal LazyIconSprite iconMove = null;
+        internal LazyIconSprite iconMoveSideways = null;
+        internal LazyIconSprite iconPanel = null;
+        internal LazyIconSprite iconPaste = null;
+        internal LazyIconSprite iconPlace = null;
+        internal LazyIconSprite iconRepeat = null;
+        internal LazyIconSprite iconResizeVertical = null;
+        internal LazyIconSprite iconResize = null;
+        internal LazyIconSprite iconSelectArea = null;
+        internal LazyIconSprite iconMirror = null;
 
         private LazyMaterial materialDragBox = new LazyMaterial(() =>
         {
@@ -173,10 +130,15 @@ namespace Duplicationer
 
         public BlueprintToolCHM()
         {
+            _frames.Add(_blueprintFrame = new BlueprintFrame(this));
+            _frames.Add(_saveFrame = new SaveFrame(this));
+            _frames.Add(_libraryFrame = new LibraryFrame(this));
+            _frames.Add(_folderFrame = new FolderFrame(this));
+
             dragArrowScale = 1.0f;
             dragArrowOffset = 0.5f;
 
-            blueprintToolModes = new BlueprintToolMode[]
+            _blueprintToolModes = new BlueprintToolMode[]
             {
                 modeSelectArea = new BlueprintToolModeSelectArea(),
                 modeResize = new BlueprintToolModeResize(),
@@ -234,7 +196,7 @@ namespace Duplicationer
                         () => IsBlueprintLoaded && CurrentMode != modePlace),
 
                     new CustomRadialMenuOption(
-                        "Select Area", iconSelectArea.Sprite, "",
+                        "Select Area", iconSelectArea.Sprite, "Clears current blueprint",
                         () => SelectMode(modeSelectArea)),
 
                     new CustomRadialMenuOption(
@@ -292,7 +254,7 @@ namespace Duplicationer
             CurrentMode?.Enter(this, fromMode);
         }
 
-        private void CopySelection()
+        internal void CopySelection()
         {
             ClearBlueprintPlaceholders();
             CurrentBlueprint = Blueprint.Create(DragMin, DragSize);
@@ -358,9 +320,9 @@ namespace Duplicationer
                                 break;
                             }
 
-                            bogoQueryResult.Clear();
-                            quadTree.queryAABB3D(aabb, bogoQueryResult, true);
-                            foreach (var bogo in bogoQueryResult)
+                            _bogoQueryResult.Clear();
+                            quadTree.queryAABB3D(aabb, _bogoQueryResult, true);
+                            foreach (var bogo in _bogoQueryResult)
                             {
                                 if (aabb.hasXYZIntersection(bogo._aabb))
                                 {
@@ -558,30 +520,30 @@ namespace Duplicationer
                 {
                     CurrentBlueprintStatusText = "";
                 }
-                UpdateMaterialReport();
+                _blueprintFrame.UpdateMaterialReport();
 
                 int remainingTasks = 0;
-                foreach (var group in activeConstructionTaskGroups) remainingTasks += group.Remaining;
+                foreach (var group in _activeConstructionTaskGroups) remainingTasks += group.Remaining;
                 if (remainingTasks > 0) CurrentBlueprintStatusText = $"ToDo: {remainingTasks}{(CurrentBlueprintStatusText.Length > 0 ? "\n" : "")}{CurrentBlueprintStatusText}";
 
                 if (!IsPlaceholdersHidden)
                 {
-                    if (placeholderMaterial == null)
+                    if (_placeholderMaterial == null)
                     {
-                        placeholderMaterial = DuplicationerPlugin.GetAsset<Material>("PlaceholderMaterial");
-                        UnityEngine.Object.DontDestroyOnLoad(placeholderMaterial);
+                        _placeholderMaterial = DuplicationerPlugin.GetAsset<Material>("PlaceholderMaterial");
+                        Object.DontDestroyOnLoad(_placeholderMaterial);
                     }
 
-                    if (placeholderPrepassMaterial == null)
+                    if (_placeholderPrepassMaterial == null)
                     {
-                        placeholderPrepassMaterial = DuplicationerPlugin.GetAsset<Material>("PlaceholderPrepassMaterial");
-                        UnityEngine.Object.DontDestroyOnLoad(placeholderPrepassMaterial);
+                        _placeholderPrepassMaterial = DuplicationerPlugin.GetAsset<Material>("PlaceholderPrepassMaterial");
+                        Object.DontDestroyOnLoad(_placeholderPrepassMaterial);
                     }
 
-                    if (placeholderSolidMaterial == null)
+                    if (_placeholderSolidMaterial == null)
                     {
-                        placeholderSolidMaterial = DuplicationerPlugin.GetAsset<Material>("PlaceholderSolidMaterial");
-                        UnityEngine.Object.DontDestroyOnLoad(placeholderSolidMaterial);
+                        _placeholderSolidMaterial = DuplicationerPlugin.GetAsset<Material>("PlaceholderSolidMaterial");
+                        Object.DontDestroyOnLoad(_placeholderSolidMaterial);
                     }
 
                     float alpha = DuplicationerPlugin.configPreviewAlpha.Get();
@@ -589,16 +551,16 @@ namespace Duplicationer
                     {
                         if (alpha < 1.0f)
                         {
-                            if (placeholderMaterial != null && placeholderPrepassMaterial != null)
+                            if (_placeholderMaterial != null && _placeholderPrepassMaterial != null)
                             {
-                                placeholderRenderGroup.Render(placeholderPrepassMaterial, placeholderMaterial);
+                                placeholderRenderGroup.Render(_placeholderPrepassMaterial, _placeholderMaterial);
                             }
                         }
                         else
                         {
-                            if (placeholderSolidMaterial != null)
+                            if (_placeholderSolidMaterial != null)
                             {
-                                placeholderRenderGroup.Render(null, placeholderSolidMaterial);
+                                placeholderRenderGroup.Render(null, _placeholderSolidMaterial);
                             }
                         }
                     }
@@ -656,7 +618,7 @@ namespace Duplicationer
                 if (isDragArrowDouble) DrawArrow(dragFaceRay.origin, -dragFaceRay.direction, dragArrowMaterial, dragArrowScale, dragArrowOffset);
             }
 
-            foreach (var updater in guiUpdaters) updater();
+            foreach (var frame in _frames) frame.Update();
         }
 
         public override bool OnRotateY()
@@ -722,8 +684,8 @@ namespace Duplicationer
             DuplicationerPlugin.log.Log(string.Format("Placing blueprint at {0}", targetPosition.ToString()));
             AABB3D aabb = ObjectPoolManager.aabb3ds.getObject();
             var modularBaseCoords = new Dictionary<ulong, Vector3Int>();
-            var constructionTaskGroup = new ConstructionTaskGroup((ConstructionTaskGroup taskGroup) => { activeConstructionTaskGroups.Remove(taskGroup); });
-            activeConstructionTaskGroups.Add(constructionTaskGroup);
+            var constructionTaskGroup = new ConstructionTaskGroup((ConstructionTaskGroup taskGroup) => { _activeConstructionTaskGroups.Remove(taskGroup); });
+            _activeConstructionTaskGroups.Add(constructionTaskGroup);
             ObjectPoolManager.aabb3ds.returnObject(aabb); aabb = null;
 
             CurrentBlueprint.Place(targetPosition, constructionTaskGroup);
@@ -791,75 +753,7 @@ namespace Duplicationer
 
         private void OnBlueprintMoved(Vector3Int oldPosition, ref Vector3Int newPosition)
         {
-            UpdateBlueprintPositionText();
-        }
-
-        private void UpdateMaterialReport()
-        {
-            if (textMaterialReport != null && Time.time >= nextUpdateTimeCountTexts)
-            {
-                nextUpdateTimeCountTexts = Time.time + 0.5f;
-
-                int repeatCount = RepeatCount.x * RepeatCount.y * RepeatCount.z;
-                ulong inventoryId = GameRoot.getClientCharacter().inventoryId;
-                ulong inventoryPtr = inventoryId != 0 ? InventoryManager.inventoryManager_getInventoryPtr(inventoryId) : 0;
-
-                int totalItemCount = 0;
-                int totalDoneCount = 0;
-                var materialReportBuilder = new System.Text.StringBuilder();
-                foreach (var kv in CurrentBlueprint.ShoppingList)
-                {
-                    var itemCount = kv.Value.count * repeatCount;
-                    if (itemCount > 0)
-                    {
-                        totalItemCount += itemCount;
-
-                        var name = kv.Value.name;
-                        var templateId = kv.Value.itemTemplateId;
-                        if (templateId != 0)
-                        {
-                            var doneCount = BlueprintPlaceholder.GetStateCount(templateId, BlueprintPlaceholder.State.Done);
-                            totalDoneCount += doneCount;
-
-                            if (inventoryPtr != 0)
-                            {
-                                var inventoryCount = InventoryManager.inventoryManager_countByItemTemplateByPtr(inventoryPtr, templateId, IOBool.iotrue);
-
-                                if (doneCount > 0)
-                                {
-                                    materialReportBuilder.AppendLine($"<color=#CCCCCC>{name}:</color> {itemCount - doneCount} <color=#FFFFAA>({inventoryCount})</color> (<color=#AACCFF>{doneCount}</color>/{itemCount})");
-                                }
-                                else
-                                {
-                                    materialReportBuilder.AppendLine($"<color=#CCCCCC>{name}:</color> {itemCount} <color=#FFFFAA>({inventoryCount})</color>");
-                                }
-                            }
-                            else
-                            {
-                                materialReportBuilder.AppendLine($"<color=#CCCCCC>{name}:</color> {itemCount} <color=#FFFFAA>(###)</color>");
-                            }
-                        }
-                        else
-                        {
-                            materialReportBuilder.AppendLine($"<color=#CCCCCC>{name}:</color> {itemCount}");
-                        }
-                    }
-                }
-
-                if (totalItemCount > 0)
-                {
-                    if (totalDoneCount > 0)
-                    {
-                        materialReportBuilder.AppendLine($"<color=#CCCCCC>Total:</color> {totalItemCount - totalDoneCount} (<color=#AACCFF>{totalDoneCount}</color>/{totalItemCount})");
-                    }
-                    else
-                    {
-                        materialReportBuilder.AppendLine($"<color=#CCCCCC>Total:</color> {totalItemCount}");
-                    }
-                }
-
-                textMaterialReport.text = materialReportBuilder.ToString();
-            }
+            _blueprintFrame.UpdateBlueprintPositionText();
         }
 
         private string GetTabletTitle()
@@ -867,284 +761,17 @@ namespace Duplicationer
             return CurrentMode?.TabletTitle(this) ?? "";
         }
 
-        internal void HideBlueprintFrame()
+        internal void BeginSaveBlueprint()
         {
-            if (blueprintFrameEscapeCloseProxy != null)
-            {
-                blueprintFrameEscapeCloseProxy.Dispose();
-                blueprintFrameEscapeCloseProxy = null;
-            }
-
-            if (duplicationerFrame == null || !duplicationerFrame.activeSelf) return;
-
-            AudioManager.playUISoundEffect(ResourceDB.resourceLinker.audioClip_UIClose);
-
-            duplicationerFrame.SetActive(false);
-            GlobalStateManager.removeCursorRequirement();
-        }
-
-        internal void ShowBlueprintFrame()
-        {
-            if (duplicationerFrame != null && duplicationerFrame.activeSelf) return;
-
-            if (duplicationerFrame == null)
-            {
-                var graphics = Traverse.Create(typeof(UIRaycastTooltipManager))?.Field("singleton")?.GetValue<UIRaycastTooltipManager>()?.tooltipRectTransform?.GetComponentsInChildren<Graphic>();
-                if (graphics != null)
-                {
-                    foreach (var graphic in graphics)
-                    {
-                        graphic.raycastTarget = false;
-                    }
-                }
-
-                ulong usernameHash = GameRoot.getClientCharacter().usernameHash;
-                UIBuilder.BeginWith(GameRoot.getDefaultCanvas())
-                    .Element_PanelAutoSize("DuplicationerFrame", "corner_cut_outline", new Color(0.133f, 0.133f, 0.133f, 1.0f), new Vector4(13, 10, 8, 13))
-                        .Keep(out duplicationerFrame)
-                        .SetVerticalLayout(new RectOffset(0, 0, 0, 0), 0.0f, TextAnchor.UpperLeft, false, true, true, true, false, false, false)
-                        .SetRectTransform(-420.0f, 120.0f, -60.0f, 220.0f, 1.0f, 0.0f, 1.0f, 0.0f, 1.0f, 0.0f)
-                        .Element_Header("HeaderBar", "corner_cut_outline", new Color(0.0f, 0.6f, 1.0f, 1.0f), new Vector4(13, 3, 8, 13))
-                            .SetRectTransform(0.0f, -60.0f, 599.0f, 0.0f, 0.5f, 1.0f, 0.0f, 1.0f, 0.0f, 1.0f)
-                            .Layout()
-                                .MinWidth(340)
-                                .MinHeight(60)
-                            .Done
-                            .Element("Heading")
-                                .SetRectTransform(0.0f, 0.0f, -60.0f, 0.0f, 0.0f, 0.5f, 0.0f, 0.0f, 1.0f, 1.0f)
-                                .Component_Text("Duplicationer", "OpenSansSemibold SDF", 34.0f, Color.white)
-                            .Done
-                            .Element_Button("Button Close", "corner_cut_fully_inset", Color.white, new Vector4(13.0f, 1.0f, 4.0f, 13.0f))
-                                .SetOnClick(HideBlueprintFrame)
-                                .SetRectTransform(-60.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.5f, 1.0f, 0.0f, 1.0f, 1.0f)
-                                .SetTransitionColors(new Color(1.0f, 1.0f, 1.0f, 1.0f), new Color(1.0f, 0.25f, 0.0f, 1.0f), new Color(1.0f, 0.0f, 0.0f, 1.0f), new Color(1.0f, 0.25f, 0.0f, 1.0f), new Color(0.5f, 0.5f, 0.5f, 1.0f), 1.0f, 0.1f)
-                                .Element("Image")
-                                    .SetRectTransform(5.0f, 5.0f, -5.0f, -5.0f, 0.5f, 0.5f, 0.0f, 0.0f, 1.0f, 1.0f)
-                                    .Component_Image("cross", Color.white, Image.Type.Sliced, Vector4.zero)
-                                .Done
-                            .Done
-                        .Done
-                        .Element("Content")
-                            .SetRectTransform(0.0f, -855.0f, 599.0f, -60.0f, 0.5f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f)
-                            .SetVerticalLayout(new RectOffset(10, 10, 10, 10), 0.0f, TextAnchor.UpperLeft, false, true, true, true, false, false, false)
-                            .Element("Padding")
-                                .SetRectTransform(10.0f, -785.0f, 589.0f, -10.0f, 0.5f, 0.5f, 0.0f, 1.0f, 0.0f, 1.0f)
-                                .SetVerticalLayout(new RectOffset(0, 0, 0, 0), 10.0f, TextAnchor.UpperLeft, false, true, true, true, false, false, false)
-                                .Element_ScrollBox("Material Report ScrollBox", builder =>
-                                    {
-                                        builder = builder
-                                            .SetVerticalLayout(new RectOffset(5, 5, 5, 5), 10.0f, TextAnchor.UpperLeft, false, true, true, false, false, false, false)
-                                            .Element("Material Report")
-                                                .SetRectTransform(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f, 0.0f, 1.0f)
-                                                .AutoSize(ContentSizeFitter.FitMode.PreferredSize, ContentSizeFitter.FitMode.PreferredSize)
-                                                .Component_Text("", "OpenSansSemibold SDF", 14.0f, Color.white, TextAlignmentOptions.TopLeft)
-                                                .Keep(out textMaterialReport)
-                                            .Done;
-                                    })
-                                    .Layout()
-                                        .PreferredHeight(200)
-                                    .Done
-                                .Done
-                                .Element("Demolish Row")
-                                    .Updater(guiUpdaters, () => boxMode != BoxMode.None && CurrentMode != modeSelectArea)
-                                    .SetHorizontalLayout(new RectOffset(0, 0, 0, 0), 5.0f, TextAnchor.UpperLeft, false, true, true, false, true, false, false)
-                                    .Element_Label("Demolish Label", "Demolish ", 100, 1)
-                                    .Done
-                                    .Element_ImageButton("Button Demolish Buildings", "assembler_iii")
-                                        .Component_Tooltip("Demolish\nBuildings")
-                                        .SetOnClick(() => DemolishArea(true, false, false, false))
-                                    .Done
-                                    .Element_ImageButton("Button Demolish Blocks", "floor")
-                                        .Component_Tooltip("Demolish\nBlocks")
-                                        .SetOnClick(() => DemolishArea(false, true, false, false))
-                                    .Done
-                                    .Element_ImageButton("Button Demolish Terrain", "dirt")
-                                        .Component_Tooltip("Demolish\nTerrain")
-                                        .SetOnClick(() => DemolishArea(false, false, true, false))
-                                    .Done
-                                    .Element_ImageButton("Button Demolish Decor", "biomass")
-                                        .Component_Tooltip("Demolish\nDecor")
-                                        .SetOnClick(() => DemolishArea(false, false, false, true))
-                                    .Done
-                                    .Element_ImageButton("Button Demolish All", "icons8-error-100")
-                                        .Component_Tooltip("Demolish\nAll")
-                                        .SetOnClick(() => DemolishArea(true, true, true, true))
-                                    .Done
-                                .Done
-                                .Element("Destroy Row")
-                                    .Updater(guiUpdaters, () => boxMode != BoxMode.None && CurrentMode != modeSelectArea)
-                                    .SetHorizontalLayout(new RectOffset(0, 0, 0, 0), 5.0f, TextAnchor.UpperLeft, false, true, true, false, true, false, false)
-                                    .Element_Label("Destroy Label", "Destroy ", 100, 1)
-                                    .Done
-                                    //.Element_ImageButton("Button Destroy Buildings", "assembler_iii")
-                                    //    .Component_Tooltip("Destroy\nBuildings")
-                                    //    .SetOnClick(() => ConfirmationFrame.Show("Permanently destroy buildings in selection?", () => DestroyArea(true, false, false, false)))
-                                    //.Done
-                                    //.Element_ImageButton("Button Destroy Blocks", "floor")
-                                    //    .Component_Tooltip("Destroy\nBlocks")
-                                    //    .SetOnClick(() => ConfirmationFrame.Show("Permanently destroy foundation blocks in selection?", () => DestroyArea(false, true, false, false)))
-                                    //.Done
-                                    .Element_ImageButton("Button Destroy Terrain", "dirt")
-                                        .Component_Tooltip("Destroy\nTerrain")
-                                        .SetOnClick(() => ConfirmationFrame.Show("Permanently destroy terrain in selection?", () => DestroyArea(false, false, true, false)))
-                                    .Done
-                                    .Element_ImageButton("Button Destroy Decor", "biomass")
-                                        .Component_Tooltip("Destroy\nDecor")
-                                        .SetOnClick(() => ConfirmationFrame.Show("Permanently destroy plants in selection?", () => DestroyArea(false, false, false, true)))
-                                    .Done
-                                    .Element_ImageButton("Button Destroy All", "icons8-error-100")
-                                        .Component_Tooltip("Destroy\nAll")
-                                        .SetOnClick(() => ConfirmationFrame.Show("Permanently destroy everything in selection?", () => DestroyArea(true, true, true, true)))
-                                    .Done
-                                .Done
-                                .Element("Position Row")
-                                    .Updater(guiUpdaters, () => boxMode == BoxMode.Blueprint)
-                                    .AutoSize(ContentSizeFitter.FitMode.Unconstrained, ContentSizeFitter.FitMode.PreferredSize)
-                                    .SetVerticalLayout(new RectOffset(0, 0, 0, 0), 10.0f, TextAnchor.UpperLeft, false, true, true, true, false, false, false)
-                                    .Element("Row Position X")
-                                        .SetHorizontalLayout(new RectOffset(0, 0, 0, 0), 5.0f, TextAnchor.UpperLeft, false, true, true, false, true, false, false)
-                                        .Element("Position Display X")
-                                            .Layout()
-                                                .MinWidth(100)
-                                                .FlexibleWidth(1)
-                                            .Done
-                                            .Component_Text("X: 0", "OpenSansSemibold SDF", 18.0f, Color.white, TextAlignmentOptions.MidlineLeft)
-                                            .Keep(out textPositionX)
-                                        .Done
-                                        .Element_ImageButton("Button Decrease", "icons8-chevron-left-filled-100_white", 28, 28, 90.0f)
-                                            .SetOnClick(() => { MoveBlueprint(CurrentBlueprintAnchor + new Vector3Int(-1, 0, 0) * NudgeX); })
-                                        .Done
-                                        .Element_ImageButton("Button Increase", "icons8-chevron-left-filled-100_white", 28, 28, 270.0f)
-                                            .SetOnClick(() => { MoveBlueprint(CurrentBlueprintAnchor + new Vector3Int(1, 0, 0) * NudgeX); })
-                                        .Done
-                                    .Done
-                                    .Element("Row Position Y")
-                                        .SetHorizontalLayout(new RectOffset(0, 0, 0, 0), 5.0f, TextAnchor.UpperLeft, false, true, true, false, true, false, false)
-                                        .Element("Position Display Y")
-                                            .Layout()
-                                                .MinWidth(100)
-                                                .FlexibleWidth(1)
-                                            .Done
-                                            .Component_Text("Y: 0", "OpenSansSemibold SDF", 18.0f, Color.white, TextAlignmentOptions.MidlineLeft)
-                                            .Keep(out textPositionY)
-                                        .Done
-                                        .Element_ImageButton("Button Decrease", "icons8-chevron-left-filled-100_white", 28, 28, 90.0f)
-                                            .SetOnClick(() => { MoveBlueprint(CurrentBlueprintAnchor + new Vector3Int(0, -1, 0) * NudgeY); })
-                                        .Done
-                                        .Element_ImageButton("Button Increase", "icons8-chevron-left-filled-100_white", 28, 28, 270.0f)
-                                            .SetOnClick(() => { MoveBlueprint(CurrentBlueprintAnchor + new Vector3Int(0, 1, 0) * NudgeY); })
-                                        .Done
-                                    .Done
-                                    .Element("Row Position Z")
-                                        .SetHorizontalLayout(new RectOffset(0, 0, 0, 0), 5.0f, TextAnchor.UpperLeft, false, true, true, false, true, false, false)
-                                        .Element("Position Display Z")
-                                            .Layout()
-                                                .MinWidth(100)
-                                                .FlexibleWidth(1)
-                                            .Done
-                                            .Component_Text("Z: 0", "OpenSansSemibold SDF", 18.0f, Color.white, TextAlignmentOptions.MidlineLeft)
-                                            .Keep(out textPositionZ)
-                                        .Done
-                                        .Element_ImageButton("Button Decrease", "icons8-chevron-left-filled-100_white", 28, 28, 90.0f)
-                                            .SetOnClick(() => { MoveBlueprint(CurrentBlueprintAnchor + new Vector3Int(0, 0, -1) * NudgeZ); })
-                                        .Done
-                                        .Element_ImageButton("Button Increase", "icons8-chevron-left-filled-100_white", 28, 28, 270.0f)
-                                            .SetOnClick(() => { MoveBlueprint(CurrentBlueprintAnchor + new Vector3Int(0, 0, 1) * NudgeZ); })
-                                        .Done
-                                    .Done
-                                .Done
-                                .Element("Preview Opacity Row")
-                                    .SetHorizontalLayout(new RectOffset(0, 0, 0, 0), 5.0f, TextAnchor.UpperLeft, false, true, true, false, true, false, false)
-                                    .Element_Label("Preview Opacity Label", "Preview Opacity", 150, 1)
-                                    .Done
-                                    .Element_Slider("Preview Opacity Slider", DuplicationerPlugin.configPreviewAlpha.Get(), 0.0f, 1.0f, (value) => { DuplicationerPlugin.configPreviewAlpha.Set(value); SetPlaceholderOpacity(value); })
-                                        .Layout()
-                                            .MinWidth(200)
-                                            .MinHeight(40)
-                                            .FlexibleWidth(1)
-                                        .Done
-                                    .Done
-                                .Done
-                                .Element("Row Cheats")
-                                    .Keep(out rowCheats)
-                                    .SetHorizontalLayout(new RectOffset(0, 0, 0, 0), 5.0f, TextAnchor.UpperLeft, false, true, true, false, true, false, false)
-                                    .Element_TextButton("Button Cheat Mode", CheatModeButtonText(), Color.white)
-                                        .Keep(out buttonCheatMode)
-                                        .Component_Tooltip("Toggle cheat mode")
-                                        .SetOnClick(ToggleCheatMode)
-                                    .Done
-                                .Done
-                                .Element("Row Files")
-                                    .SetHorizontalLayout(new RectOffset(0, 0, 0, 0), 5.0f, TextAnchor.UpperLeft, false, true, true, false, true, false, false)
-                                    .Element_ImageTextButton("Button Save", "Save", "download", Color.white, 28, 28)
-                                        .Component_Tooltip("Save current blueprint")
-                                        .SetOnClick(BeginSaveBlueprint)
-                                        .Updater<Button>(guiUpdaters, () => IsBlueprintLoaded)
-                                    .Done
-                                    .Element_ImageTextButton("Button Load", "Load", "upload", Color.white, 28, 28)
-                                        .Component_Tooltip("Load blueprint from library")
-                                        .SetOnClick(BeginLoadBlueprint)
-                                    .Done
-                                .Done
-                                .Element("Row Confirm Buttons")
-                                    .SetHorizontalLayout(new RectOffset(0, 0, 0, 0), 5.0f, TextAnchor.UpperLeft, false, true, true, false, true, false, false)
-                                    .Element_TextButton("Button Paste", "Confirm/Paste")
-                                        .Updater<Button>(guiUpdaters, () => CurrentMode != null && CurrentMode.AllowPaste(this))
-                                        .SetOnClick(() => { PlaceBlueprintMultiple(CurrentBlueprintAnchor, repeatFrom, repeatTo); })
-                                    .Done
-                                    .Element_TextButton("Button Copy", "Confirm/Copy")
-                                        .Updater<Button>(guiUpdaters, () => CurrentMode != null && CurrentMode.AllowCopy(this))
-                                        .SetOnClick(CopySelection)
-                                    .Done
-                                .Done
-                            .Done
-                        .Done
-                    .Done
-                .End();
-
-                if (!DuplicationerPlugin.configCheatModeAllowed.Get() && rowCheats != null)
-                {
-                    rowCheats.SetActive(false);
-                }
-            }
-
-            AudioManager.playUISoundEffect(ResourceDB.resourceLinker.audioClip_UIOpen);
-
-            duplicationerFrame.SetActive(true);
-            GlobalStateManager.addCursorRequirement();
-            blueprintFrameEscapeCloseProxy = EscapeCloseProxy.Register(HideBlueprintFrame);
-
-            UpdateBlueprintPositionText();
-        }
-
-        private string CheatModeButtonText() => DuplicationerPlugin.IsCheatModeEnabled ? "Disable Cheat Mode" : "Enable Cheat Mode";
-
-        private void ToggleCheatMode()
-        {
-            if (buttonCheatMode == null) return;
-            if (!DuplicationerPlugin.configCheatModeAllowed.Get()) return;
-            DuplicationerPlugin.configCheatModeEnabled.Set(!DuplicationerPlugin.configCheatModeEnabled.Get());
-            var textComponent = buttonCheatMode.GetComponentInChildren<TextMeshProUGUI>();
-            if (textComponent == null) return;
-            textComponent.text = CheatModeButtonText();
-        }
-
-        private void BeginSaveBlueprint()
-        {
-            HideBlueprintFrame();
+            HideBlueprintFrame(true);
             ShowSaveFrame();
         }
 
-        private void GetInfoFromExistingBlueprint()
-        {
-            ShowLibraryFrame(true);
-        }
-
-        private void FinishSaveBlueprint()
+        internal void FinishSaveBlueprint()
         {
             if (CurrentBlueprint == null) throw new System.ArgumentNullException(nameof(CurrentBlueprint));
 
-            string name = saveFrameNameInputField.text;
+            string name = _saveFrame.BlueprintName;
             if (string.IsNullOrWhiteSpace(name)) return;
 
             string filenameBase = Path.Combine(Path.GetDirectoryName(name), PathHelpers.MakeValidFileName(Path.GetFileName(name)));
@@ -1154,7 +781,7 @@ namespace Duplicationer
                 ConfirmationFrame.Show($"Overwrite '{name}'?", "Overwrite", () =>
                 {
                     DuplicationerPlugin.log.Log($"Saving blueprint '{name}' to '{path}'");
-                    CurrentBlueprint.Save(path, Path.GetFileName(name), saveFrameIconItemTemplates.Take(saveFrameIconCount).ToArray());
+                    CurrentBlueprint.Save(path, Path.GetFileName(name), _saveFrame.IconItemTemplates.Take(_saveFrame.IconCount).ToArray());
 
                     HideSaveFrame();
                 });
@@ -1162,1159 +789,85 @@ namespace Duplicationer
             else
             {
                 DuplicationerPlugin.log.Log($"Saving blueprint '{name}' to '{path}'");
-                CurrentBlueprint.Save(path, Path.GetFileName(name), saveFrameIconItemTemplates.Take(saveFrameIconCount).ToArray());
+                CurrentBlueprint.Save(path, Path.GetFileName(name), _saveFrame.IconItemTemplates.Take(_saveFrame.IconCount).ToArray());
 
                 HideSaveFrame();
             }
         }
 
-        internal void HideSaveFrame()
+        internal void BeginLoadBlueprint()
         {
-            if (saveFrameEscapeCloseProxy != null)
-            {
-                saveFrameEscapeCloseProxy.Dispose();
-                saveFrameEscapeCloseProxy = null;
-            }
+            HideBlueprintFrame(true);
+            ShowLibraryFrame();
+        }
 
-            if (saveFrame == null || !saveFrame.activeSelf) return;
+        internal void HideBlueprintFrame(bool silent = false)
+        {
+            _blueprintFrame.Hide(silent);
+        }
 
-            AudioManager.playUISoundEffect(ResourceDB.resourceLinker.audioClip_UIClose);
+        internal void ShowBlueprintFrame()
+        {
+            _blueprintFrame.Show();
+        }
 
-            saveFrame.SetActive(false);
-            GlobalStateManager.removeCursorRequirement();
+        internal void HideSaveFrame(bool silent = false)
+        {
+            _saveFrame.Hide(silent);
         }
 
         internal void ShowSaveFrame()
         {
-            if (saveFrame != null && saveFrame.activeSelf) return;
-
-            if (libraryFrame != null && libraryFrame.activeSelf) HideLibraryFrame();
-
-            if (saveFrame == null)
-            {
-                ulong usernameHash = GameRoot.getClientCharacter().usernameHash;
-                UIBuilder.BeginWith(GameRoot.getDefaultCanvas())
-                    .Element_Panel("Save Frame", "corner_cut_outline", new Color(0.133f, 0.133f, 0.133f, 1.0f), new Vector4(13, 10, 8, 13))
-                        .Keep(out saveFrame)
-                        .SetRectTransform(100, 100, -100, -100, 0.5f, 0.5f, 0, 0, 1, 1)
-                        .Element_Header("HeaderBar", "corner_cut_outline", new Color(0.0f, 0.6f, 1.0f, 1.0f), new Vector4(13, 3, 8, 13))
-                            .SetRectTransform(0.0f, -60.0f, 0.0f, 0.0f, 0.5f, 1.0f, 0.0f, 1.0f, 1.0f, 1.0f)
-                            .Element("Heading")
-                                .SetRectTransform(0.0f, 0.0f, -60.0f, 0.0f, 0.0f, 0.5f, 0.0f, 0.0f, 1.0f, 1.0f)
-                                .Component_Text("Save Blueprint", "OpenSansSemibold SDF", 34.0f, Color.white)
-                            .Done
-                            .Element_Button("Button Close", "corner_cut_fully_inset", Color.white, new Vector4(13.0f, 1.0f, 4.0f, 13.0f))
-                                .SetOnClick(HideSaveFrame)
-                                .SetRectTransform(-60.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.5f, 1.0f, 0.0f, 1.0f, 1.0f)
-                                .SetTransitionColors(new Color(1.0f, 1.0f, 1.0f, 1.0f), new Color(1.0f, 0.25f, 0.0f, 1.0f), new Color(1.0f, 0.0f, 0.0f, 1.0f), new Color(1.0f, 0.25f, 0.0f, 1.0f), new Color(0.5f, 0.5f, 0.5f, 1.0f), 1.0f, 0.1f)
-                                .Element("Image")
-                                    .SetRectTransform(5.0f, 5.0f, -5.0f, -5.0f, 0.5f, 0.5f, 0.0f, 0.0f, 1.0f, 1.0f)
-                                    .Component_Image("cross", Color.white, Image.Type.Sliced, Vector4.zero)
-                                .Done
-                            .Done
-                        .Done
-                        .Element("Content")
-                            .SetRectTransform(0.0f, 0.0f, 0.0f, -60.0f, 0.5f, 0.5f, 0.0f, 0.0f, 1.0f, 1.0f)
-                            .SetHorizontalLayout(new RectOffset(0, 0, 0, 0), 0, TextAnchor.UpperLeft, false, true, true, false, true, false, false)
-                            .Element("ContentLeft")
-                                .Layout()
-                                    .FlexibleWidth(1)
-                                .Done
-                                .Element("Padding")
-                                    .SetRectTransform(10.0f, 10.0f, -10.0f, -10.0f, 0.5f, 0.5f, 0.0f, 0.0f, 1.0f, 1.0f)
-                                    .Do(builder =>
-                                    {
-                                        var gameObject = UnityEngine.Object.Instantiate(prefabGridScrollView.Prefab, builder.GameObject.transform);
-                                        var grid = gameObject.GetComponentInChildren<GridLayoutGroup>();
-                                        if (grid == null) throw new System.Exception("Grid not found.");
-                                        saveGridObject = grid.gameObject;
-                                        grid.cellSize = new Vector2(80.0f, 80.0f);
-                                        grid.padding = new RectOffset(4, 4, 4, 4);
-                                        grid.spacing = new Vector2(0.0f, 0.0f);
-                                    })
-                                .Done
-                            .Done
-                            .Element("ContentRight")
-                                .Layout()
-                                    .MinWidth(132 + 4 + 132 + 4 + 132 + 10)
-                                    .FlexibleWidth(0)
-                                .Done
-                                .SetVerticalLayout(new RectOffset(0, 10, 10, 10), 10, TextAnchor.UpperLeft, false, true, true, true, false, false, false)
-                                .Element("Icons Row")
-                                    .Layout()
-                                        .MinHeight(132 + 6 + 132)
-                                        .FlexibleHeight(0)
-                                    .Done
-                                    .Element_Button("Icon 1 Button", iconBlack.Sprite, Color.white, Vector4.zero, Image.Type.Simple)
-                                        .SetRectTransform(0, -132, 132, 0, 0, 1, 0, 1, 0, 1)
-                                        .SetOnClick(() => SaveFrameRemoveIcon(0))
-                                        .SetTransitionColors(new Color(0.2f, 0.2f, 0.2f, 1.0f), new Color(0.0f, 0.6f, 1.0f, 1.0f), new Color(0.222f, 0.667f, 1.0f, 1.0f), new Color(0.0f, 0.6f, 1.0f, 1.0f), new Color(0.5f, 0.5f, 0.5f, 1.0f), 1.0f, 0.1f)
-                                        .Element("Image")
-                                            .SetRectTransform(0, 0, 0, 0, 0.5f, 0.5f, 0, 0, 1, 1)
-                                            .Component_Image(iconEmpty.Sprite, Color.white, Image.Type.Sliced, Vector4.zero)
-                                            .Keep(out saveFrameIconImages[0])
-                                        .Done
-                                    .Done
-                                    .Element_Button("Icon 2 Button", iconBlack.Sprite, Color.white, Vector4.zero, Image.Type.Simple)
-                                        .SetRectTransform(132 + 4, -132, 132 + 4 + 132, 0, 0, 1, 0, 1, 0, 1)
-                                        .SetOnClick(() => SaveFrameRemoveIcon(1))
-                                        .SetTransitionColors(new Color(0.2f, 0.2f, 0.2f, 1.0f), new Color(0.0f, 0.6f, 1.0f, 1.0f), new Color(0.222f, 0.667f, 1.0f, 1.0f), new Color(0.0f, 0.6f, 1.0f, 1.0f), new Color(0.5f, 0.5f, 0.5f, 1.0f), 1.0f, 0.1f)
-                                        .Element("Image")
-                                            .SetRectTransform(0, 0, 0, 0, 0.5f, 0.5f, 0, 0, 1, 1)
-                                            .Component_Image(iconEmpty.Sprite, Color.white, Image.Type.Sliced, Vector4.zero)
-                                        .Keep(out saveFrameIconImages[1])
-                                        .Done
-                                    .Done
-                                    .Element_Button("Icon 3 Button", iconBlack.Sprite, Color.white, Vector4.zero, Image.Type.Simple)
-                                        .SetRectTransform(0, -(132 + 4 + 132), 132, -(132 + 4), 0, 1, 0, 1, 0, 1)
-                                        .SetOnClick(() => SaveFrameRemoveIcon(2))
-                                        .SetTransitionColors(new Color(0.2f, 0.2f, 0.2f, 1.0f), new Color(0.0f, 0.6f, 1.0f, 1.0f), new Color(0.222f, 0.667f, 1.0f, 1.0f), new Color(0.0f, 0.6f, 1.0f, 1.0f), new Color(0.5f, 0.5f, 0.5f, 1.0f), 1.0f, 0.1f)
-                                        .Element("Image")
-                                            .SetRectTransform(0, 0, 0, 0, 0.5f, 0.5f, 0, 0, 1, 1)
-                                            .Component_Image(iconEmpty.Sprite, Color.white, Image.Type.Sliced, Vector4.zero)
-                                            .Keep(out saveFrameIconImages[2])
-                                        .Done
-                                    .Done
-                                    .Element_Button("Icon 4 Button", iconBlack.Sprite, Color.white, Vector4.zero, Image.Type.Simple)
-                                        .SetRectTransform(132 + 4, -(132 + 4 + 132), 132 + 4 + 132, -(132 + 4), 0, 1, 0, 1, 0, 1)
-                                        .SetOnClick(() => SaveFrameRemoveIcon(3))
-                                        .SetTransitionColors(new Color(0.2f, 0.2f, 0.2f, 1.0f), new Color(0.0f, 0.6f, 1.0f, 1.0f), new Color(0.222f, 0.667f, 1.0f, 1.0f), new Color(0.0f, 0.6f, 1.0f, 1.0f), new Color(0.5f, 0.5f, 0.5f, 1.0f), 1.0f, 0.1f)
-                                        .Element("Image")
-                                            .SetRectTransform(0, 0, 0, 0, 0.5f, 0.5f, 0, 0, 1, 1)
-                                            .Component_Image(iconEmpty.Sprite, Color.white, Image.Type.Sliced, Vector4.zero)
-                                            .Keep(out saveFrameIconImages[3])
-                                        .Done
-                                    .Done
-                                    .Element("Preview")
-                                        .SetRectTransform(132 + 4 + 132 + 10 + 64 - 50, -(132 + 5 - 60), 132 + 4 + 132 + 10 + 64 - 50, -(132 + 5 - 60), 0, 1, 0, 1, 0, 1)
-                                        .SetSizeDelta(100, 120)
-                                        .Keep(out saveFramePreviewContainer)
-                                    .Done
-                                .Done
-                                .Element("Name Row")
-                                    .Layout()
-                                        .MinHeight(40)
-                                        .FlexibleHeight(0)
-                                    .Done
-                                    .Do(builder =>
-                                    {
-                                        var gameObject = Object.Instantiate(prefabBlueprintNameInputField.Prefab, builder.GameObject.transform);
-                                        saveFrameNameInputField = gameObject.GetComponentInChildren<TMP_InputField>();
-                                        if (saveFrameNameInputField == null) throw new System.Exception("TextMeshPro Input field not found.");
-                                        saveFrameNameInputField.text = "";
-                                        saveFrameNameInputField.onValueChanged.AddListener(new UnityAction<string>((string value) =>
-                                        {
-                                            if (saveFramePreviewLabel != null) saveFramePreviewLabel.text = Path.GetFileName(value);
-                                        }));
-                                        EventSystem.current.SetSelectedGameObject(saveFrameNameInputField.gameObject, null);
-                                    })
-                                .Done
-                                .Element("Row Buttons")
-                                    .Layout()
-                                        .MinHeight(40)
-                                        .FlexibleHeight(0)
-                                    .Done
-                                    .SetHorizontalLayout(new RectOffset(0, 0, 0, 0), 5.0f, TextAnchor.UpperLeft, false, true, true, false, true, false, false)
-                                    .Element_TextButton("Button Confirm", "Save Blueprint")
-                                        .Updater<Button>(guiUpdaters, () => !string.IsNullOrWhiteSpace(saveFrameNameInputField?.text))
-                                        .SetOnClick(FinishSaveBlueprint)
-                                    .Done
-                                    .Element_TextButton("Button Get Existing", "Get Existing")
-                                        .SetOnClick(GetInfoFromExistingBlueprint)
-                                    .Done
-                                    .Element_TextButton("Button Cancel", "Cancel")
-                                        .SetOnClick(HideSaveFrame)
-                                    .Done
-                                .Done
-                                .Element_ScrollBox("Material Report ScrollBox", builder =>
-                                    {
-                                        builder = builder
-                                            .SetVerticalLayout(new RectOffset(5, 5, 5, 5), 10.0f, TextAnchor.UpperLeft, false, true, true, false, false, false, false)
-                                            .Element("Material Report")
-                                                .SetRectTransform(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f, 0.0f, 1.0f)
-                                                .AutoSize(ContentSizeFitter.FitMode.PreferredSize, ContentSizeFitter.FitMode.PreferredSize)
-                                                .Component_Text("", "OpenSansSemibold SDF", 14.0f, Color.white, TextAlignmentOptions.TopLeft)
-                                                .Keep(out saveFrameMaterialReportText)
-                                            .Done;
-                                    })
-                                    .Layout()
-                                        .PreferredHeight(400)
-                                    .Done
-                                .Done
-                            .Done
-                        .Done
-                    .Done
-                .End();
-
-                FillSaveGrid();
-            }
-
-            if (CurrentBlueprint != null)
-            {
-                if (saveFrameNameInputField != null) saveFrameNameInputField.text = CurrentBlueprint.Name;
-
-                for (int i = 0; i < 4; i++) saveFrameIconItemTemplates[i] = null;
-                CurrentBlueprint.IconItemTemplates.CopyTo(saveFrameIconItemTemplates, 0);
-                saveFrameIconCount = CurrentBlueprint.IconItemTemplates.Length;
-            }
-
-            FillSavePreview();
-            FillSaveFrameIcons();
-            FillSaveMaterialReport();
-
-            AudioManager.playUISoundEffect(ResourceDB.resourceLinker.audioClip_UIOpen);
-
-            saveFrame.SetActive(true);
-            GlobalStateManager.addCursorRequirement();
-            saveFrameEscapeCloseProxy = EscapeCloseProxy.Register(HideSaveFrame);
+            _saveFrame.Show();
         }
 
-        private void FillSaveMaterialReport()
+        internal void HideLibraryFrame(bool silent = false)
         {
-            int totalItemCount = 0;
-            var materialReportBuilder = new System.Text.StringBuilder();
-            foreach (var kv in CurrentBlueprint.ShoppingList)
-            {
-                var itemCount = kv.Value.count;
-                if (itemCount > 0)
-                {
-                    totalItemCount += itemCount;
-                    var name = kv.Value.name;
-                    materialReportBuilder.AppendLine($"<color=#CCCCCC>{name}:</color> {itemCount}");
-                }
-            }
-
-            if (totalItemCount > 0)
-            {
-                materialReportBuilder.AppendLine($"<color=#CCCCCC>Total:</color> {totalItemCount}");
-            }
-
-            saveFrameMaterialReportText.text = materialReportBuilder.ToString();
+            _libraryFrame.Hide(silent);
         }
 
-        private void FillSavePreview()
+        internal void ShowLibraryFrame(SaveFrame saveFrame = null)
         {
-            saveFramePreviewIconImages[0] = saveFramePreviewIconImages[1] = saveFramePreviewIconImages[2] = saveFramePreviewIconImages[3] = null;
-
-            switch (saveFrameIconCount)
-            {
-                case 0:
-                    {
-                        DestroyAllTransformChildren(saveFramePreviewContainer.transform);
-                        var gameObject = UnityEngine.Object.Instantiate(prefabBlueprintButtonDefaultIcon.Prefab, saveFramePreviewContainer.transform);
-                        var deleteButton = gameObject.transform.Find("DeleteButton")?.gameObject;
-                        if (deleteButton != null) deleteButton.SetActive(false);
-                        var renameButton = gameObject.transform.Find("RenameButton")?.gameObject;
-                        if (renameButton != null) renameButton.SetActive(false);
-                        saveFramePreviewLabel = gameObject.GetComponentInChildren<TextMeshProUGUI>();
-                        if (saveFramePreviewLabel == null) throw new System.ArgumentNullException(nameof(saveFramePreviewLabel));
-                    }
-                    break;
-
-                case 1:
-                    {
-                        DestroyAllTransformChildren(saveFramePreviewContainer.transform);
-                        var gameObject = UnityEngine.Object.Instantiate(prefabBlueprintButton1Icon.Prefab, saveFramePreviewContainer.transform);
-                        var deleteButton = gameObject.transform.Find("DeleteButton")?.gameObject;
-                        if (deleteButton != null) deleteButton.SetActive(false);
-                        var renameButton = gameObject.transform.Find("RenameButton")?.gameObject;
-                        if (renameButton != null) renameButton.SetActive(false);
-                        saveFramePreviewLabel = gameObject.GetComponentInChildren<TextMeshProUGUI>();
-                        if (saveFramePreviewLabel == null) throw new System.ArgumentNullException(nameof(saveFramePreviewLabel));
-                        saveFramePreviewIconImages[0] = gameObject.transform.Find("Icon1")?.GetComponent<Image>();
-                    }
-                    break;
-
-                case 2:
-                    {
-                        DestroyAllTransformChildren(saveFramePreviewContainer.transform);
-                        var gameObject = UnityEngine.Object.Instantiate(prefabBlueprintButton2Icon.Prefab, saveFramePreviewContainer.transform);
-                        var deleteButton = gameObject.transform.Find("DeleteButton")?.gameObject;
-                        if (deleteButton != null) deleteButton.SetActive(false);
-                        var renameButton = gameObject.transform.Find("RenameButton")?.gameObject;
-                        if (renameButton != null) renameButton.SetActive(false);
-                        saveFramePreviewLabel = gameObject.GetComponentInChildren<TextMeshProUGUI>();
-                        if (saveFramePreviewLabel == null) throw new System.ArgumentNullException(nameof(saveFramePreviewLabel));
-                        saveFramePreviewIconImages[0] = gameObject.transform.Find("Icon1")?.GetComponent<Image>();
-                        saveFramePreviewIconImages[1] = gameObject.transform.Find("Icon2")?.GetComponent<Image>();
-                    }
-                    break;
-
-                case 3:
-                    {
-                        DestroyAllTransformChildren(saveFramePreviewContainer.transform);
-                        var gameObject = UnityEngine.Object.Instantiate(prefabBlueprintButton3Icon.Prefab, saveFramePreviewContainer.transform);
-                        var deleteButton = gameObject.transform.Find("DeleteButton")?.gameObject;
-                        if (deleteButton != null) deleteButton.SetActive(false);
-                        var renameButton = gameObject.transform.Find("RenameButton")?.gameObject;
-                        if (renameButton != null) renameButton.SetActive(false);
-                        saveFramePreviewLabel = gameObject.GetComponentInChildren<TextMeshProUGUI>();
-                        if (saveFramePreviewLabel == null) throw new System.ArgumentNullException(nameof(saveFramePreviewLabel));
-                        saveFramePreviewIconImages[0] = gameObject.transform.Find("Icon1")?.GetComponent<Image>();
-                        saveFramePreviewIconImages[1] = gameObject.transform.Find("Icon2")?.GetComponent<Image>();
-                        saveFramePreviewIconImages[2] = gameObject.transform.Find("Icon3")?.GetComponent<Image>();
-                    }
-                    break;
-
-                case 4:
-                    {
-                        DestroyAllTransformChildren(saveFramePreviewContainer.transform);
-                        var gameObject = UnityEngine.Object.Instantiate(prefabBlueprintButton4Icon.Prefab, saveFramePreviewContainer.transform);
-                        saveFramePreviewLabel = gameObject.GetComponentInChildren<TextMeshProUGUI>();
-                        if (saveFramePreviewLabel == null) throw new System.ArgumentNullException(nameof(saveFramePreviewLabel));
-                        var renameButton = gameObject.transform.Find("RenameButton")?.gameObject;
-                        if (renameButton != null) renameButton.SetActive(false);
-                        saveFramePreviewIconImages[0] = gameObject.transform.Find("Icon1")?.GetComponent<Image>();
-                        saveFramePreviewIconImages[1] = gameObject.transform.Find("Icon2")?.GetComponent<Image>();
-                        saveFramePreviewIconImages[2] = gameObject.transform.Find("Icon3")?.GetComponent<Image>();
-                        saveFramePreviewIconImages[3] = gameObject.transform.Find("Icon4")?.GetComponent<Image>();
-                    }
-                    break;
-
-                default:
-                    break;
-            }
-
-            if (saveFramePreviewLabel != null && saveFrameNameInputField != null)
-            {
-                saveFramePreviewLabel.text = Path.GetFileName(saveFrameNameInputField.text);
-            }
-
-            for (int i = 0; i < saveFrameIconCount; i++)
-            {
-                if (saveFramePreviewIconImages[i] != null)
-                {
-                    saveFramePreviewIconImages[i].sprite = saveFrameIconItemTemplates[i]?.icon ?? iconEmpty.Sprite;
-                }
-            }
+            _libraryFrame.Show(saveFrame);
         }
 
-        private void FillSaveGrid()
+        internal void FillLibraryGrid(string relativePath, SaveFrame saveFrame = null)
         {
-            if (saveGridObject == null) return;
-
-            DestroyAllTransformChildren(saveGridObject.transform);
-
-            foreach (var kv in ItemTemplateManager.getAllItemTemplates())
-            {
-                var itemTemplate = kv.Value;
-                if (itemTemplate.isHiddenItem) continue;
-
-                var gameObject = UnityEngine.Object.Instantiate(prefabBlueprintButtonIcon.Prefab, saveGridObject.transform);
-
-                var iconImage = gameObject.transform.Find("Icon1")?.GetComponent<Image>();
-                if (iconImage != null) iconImage.sprite = itemTemplate.icon;
-
-                var button = gameObject.GetComponentInChildren<Button>();
-                if (button != null)
-                {
-                    button.onClick.AddListener(new UnityAction(() => SaveFrameAddIcon(itemTemplate)));
-                }
-
-                var panel = gameObject.GetComponent<Image>();
-                if (panel != null) panel.color = Color.clear;
-            }
+            _libraryFrame.FillLibraryGrid(relativePath, saveFrame);
         }
 
-        private void FillSaveFrameIcons()
+        internal void HideFolderFrame(bool silent = false)
         {
-            for (int i = 0; i < saveFrameIconCount; i++)
-            {
-                if (saveFrameIconImages[i] != null)
-                {
-                    saveFrameIconImages[i].sprite = saveFrameIconItemTemplates[i]?.icon_256 ?? iconEmpty.Sprite;
-                }
-            }
-            for (int i = saveFrameIconCount; i < 4; i++)
-            {
-                if (saveFrameIconImages[i] != null)
-                {
-                    saveFrameIconImages[i].sprite = iconEmpty.Sprite;
-                }
-            }
-        }
-
-        private void SaveFrameAddIcon(ItemTemplate itemTemplate)
-        {
-            if (itemTemplate == null) throw new System.ArgumentNullException(nameof(itemTemplate));
-            if (saveFrameIconCount >= 4) return;
-
-            AudioManager.playUISoundEffect(ResourceDB.resourceLinker.audioClip_UIButtonClick);
-
-            saveFrameIconItemTemplates[saveFrameIconCount] = itemTemplate;
-            saveFrameIconCount++;
-
-            FillSavePreview();
-            FillSaveFrameIcons();
-        }
-
-        private void SaveFrameRemoveIcon(int iconIndex)
-        {
-            if (iconIndex >= saveFrameIconCount) return;
-
-            AudioManager.playUISoundEffect(ResourceDB.resourceLinker.audioClip_UIButtonClick);
-
-            for (int i = iconIndex; i < 3; i++) saveFrameIconItemTemplates[i] = saveFrameIconItemTemplates[i + 1];
-            saveFrameIconItemTemplates[3] = null;
-            saveFrameIconCount--;
-
-            FillSavePreview();
-            FillSaveFrameIcons();
-        }
-
-        private static void DestroyAllTransformChildren(Transform transform)
-        {
-            for (int i = transform.childCount - 1; i >= 0; i--)
-            {
-                Transform child = transform.GetChild(i);
-                child.SetParent(null, false);
-                UnityEngine.Object.Destroy(child.gameObject);
-            }
-        }
-
-        private void BeginLoadBlueprint()
-        {
-            HideBlueprintFrame();
-            ShowLibraryFrame();
-        }
-
-        internal void HideLibraryFrame()
-        {
-            if (libraryFrameEscapeCloseProxy != null)
-            {
-                libraryFrameEscapeCloseProxy.Dispose();
-                libraryFrameEscapeCloseProxy = null;
-            }
-
-            if (libraryFrame == null || !libraryFrame.activeSelf) return;
-
-            AudioManager.playUISoundEffect(ResourceDB.resourceLinker.audioClip_UIClose);
-
-            libraryFrame.SetActive(false);
-            GlobalStateManager.removeCursorRequirement();
-        }
-
-        internal void ShowLibraryFrame(bool isForSaveInfo = false)
-        {
-            if (!isForSaveInfo && saveFrame != null && saveFrame.activeSelf) HideSaveFrame();
-
-            if (libraryFrame != null)
-            {
-                if (libraryFrame.activeSelf) return;
-
-                Object.Destroy(libraryFrame);
-                libraryFrame = null;
-            }
-
-            var graphics = Traverse.Create(typeof(UIRaycastTooltipManager))?.Field("singleton")?.GetValue<UIRaycastTooltipManager>()?.tooltipRectTransform?.GetComponentsInChildren<Graphic>();
-            if (graphics != null)
-            {
-                foreach (var graphic in graphics)
-                {
-                    graphic.raycastTarget = false;
-                }
-            }
-
-            ulong usernameHash = GameRoot.getClientCharacter().usernameHash;
-            UIBuilder.BeginWith(GameRoot.getDefaultCanvas())
-                .Element_Panel("Library Frame", "corner_cut_outline", new Color(0.133f, 0.133f, 0.133f, 1.0f), new Vector4(13, 10, 8, 13))
-                    .Keep(out libraryFrame)
-                    .SetRectTransform(100, 100, -100, -100, 0.5f, 0.5f, 0, 0, 1, 1)
-                    .Element_Header("HeaderBar", "corner_cut_outline", new Color(0.0f, 0.6f, 1.0f, 1.0f), new Vector4(13, 3, 8, 13))
-                        .SetRectTransform(0.0f, -60.0f, 0.0f, 0.0f, 0.5f, 1.0f, 0.0f, 1.0f, 1.0f, 1.0f)
-                        .Element("Heading")
-                            .SetRectTransform(0.0f, 0.0f, -60.0f, 0.0f, 0.0f, 0.5f, 0.0f, 0.0f, 1.0f, 1.0f)
-                            .Component_Text("Blueprints", "OpenSansSemibold SDF", 34.0f, Color.white)
-                            .Keep(out libraryFrameHeading)
-                        .Done
-                        .Element_Button("Button Close", "corner_cut_fully_inset", Color.white, new Vector4(13.0f, 1.0f, 4.0f, 13.0f))
-                            .SetOnClick(HideLibraryFrame)
-                            .SetRectTransform(-60.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.5f, 1.0f, 0.0f, 1.0f, 1.0f)
-                            .SetTransitionColors(new Color(1.0f, 1.0f, 1.0f, 1.0f), new Color(1.0f, 0.25f, 0.0f, 1.0f), new Color(1.0f, 0.0f, 0.0f, 1.0f), new Color(1.0f, 0.25f, 0.0f, 1.0f), new Color(0.5f, 0.5f, 0.5f, 1.0f), 1.0f, 0.1f)
-                            .Element("Image")
-                                .SetRectTransform(5.0f, 5.0f, -5.0f, -5.0f, 0.5f, 0.5f, 0.0f, 0.0f, 1.0f, 1.0f)
-                                .Component_Image("cross", Color.white, Image.Type.Sliced, Vector4.zero)
-                            .Done
-                        .Done
-                    .Done
-                    .Element("Content")
-                        .SetRectTransform(0.0f, 0.0f, 0.0f, -60.0f, 0.5f, 0.5f, 0.0f, 0.0f, 1.0f, 1.0f)
-                        .Element("Padding")
-                            .SetRectTransform(10.0f, 10.0f, -10.0f, -10.0f, 0.5f, 0.5f, 0.0f, 0.0f, 1.0f, 1.0f)
-                            .Do(builder =>
-                            {
-                                var gameObject = Object.Instantiate(prefabGridScrollView.Prefab, builder.GameObject.transform);
-                                var grid = gameObject.GetComponentInChildren<GridLayoutGroup>();
-                                if (grid == null) throw new System.Exception("Grid not found.");
-                                libraryGridObject = grid.gameObject;
-                            })
-                        .Done
-                    .Done
-                .Done
-            .End();
-
-            FillLibraryGrid(lastLibraryRelativePath, isForSaveInfo);
-
-            AudioManager.playUISoundEffect(ResourceDB.resourceLinker.audioClip_UIOpen);
-
-            libraryFrame.SetActive(true);
-            GlobalStateManager.addCursorRequirement();
-            libraryFrameEscapeCloseProxy = EscapeCloseProxy.Register(HideLibraryFrame);
-        }
-
-        private void FillLibraryGrid(string relativePath, bool isForSaveInfo)
-        {
-            if (libraryGridObject == null) return;
-
-            lastLibraryRelativePath = relativePath;
-
-            DestroyAllTransformChildren(libraryGridObject.transform);
-
-            libraryFrameHeading.text = string.IsNullOrEmpty(relativePath) ? "Blueprints" : $"Blueprints\\{relativePath}";
-
-            var prefabs = new GameObject[5]
-            {
-                prefabBlueprintButtonDefaultIcon.Prefab, prefabBlueprintButton1Icon.Prefab, prefabBlueprintButton2Icon.Prefab, prefabBlueprintButton3Icon.Prefab, prefabBlueprintButton4Icon.Prefab
-            };
-
-            if (!string.IsNullOrEmpty(relativePath))
-            {
-                var backGameObject = Object.Instantiate(prefabBlueprintButtonFolderBack.Prefab, libraryGridObject.transform);
-                var backButton = backGameObject.GetComponentInChildren<Button>();
-                if (backButton != null)
-                {
-                    backButton.onClick.AddListener(new UnityAction(() =>
-                    {
-                        AudioManager.playUISoundEffect(ResourceDB.resourceLinker.audioClip_UIButtonClick);
-
-                        var backPath = Path.GetDirectoryName(relativePath);
-                        FillLibraryGrid(backPath, isForSaveInfo);
-                    }));
-                }
-            }
-
-            if (!isForSaveInfo)
-            {
-                var newFolderGameObject = Object.Instantiate(prefabBlueprintButtonFolderNew.Prefab, libraryGridObject.transform);
-                var newFolderButton = newFolderGameObject.GetComponentInChildren<Button>();
-                if (newFolderButton != null)
-                {
-                    newFolderButton.onClick.AddListener(new UnityAction(() =>
-                    {
-                        ShowFolderFrame(relativePath, "");
-                        //TextEntryFrame.Show("Enter folder name:", "", "Create Folder", (name) =>
-                        //{
-                        //    if (string.IsNullOrWhiteSpace(name)) return;
-                        //    var path = Path.Combine(DuplicationerPlugin.BlueprintFolder, relativePath, name);
-                        //    if (Directory.Exists(path)) return;
-                        //    Directory.CreateDirectory(path);
-                        //    FillLibraryGrid(Path.Combine(relativePath, name), false);
-                        //});
-                    }));
-                }
-            }
-
-            var builder = UIBuilder.BeginWith(libraryGridObject);
-            foreach (var path in Directory.GetDirectories(Path.Combine(DuplicationerPlugin.BlueprintFolder, relativePath)))
-            {
-                var name = Path.GetFileName(path);
-
-                var gameObject = Object.Instantiate(prefabBlueprintButtonFolder.Prefab, libraryGridObject.transform);
-
-                var label = gameObject.transform.Find("Label")?.GetComponent<TextMeshProUGUI>();
-                if (label != null) label.text = name;
-
-                ItemTemplate iconItemTemplate = null;
-                var iconNamePath = Path.Combine(path, "__folder_icon.txt");
-                if (File.Exists(iconNamePath))
-                {
-                    var identifier = File.ReadAllText(iconNamePath).Trim();
-                    var hash = ItemTemplate.generateStringHash(identifier);
-                    iconItemTemplate = ItemTemplateManager.getItemTemplate(hash);
-                }
-
-                var iconImage = gameObject.transform.Find("Icon1")?.GetComponent<Image>();
-                if (iconImage != null)
-                {
-                    iconImage.sprite = iconItemTemplate?.icon ?? iconEmpty.Sprite;
-                }
-
-                var button = gameObject.GetComponent<Button>();
-                if (button != null)
-                {
-                    button.onClick.AddListener(new UnityAction(() =>
-                    {
-                        ActionManager.AddQueuedEvent(() =>
-                        {
-                            AudioManager.playUISoundEffect(ResourceDB.resourceLinker.audioClip_UIButtonClick);
-
-                            FillLibraryGrid(Path.Combine(relativePath, name), isForSaveInfo);
-                        });
-                    }));
-                }
-
-                var deleteButton = gameObject.transform.Find("DeleteButton")?.GetComponent<Button>();
-                if (deleteButton != null)
-                {
-                    if (isForSaveInfo)
-                    {
-                        deleteButton.gameObject.SetActive(false);
-                    }
-                    else
-                    {
-                        var nameToDelete = name;
-                        var pathToDelete = path;
-                        deleteButton.onClick.AddListener(new UnityAction(() =>
-                        {
-                            ActionManager.AddQueuedEvent(() =>
-                            {
-                                ConfirmationFrame.Show($"Delete folder '{name}'", "Delete", () =>
-                                {
-                                    try
-                                    {
-                                        Directory.Delete(pathToDelete, true);
-                                        FillLibraryGrid(relativePath, false);
-                                    }
-                                    catch (System.Exception) { }
-                                });
-                            });
-                        }));
-                    }
-
-                    var renameButton = gameObject.transform.Find("RenameButton")?.GetComponent<Button>();
-                    if (renameButton != null)
-                    {
-                        if (isForSaveInfo)
-                        {
-                            renameButton.gameObject.SetActive(false);
-                        }
-                        else
-                        {
-                            var nameToRename = name;
-                            var pathToRename = path;
-                            renameButton.onClick.AddListener(new UnityAction(() =>
-                            {
-                                ActionManager.AddQueuedEvent(() =>
-                                {
-                                    ShowFolderFrame(relativePath, nameToRename);
-                                    //TextEntryFrame.Show($"Rename Folder", nameToRename, "Rename", (string newName) =>
-                                    //{
-                                    //    string filenameBase = Path.Combine(Path.GetDirectoryName(newName), PathHelpers.MakeValidFileName(Path.GetFileName(newName)));
-                                    //    string newPath = Path.Combine(DuplicationerPlugin.BlueprintFolder, relativePath, filenameBase);
-                                    //    if (!File.Exists(newPath))
-                                    //    {
-                                    //        try
-                                    //        {
-                                    //            DuplicationerPlugin.log.Log($"Renaming folder '{pathToRename}' to '{newPath}'");
-                                    //            Directory.Move(pathToRename, newPath);
-                                    //            FillLibraryGrid(relativePath, false);
-                                    //        }
-                                    //        catch (System.Exception) { }
-                                    //    }
-                                    //});
-                                });
-                            }));
-                        }
-                    }
-                }
-            }
-
-            foreach (var path in Directory.GetFiles(Path.Combine(DuplicationerPlugin.BlueprintFolder, relativePath), $"*.{DuplicationerPlugin.BlueprintExtension}"))
-            {
-                if (Blueprint.TryLoadFileHeader(path, out var header, out var name))
-                {
-                    var iconItemTemplates = new List<ItemTemplate>();
-                    if (header.icon1 != 0)
-                    {
-                        var template = ItemTemplateManager.getItemTemplate(header.icon1);
-                        if (template != null && template.icon != null) iconItemTemplates.Add(template);
-                    }
-                    if (header.icon2 != 0)
-                    {
-                        var template = ItemTemplateManager.getItemTemplate(header.icon2);
-                        if (template != null && template.icon != null) iconItemTemplates.Add(template);
-                    }
-                    if (header.icon3 != 0)
-                    {
-                        var template = ItemTemplateManager.getItemTemplate(header.icon3);
-                        if (template != null && template.icon != null) iconItemTemplates.Add(template);
-                    }
-                    if (header.icon4 != 0)
-                    {
-                        var template = ItemTemplateManager.getItemTemplate(header.icon4);
-                        if (template != null && template.icon != null) iconItemTemplates.Add(template);
-                    }
-
-                    int iconCount = iconItemTemplates.Count;
-
-                    var gameObject = Object.Instantiate(prefabs[iconCount], libraryGridObject.transform);
-
-                    var label = gameObject.transform.Find("Label")?.GetComponent<TextMeshProUGUI>();
-                    if (label != null) label.text = name;
-
-                    var iconImages = new Image[] {
-                        gameObject.transform.Find("Icon1")?.GetComponent<Image>(),
-                        gameObject.transform.Find("Icon2")?.GetComponent<Image>(),
-                        gameObject.transform.Find("Icon3")?.GetComponent<Image>(),
-                        gameObject.transform.Find("Icon4")?.GetComponent<Image>()
-                    };
-
-                    for (int iconIndex = 0; iconIndex < iconCount; iconIndex++)
-                    {
-                        iconImages[iconIndex].sprite = iconItemTemplates[iconIndex].icon;
-                    }
-
-                    var button = gameObject.GetComponent<Button>();
-                    if (button != null)
-                    {
-                        if (isForSaveInfo)
-                        {
-                            var nameForSaveInfo = Path.Combine(relativePath, Path.GetFileNameWithoutExtension(path));
-                            button.onClick.AddListener(new UnityAction(() =>
-                            {
-                                ActionManager.AddQueuedEvent(() =>
-                                {
-                                    saveFrameNameInputField.text = nameForSaveInfo;
-                                    saveFrameIconCount = iconCount;
-                                    for (int i = 0; i < 4; i++)
-                                    {
-                                        saveFrameIconItemTemplates[i] = (i < iconCount) ? iconItemTemplates[i] : null;
-                                    }
-                                    FillSaveFrameIcons();
-                                    FillSavePreview();
-                                    HideLibraryFrame();
-                                });
-                            }));
-                        }
-                        else
-                        {
-                            button.onClick.AddListener(new UnityAction(() =>
-                            {
-                                ActionManager.AddQueuedEvent(() =>
-                                {
-                                    HideLibraryFrame();
-                                    ClearBlueprintPlaceholders();
-                                    LoadBlueprintFromFile(path);
-                                    SelectMode(modePlace);
-                                });
-                            }));
-                        }
-                    }
-
-                    var deleteButton = gameObject.transform.Find("DeleteButton")?.GetComponent<Button>();
-                    if (deleteButton != null)
-                    {
-                        if (isForSaveInfo)
-                        {
-                            deleteButton.gameObject.SetActive(false);
-                        }
-                        else
-                        {
-                        var nameToDelete = name;
-                        var pathToDelete = path;
-                        deleteButton.onClick.AddListener(new UnityAction(() =>
-                        {
-                            ActionManager.AddQueuedEvent(() =>
-                            {
-                                ConfirmationFrame.Show($"Delete '{name}'", "Delete", () =>
-                                {
-                                    try
-                                    {
-                                        File.Delete(pathToDelete);
-                                        FillLibraryGrid(relativePath, false);
-                                    }
-                                    catch (System.Exception) { }
-                                });
-                            });
-                        }));
-                    }
-
-                    var renameButton = gameObject.transform.Find("RenameButton")?.GetComponent<Button>();
-                        if (renameButton != null)
-                        {
-                            if (isForSaveInfo)
-                            {
-                                renameButton.gameObject.SetActive(false);
-                            }
-                            else
-                            {
-                                var nameToRename = name;
-                                var pathToRename = path;
-                                renameButton.onClick.AddListener(new UnityAction(() =>
-                                {
-                                    ActionManager.AddQueuedEvent(() =>
-                                    {
-                                        TextEntryFrame.Show($"Rename Blueprint", nameToRename, "Rename", (string newName) =>
-                                        {
-                                            string filenameBase = Path.Combine(Path.GetDirectoryName(newName), PathHelpers.MakeValidFileName(Path.GetFileName(newName)));
-                                            string newPath = Path.Combine(DuplicationerPlugin.BlueprintFolder, relativePath, $"{filenameBase}.{DuplicationerPlugin.BlueprintExtension}");
-                                            if (File.Exists(newPath))
-                                            {
-                                                ConfirmationFrame.Show($"Overwrite '{newName}'?", "Overwrite", () =>
-                                                {
-                                                    try
-                                                    {
-                                                        DuplicationerPlugin.log.Log($"Renaming blueprint '{nameToRename}' to '{newName}'");
-                                                        File.Delete(newPath);
-                                                        File.Move(pathToRename, newPath);
-                                                        RenameBlueprint(newPath, Path.GetFileName(newName));
-                                                        FillLibraryGrid(relativePath, false);
-                                                    }
-                                                    catch (System.Exception) { }
-                                                });
-                                            }
-                                            else
-                                            {
-                                                try
-                                                {
-                                                    DuplicationerPlugin.log.Log($"Renaming blueprint '{nameToRename}' to '{newName}'");
-                                                    File.Move(pathToRename, newPath);
-                                                    RenameBlueprint(newPath, Path.GetFileName(newName));
-                                                    FillLibraryGrid(relativePath, false);
-                                                }
-                                                catch (System.Exception) { }
-                                            }
-                                        });
-                                    });
-                                }));
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        private void RenameBlueprint(string path, string name)
-        {
-            var iconItemTemplateIds = new ulong[4];
-
-            var reader = new BinaryReader(new FileStream(path, FileMode.Open, FileAccess.Read));
-
-            var magic = reader.ReadUInt32();
-            var version = reader.ReadUInt32();
-
-            for (int i = 0; i < 4; i++) iconItemTemplateIds[i] = reader.ReadUInt64();
-
-            var oldName = reader.ReadString();
-
-            var data = reader.ReadBytes((int)(reader.BaseStream.Length - reader.BaseStream.Position));
-
-            reader.Close();
-            reader.Dispose();
-
-            var writer = new BinaryWriter(new FileStream(path, FileMode.Create, FileAccess.Write));
-
-            writer.Write(magic);
-            writer.Write(version);
-
-            for (int i = 0; i < 4; i++)
-            {
-                writer.Write(iconItemTemplateIds[i]);
-            }
-
-            writer.Write(name);
-
-            writer.Write(data);
-
-            writer.Close();
-            writer.Dispose();
-        }
-
-        internal void HideFolderFrame()
-        {
-            if (folderFrameEscapeCloseProxy != null)
-            {
-                folderFrameEscapeCloseProxy.Dispose();
-                folderFrameEscapeCloseProxy = null;
-            }
-
-            if (folderFrame == null || !folderFrame.activeSelf) return;
-
-            AudioManager.playUISoundEffect(ResourceDB.resourceLinker.audioClip_UIClose);
-
-            folderFrame.SetActive(false);
-            GlobalStateManager.removeCursorRequirement();
+            _folderFrame.Hide(silent);
         }
 
         internal void ShowFolderFrame(string relativePath, string folderName)
         {
-            if (folderFrame != null && folderFrame.activeSelf) return;
-
-            var originalPath = Path.Combine(DuplicationerPlugin.BlueprintFolder, relativePath, folderName);
-
-            if (folderFrame != null)
-            {
-                Object.Destroy(folderFrame);
-                folderFrame = null;
-            }
-
-            ulong usernameHash = GameRoot.getClientCharacter().usernameHash;
-            UIBuilder.BeginWith(GameRoot.getDefaultCanvas())
-                .Element_Panel("Folder Frame", "corner_cut_outline", new Color(0.133f, 0.133f, 0.133f, 1.0f), new Vector4(13, 10, 8, 13))
-                    .Keep(out folderFrame)
-                    .SetRectTransform(100, 100, -100, -100, 0.5f, 0.5f, 0, 0, 1, 1)
-                    .Element_Header("HeaderBar", "corner_cut_outline", new Color(0.0f, 0.6f, 1.0f, 1.0f), new Vector4(13, 3, 8, 13))
-                        .SetRectTransform(0.0f, -60.0f, 0.0f, 0.0f, 0.5f, 1.0f, 0.0f, 1.0f, 1.0f, 1.0f)
-                        .Element("Heading")
-                            .SetRectTransform(0.0f, 0.0f, -60.0f, 0.0f, 0.0f, 0.5f, 0.0f, 0.0f, 1.0f, 1.0f)
-                            .Component_Text($"Folder - /{relativePath}", "OpenSansSemibold SDF", 34.0f, Color.white)
-                        .Done
-                        .Element_Button("Button Close", "corner_cut_fully_inset", Color.white, new Vector4(13.0f, 1.0f, 4.0f, 13.0f))
-                            .SetOnClick(HideFolderFrame)
-                            .SetRectTransform(-60.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.5f, 1.0f, 0.0f, 1.0f, 1.0f)
-                            .SetTransitionColors(new Color(1.0f, 1.0f, 1.0f, 1.0f), new Color(1.0f, 0.25f, 0.0f, 1.0f), new Color(1.0f, 0.0f, 0.0f, 1.0f), new Color(1.0f, 0.25f, 0.0f, 1.0f), new Color(0.5f, 0.5f, 0.5f, 1.0f), 1.0f, 0.1f)
-                            .Element("Image")
-                                .SetRectTransform(5.0f, 5.0f, -5.0f, -5.0f, 0.5f, 0.5f, 0.0f, 0.0f, 1.0f, 1.0f)
-                                .Component_Image("cross", Color.white, Image.Type.Sliced, Vector4.zero)
-                            .Done
-                        .Done
-                    .Done
-                    .Element("Content")
-                        .SetRectTransform(0.0f, 0.0f, 0.0f, -60.0f, 0.5f, 0.5f, 0.0f, 0.0f, 1.0f, 1.0f)
-                        .SetHorizontalLayout(new RectOffset(0, 0, 0, 0), 0, TextAnchor.UpperLeft, false, true, true, false, true, false, false)
-                        .Element("ContentLeft")
-                            .Layout()
-                                .FlexibleWidth(1)
-                            .Done
-                            .Element("Padding")
-                                .SetRectTransform(10.0f, 10.0f, -10.0f, -10.0f, 0.5f, 0.5f, 0.0f, 0.0f, 1.0f, 1.0f)
-                                .Do(builder =>
-                                {
-                                    var gameObject = Object.Instantiate(prefabGridScrollView.Prefab, builder.GameObject.transform);
-                                    var grid = gameObject.GetComponentInChildren<GridLayoutGroup>();
-                                    if (grid == null) throw new System.Exception("Grid not found.");
-                                    folderGridObject = grid.gameObject;
-                                    grid.cellSize = new Vector2(80.0f, 80.0f);
-                                    grid.padding = new RectOffset(4, 4, 4, 4);
-                                    grid.spacing = new Vector2(0.0f, 0.0f);
-                                })
-                            .Done
-                        .Done
-                        .Element("ContentRight")
-                            .Layout()
-                                .MinWidth(132 + 4 + 132 + 4 + 132 + 10)
-                                .FlexibleWidth(0)
-                            .Done
-                            .SetVerticalLayout(new RectOffset(0, 10, 10, 10), 10, TextAnchor.UpperLeft, false, true, true, true, false, false, false)
-                            .Element("Icons Row")
-                                .Layout()
-                                    .MinHeight(132 + 6 + 132)
-                                    .FlexibleHeight(0)
-                                .Done
-                                .Element_Button("Icon 1 Button", iconBlack.Sprite, Color.white, Vector4.zero, Image.Type.Simple)
-                                    .SetRectTransform(0, -270, 270, 0, 0, 1, 0, 1, 0, 1)
-                                    .SetOnClick(() => {
-                                        folderFrameIconImage.sprite = iconEmpty.Sprite;
-                                        folderFrameIconItemTemplate = null;
-                                        FillFolderPreview();
-                                        AudioManager.playUISoundEffect(ResourceDB.resourceLinker.audioClip_UIButtonClick);
-                                    })
-                                    .SetTransitionColors(new Color(0.2f, 0.2f, 0.2f, 1.0f), new Color(0.0f, 0.6f, 1.0f, 1.0f), new Color(0.222f, 0.667f, 1.0f, 1.0f), new Color(0.0f, 0.6f, 1.0f, 1.0f), new Color(0.5f, 0.5f, 0.5f, 1.0f), 1.0f, 0.1f)
-                                    .Element("Image")
-                                        .SetRectTransform(0, 0, 0, 0, 0.5f, 0.5f, 0, 0, 1, 1)
-                                        .Component_Image(iconEmpty.Sprite, Color.white, Image.Type.Sliced, Vector4.zero)
-                                        .Keep(out folderFrameIconImage)
-                                    .Done
-                                .Done
-                                .Element("Preview")
-                                    .SetRectTransform(132 + 4 + 132 + 10 + 64 - 50, -(132 + 5 - 60), 132 + 4 + 132 + 10 + 64 - 50, -(132 + 5 - 60), 0, 1, 0, 1, 0, 1)
-                                    .SetSizeDelta(100, 120)
-                                    .Keep(out folderFramePreviewContainer)
-                                .Done
-                            .Done
-                            .Element("Name Row")
-                                .Layout()
-                                    .MinHeight(40)
-                                    .FlexibleHeight(0)
-                                .Done
-                                .Do(builder =>
-                                {
-                                    var gameObject = Object.Instantiate(prefabBlueprintNameInputField.Prefab, builder.GameObject.transform);
-                                    folderFrameNameInputField = gameObject.GetComponentInChildren<TMP_InputField>();
-                                    if (folderFrameNameInputField == null) throw new System.Exception("TextMeshPro Input field not found.");
-                                    folderFrameNameInputField.text = "";
-                                    folderFrameNameInputField.onValueChanged.AddListener(new UnityAction<string>((string value) =>
-                                    {
-                                        if (folderFramePreviewLabel != null) folderFramePreviewLabel.text = Path.GetFileName(value);
-                                    }));
-                                    EventSystem.current.SetSelectedGameObject(folderFrameNameInputField.gameObject, null);
-                                })
-                            .Done
-                            .Element("Row Buttons")
-                                .Layout()
-                                    .MinHeight(40)
-                                    .FlexibleHeight(0)
-                                .Done
-                                .SetHorizontalLayout(new RectOffset(0, 0, 0, 0), 5.0f, TextAnchor.UpperLeft, false, true, true, false, true, false, false)
-                                .Element_TextButton("Button Confirm", "Confirm")
-                                    .Updater<Button>(guiUpdaters, () => !string.IsNullOrWhiteSpace(folderFrameNameInputField?.text))
-                                    .SetOnClick(() => { ConfirmFolderEdit(relativePath, folderName, folderFrameNameInputField?.text); })
-                                .Done
-                                .Element_TextButton("Button Cancel", "Cancel")
-                                    .SetOnClick(HideFolderFrame)
-                                .Done
-                            .Done
-                        .Done
-                    .Done
-                .Done
-            .End();
-
-            FillFolderGrid();
-
-            if (folderFrameNameInputField != null) folderFrameNameInputField.text = folderName;
-
-            folderFrameIconItemTemplate = null;
-
-            if (!string.IsNullOrEmpty(folderName))
-            {
-                string iconNamePath = Path.Combine(originalPath, "__folder_icon.txt");
-                if (File.Exists(iconNamePath))
-                {
-                    var iconName = File.ReadAllText(iconNamePath).Trim();
-                    var iconHash = ItemTemplate.generateStringHash(iconName);
-                    folderFrameIconItemTemplate = ItemTemplateManager.getItemTemplate(iconHash);
-                }
-            }
-
-            AudioManager.playUISoundEffect(ResourceDB.resourceLinker.audioClip_UIOpen);
-
-            FillFolderPreview();
-            FillFolderFrameIcons();
-
-            folderFrame.SetActive(true);
-            GlobalStateManager.addCursorRequirement();
-            folderFrameEscapeCloseProxy = EscapeCloseProxy.Register(HideFolderFrame);
-        }
-
-        private void ConfirmFolderEdit(string relativePath, string originalName, string newName)
-        {
-            var newPath = Path.Combine(DuplicationerPlugin.BlueprintFolder, relativePath, newName);
-            var iconNamePath = Path.Combine(newPath, "__folder_icon.txt");
-            if (string.IsNullOrWhiteSpace(originalName))
-            {
-                try
-                {
-                    Directory.CreateDirectory(newPath);
-                    if (Directory.Exists(newPath))
-                    {
-                        if (folderFrameIconItemTemplate != null)
-                        {
-                            File.WriteAllText(iconNamePath, folderFrameIconItemTemplate.identifier);
-                        }
-
-                        HideFolderFrame();
-                        FillLibraryGrid(relativePath, false);
-                    }
-                }
-                catch { }
-            }
-            else
-            {
-                var originalPath = Path.Combine(DuplicationerPlugin.BlueprintFolder, relativePath, originalName);
-
-                try
-                {
-                    if (originalPath != newPath && Directory.Exists(originalPath) && !Directory.Exists(newPath))
-                    {
-                        Directory.Move(originalPath, newPath);
-                    }
-
-                    if (File.Exists(iconNamePath)) File.Delete(iconNamePath);
-
-                    if (folderFrameIconItemTemplate != null)
-                    {
-                        File.WriteAllText(iconNamePath, folderFrameIconItemTemplate.identifier);
-                    }
-
-                    HideFolderFrame();
-                    FillLibraryGrid(relativePath, false);
-                }
-                catch { }
-            }
-        }
-
-        private void FillFolderGrid()
-        {
-            if (folderGridObject == null) return;
-
-            DestroyAllTransformChildren(folderGridObject.transform);
-
-            foreach (var kv in ItemTemplateManager.getAllItemTemplates())
-            {
-                var itemTemplate = kv.Value;
-                if (itemTemplate.isHiddenItem) continue;
-
-                var gameObject = Object.Instantiate(prefabBlueprintButtonIcon.Prefab, folderGridObject.transform);
-
-                var iconImage = gameObject.transform.Find("Icon1")?.GetComponent<Image>();
-                if (iconImage != null) iconImage.sprite = itemTemplate.icon;
-
-                var button = gameObject.GetComponentInChildren<Button>();
-                if (button != null)
-                {
-                    button.onClick.AddListener(new UnityAction(() => {
-                        AudioManager.playUISoundEffect(ResourceDB.resourceLinker.audioClip_UIButtonClick);
-                        folderFrameIconItemTemplate = itemTemplate;
-                        folderFrameIconImage.sprite = itemTemplate?.icon ?? iconEmpty.Sprite;
-                        FillFolderPreview();
-                    }));
-                }
-
-                var panel = gameObject.GetComponent<Image>();
-                if (panel != null) panel.color = Color.clear;
-            }
-        }
-
-        private void FillFolderPreview()
-        {
-            DestroyAllTransformChildren(folderFramePreviewContainer.transform);
-            var gameObject = Object.Instantiate(prefabBlueprintButtonFolder.Prefab, folderFramePreviewContainer.transform);
-            var deleteButton = gameObject.transform.Find("DeleteButton")?.gameObject;
-            if (deleteButton != null) deleteButton.SetActive(false);
-            var renameButton = gameObject.transform.Find("RenameButton")?.gameObject;
-            if (renameButton != null) renameButton.SetActive(false);
-            folderFramePreviewLabel = gameObject.GetComponentInChildren<TextMeshProUGUI>();
-            folderFramePreviewIconImage = gameObject.transform.Find("Icon1")?.GetComponent<Image>();
-
-            if (folderFramePreviewLabel != null && folderFrameNameInputField != null)
-            {
-                folderFramePreviewLabel.text = Path.GetFileName(folderFrameNameInputField.text);
-            }
-
-            if (folderFramePreviewIconImage != null)
-            {
-                folderFramePreviewIconImage.sprite = folderFrameIconItemTemplate?.icon ?? iconEmpty.Sprite;
-            }
-        }
-
-        private void FillFolderFrameIcons()
-        {
-            if (folderFrameIconImage != null)
-            {
-                folderFrameIconImage.sprite = folderFrameIconItemTemplate?.icon_256 ?? iconEmpty.Sprite;
-            }
+            _folderFrame.Show(relativePath, folderName);
         }
 
         private static List<bool> GetTerrainTypeRemovalMask()
         {
-            if (terrainTypeRemovalMask == null)
+            if (_terrainTypeRemovalMask == null)
             {
                 var terrainTypes = ItemTemplateManager.getAllTerrainTemplates();
 
-                terrainTypeRemovalMask = new List<bool>();
-                terrainTypeRemovalMask.Add(false); // Air
-                terrainTypeRemovalMask.Add(false); // ???
+                _terrainTypeRemovalMask = new List<bool>
+                {
+                    false, // Air
+                    false // ???
+                };
 
                 foreach (var terrainType in terrainTypes)
                 {
-                    terrainTypeRemovalMask.Add(terrainType.Value.destructible);
+                    _terrainTypeRemovalMask.Add(terrainType.Value.destructible);
                 }
             }
 
-            return terrainTypeRemovalMask;
+            return _terrainTypeRemovalMask;
         }
 
-        private void DestroyArea(bool doBuildings, bool doBlocks, bool doTerrain, bool doDecor)
+        internal void DestroyArea(bool doBuildings, bool doBlocks, bool doTerrain, bool doDecor)
         {
             if (TryGetSelectedArea(out Vector3Int from, out Vector3Int to))
             {
@@ -2324,11 +877,11 @@ namespace Duplicationer
                 {
                     AABB3D aabb = ObjectPoolManager.aabb3ds.getObject();
                     aabb.reinitialize(from.x, from.y, from.z, to.x - from.x + 1, to.y - from.y + 1, to.z - from.z + 1);
-                    bogoQueryResult.Clear();
-                    StreamingSystem.getBuildableObjectGOQuadtreeArray().queryAABB3D(aabb, bogoQueryResult, true);
-                    if (bogoQueryResult.Count > 0)
+                    _bogoQueryResult.Clear();
+                    StreamingSystem.getBuildableObjectGOQuadtreeArray().queryAABB3D(aabb, _bogoQueryResult, true);
+                    if (_bogoQueryResult.Count > 0)
                     {
-                        foreach (var bogo in bogoQueryResult)
+                        foreach (var bogo in _bogoQueryResult)
                         {
                             if (bogo.template.type == BuildableObjectTemplate.BuildableObjectType.WorldDecorMineAble)
                             {
@@ -2380,7 +933,7 @@ namespace Duplicationer
             }
         }
 
-        private void DemolishArea(bool doBuildings, bool doBlocks, bool doTerrain, bool doDecor)
+        internal void DemolishArea(bool doBuildings, bool doBlocks, bool doTerrain, bool doDecor)
         {
             if (TryGetSelectedArea(out Vector3Int from, out Vector3Int to))
             {
@@ -2390,11 +943,11 @@ namespace Duplicationer
                 {
                     AABB3D aabb = ObjectPoolManager.aabb3ds.getObject();
                     aabb.reinitialize(from.x, from.y, from.z, to.x - from.x + 1, to.y - from.y + 1, to.z - from.z + 1);
-                    bogoQueryResult.Clear();
-                    StreamingSystem.getBuildableObjectGOQuadtreeArray().queryAABB3D(aabb, bogoQueryResult, true);
-                    if (bogoQueryResult.Count > 0)
+                    _bogoQueryResult.Clear();
+                    StreamingSystem.getBuildableObjectGOQuadtreeArray().queryAABB3D(aabb, _bogoQueryResult, true);
+                    if (_bogoQueryResult.Count > 0)
                     {
-                        foreach (var bogo in bogoQueryResult)
+                        foreach (var bogo in _bogoQueryResult)
                         {
                             if (bogo.template.type == BuildableObjectTemplate.BuildableObjectType.WorldDecorMineAble)
                             {
@@ -2473,13 +1026,6 @@ namespace Duplicationer
             return false;
         }
 
-        internal void UpdateBlueprintPositionText()
-        {
-            if (textPositionX != null) textPositionX.text = string.Format("Position X: {0}", CurrentBlueprintAnchor.x);
-            if (textPositionY != null) textPositionY.text = string.Format("Position Y: {0}", CurrentBlueprintAnchor.y);
-            if (textPositionZ != null) textPositionZ.text = string.Format("Position Z: {0}", CurrentBlueprintAnchor.z);
-        }
-
         internal void LoadIconSprites()
         {
             iconBlack = new LazyIconSprite(DuplicationerPlugin.bundleMainAssets, "black");
@@ -2509,42 +1055,9 @@ namespace Duplicationer
             buildingPlaceholderUpdateIndex = 0;
             terrainPlaceholderUpdateIndex = 0;
 
-            activeConstructionTaskGroups.Clear();
+            _activeConstructionTaskGroups.Clear();
 
-            bogoQueryResult.Clear();
-        }
-
-        internal List<MinecartDepotGO> GetExistingMinecartDepots(Vector3Int targetPosition, Vector3Int repeatFrom, Vector3Int repeatTo)
-        {
-            existingMinecartDepots.Clear();
-            for (int y = repeatFrom.y; y <= repeatTo.y; ++y)
-            {
-                for (int z = repeatFrom.z; z <= repeatTo.z; ++z)
-                {
-                    for (int x = repeatFrom.x; x <= repeatTo.x; ++x)
-                    {
-                        CurrentBlueprint.GetExistingMinecartDepots(targetPosition + new Vector3Int(x * CurrentBlueprintSize.x, y * CurrentBlueprintSize.y, z * CurrentBlueprintSize.z), existingMinecartDepots);
-                    }
-                }
-            }
-
-            return existingMinecartDepots;
-        }
-
-        internal bool HasExistingMinecartDepots(Vector3Int targetPosition, Vector3Int repeatFrom, Vector3Int repeatTo)
-        {
-            for (int y = repeatFrom.y; y <= repeatTo.y; ++y)
-            {
-                for (int z = repeatFrom.z; z <= repeatTo.z; ++z)
-                {
-                    for (int x = repeatFrom.x; x <= repeatTo.x; ++x)
-                    {
-                        if (CurrentBlueprint.HasExistingMinecartDepots(targetPosition + new Vector3Int(x * CurrentBlueprintSize.x, y * CurrentBlueprintSize.y, z * CurrentBlueprintSize.z))) return true;
-                    }
-                }
-            }
-
-            return false;
+            _bogoQueryResult.Clear();
         }
 
         public void SetPlaceholderOpacity(float alpha)
@@ -2557,9 +1070,34 @@ namespace Duplicationer
             }
         }
 
+        internal void ClearBlueprint()
+        {
+            ClearBlueprintPlaceholders();
+            CurrentBlueprint = null;
+            IsBlueprintActive = false;
+        }
+
         internal void LoadBlueprintFromFile(string path)
         {
             CurrentBlueprint = Blueprint.LoadFromFile(path);
+        }
+
+        internal void ClearBlueprintRecipes()
+        {
+            if (CurrentBlueprint == null) return;
+
+            CurrentBlueprint.ClearRecipes();
+            AudioManager.playUISoundEffect(ResourceDB.resourceLinker.audioClip_UIButtonClick);
+        }
+
+        internal void RemoveItemFromBlueprint(ItemTemplate template)
+        {
+            if (CurrentBlueprint == null) return;
+
+            CurrentBlueprint.RemoveItem(template);
+            ClearBlueprintPlaceholders();
+            ShowBlueprint(CurrentBlueprintAnchor);
+            AudioManager.playUISoundEffect(ResourceDB.resourceLinker.audioClip_bulkDemolishObjects);
         }
 
         internal enum BoxMode
@@ -2578,34 +1116,6 @@ namespace Duplicationer
             transform.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, width);
             transform.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, height);
             return builder;
-        }
-    }
-
-    public class EscapeCloseProxy : IEscapeCloseable
-    {
-        public delegate void EscapeCloseDelegate();
-        private readonly EscapeCloseDelegate _onClose;
-
-        public EscapeCloseProxy(EscapeCloseDelegate onClose)
-        {
-            _onClose = onClose;
-        }
-
-        public void iec_triggerFrameClose()
-        {
-            _onClose?.Invoke();
-        }
-
-        public static EscapeCloseProxy Register(EscapeCloseDelegate onClose)
-        {
-            var iec = new EscapeCloseProxy(onClose);
-            GlobalStateManager.registerEscapeCloseable(iec);
-            return iec;
-        }
-
-        internal void Dispose()
-        {
-            GlobalStateManager.deRegisterEscapeCloseable(this);
         }
     }
 }

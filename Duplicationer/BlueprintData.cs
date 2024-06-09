@@ -1,4 +1,6 @@
-﻿using UnityEngine;
+﻿using Newtonsoft.Json.Linq;
+using System;
+using UnityEngine;
 
 namespace Duplicationer
 {
@@ -96,6 +98,22 @@ namespace Duplicationer
                 }
 
                 return false;
+            }
+
+            internal bool RemoveCustomData(string identifier)
+            {
+                var result = false;
+                for (int i = customData.Length - 1; i >= 0; i--)
+                {
+                    var customDataEntry = customData[i];
+                    if (customDataEntry.identifier == identifier)
+                    {
+                        customData = customData.RemoveAt(i);
+                        result = true;
+                    }
+                }
+
+                return result;
             }
         }
 

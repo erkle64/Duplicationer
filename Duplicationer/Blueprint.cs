@@ -17,37 +17,38 @@ namespace Duplicationer
         public const uint FileMagicNumber = 0x42649921u;
         public const uint LatestBlueprintVersion = 3;
 
-        public string Name => name;
-        public Vector3Int Size => data.blocks.Size;
-        public int SizeX => data.blocks.sizeX;
-        public int SizeY => data.blocks.sizeY;
-        public int SizeZ => data.blocks.sizeZ;
-        public bool HasMinecartDepots => minecartDepotIndices.IsNullOrEmpty();
+        public string Name => _name;
+        public Vector3Int Size => _data.blocks.Size;
+        public int SizeX => _data.blocks.sizeX;
+        public int SizeY => _data.blocks.sizeY;
+        public int SizeZ => _data.blocks.sizeZ;
 
-        public ItemTemplate[] IconItemTemplates => iconItemTemplates;
-        private ItemTemplate[] iconItemTemplates;
+        public ItemTemplate[] IconItemTemplates => _iconItemTemplates;
+        private ItemTemplate[] _iconItemTemplates;
 
         public Dictionary<ulong, ShoppingListData> ShoppingList { get; private set; }
 
-        private string name;
-        private BlueprintData data;
-        private int[] minecartDepotIndices;
+        private string _name;
+        private BlueprintData _data;
 
-        private bool isMirrorable = false;
-        public bool IsMirrorable => isMirrorable;
+        private bool _isMirrorable = false;
+        public bool IsMirrorable => _isMirrorable;
 
-        private static List<BuildableObjectGO> bogoQueryResult = new List<BuildableObjectGO>(0);
-        private static List<ConstructionTaskGroup.ConstructionTask> dependenciesTemp = new List<ConstructionTaskGroup.ConstructionTask>();
-        private static Dictionary<ConstructionTaskGroup.ConstructionTask, List<ulong>> genericDependencies = new Dictionary<ConstructionTaskGroup.ConstructionTask, List<ulong>>();
+        private bool _hasRecipes = false;
+        public bool HasRecipes => _hasRecipes;
+
+        private static List<BuildableObjectGO> _bogoQueryResult = new List<BuildableObjectGO>(0);
+        private static List<ConstructionTaskGroup.ConstructionTask> _dependenciesTemp = new List<ConstructionTaskGroup.ConstructionTask>();
+        private static Dictionary<ConstructionTaskGroup.ConstructionTask, List<ulong>> _genericDependencies = new Dictionary<ConstructionTaskGroup.ConstructionTask, List<ulong>>();
 
         public delegate void PostBuildAction(ConstructionTaskGroup taskGroup, ConstructionTaskGroup.ConstructionTask task);
-        private static List<PostBuildAction> postBuildActions = new List<PostBuildAction>();
+        private static List<PostBuildAction> _postBuildActions = new List<PostBuildAction>();
 
-        private static ItemTemplate powerlineItemTemplate;
+        private static ItemTemplate _powerlineItemTemplate;
 
         private static ItemTemplate PowerlineItemTemplate
         {
-            get => (powerlineItemTemplate == null) ? powerlineItemTemplate = ItemTemplateManager.getItemTemplate("_base_power_line_i") : powerlineItemTemplate;
+            get => (_powerlineItemTemplate == null) ? _powerlineItemTemplate = ItemTemplateManager.getItemTemplate("_base_power_line_i") : _powerlineItemTemplate;
         }
 
         private struct PowerlineConnectionPair
@@ -75,23 +76,25 @@ namespace Duplicationer
         }
         private static HashSet<PowerlineConnectionPair> _powerlineConnectionPairs = new HashSet<PowerlineConnectionPair>();
 
-        public Blueprint(string name, BlueprintData data, int[] minecartDepotIndices, Dictionary<ulong, ShoppingListData> shoppingList, ItemTemplate[] iconItemTemplates)
+        public Blueprint(string name, BlueprintData data, Dictionary<ulong, ShoppingListData> shoppingList, ItemTemplate[] iconItemTemplates)
         {
-            this.name = name;
-            this.data = data;
-            this.minecartDepotIndices = minecartDepotIndices;
-            this.ShoppingList = shoppingList;
-            this.iconItemTemplates = iconItemTemplates;
+            _name = name;
+            _data = data;
+            ShoppingList = shoppingList;
+            _iconItemTemplates = iconItemTemplates;
 
-            isMirrorable = true;
+            _hasRecipes = false;
+            _isMirrorable = true;
             foreach (var buildableObjectData in data.buildableObjects)
             {
                 var template = ItemTemplateManager.getBuildableObjectTemplate(buildableObjectData.templateId);
                 if (template != null && template.canBeRotatedAroundXAxis)
                 {
-                    isMirrorable = false;
+                    _isMirrorable = false;
                     break;
                 }
+
+                if (buildableObjectData.HasCustomData("craftingRecipeId")) _hasRecipes = true;
             }
         }
 
@@ -119,9 +122,9 @@ namespace Duplicationer
             AABB3D aabb = ObjectPoolManager.aabb3ds.getObject();
             aabb.reinitialize(from.x, from.y, from.z, to.x - from.x, to.y - from.y, to.z - from.z);
             QuadtreeArray<BuildableObjectGO> quadTree = StreamingSystem.getBuildableObjectGOQuadtreeArray();
-            bogoQueryResult.Clear();
-            quadTree.queryAABB3D(aabb, bogoQueryResult, true);
-            foreach (var bogo in bogoQueryResult)
+            _bogoQueryResult.Clear();
+            quadTree.queryAABB3D(aabb, _bogoQueryResult, true);
+            foreach (var bogo in _bogoQueryResult)
             {
                 if (aabb.hasXYZIntersection(bogo._aabb))
                 {
@@ -148,16 +151,20 @@ namespace Duplicationer
             var to = from + size;
 
             var shoppingList = new Dictionary<ulong, ShoppingListData>();
-            var minecartDepotIndices = new List<int>();
 
-            foreach (var blockId in blocks)
+            for (int i = 0; i < blocks.Length; i++)
             {
+                byte blockId = blocks[i];
                 if (blockId >= GameRoot.BUILDING_PART_ARRAY_IDX_START)
                 {
                     var partTemplate = ItemTemplateManager.getBuildingPartTemplate(GameRoot.BuildingPartIdxLookupTable.table[blockId]);
                     if (partTemplate.parentItemTemplate != null)
                     {
                         AddToShoppingList(shoppingList, partTemplate.parentItemTemplate);
+                    }
+                    else
+                    {
+                        blocks[i] = 0;
                     }
                 }
                 else if (blockId > 0)
@@ -166,6 +173,10 @@ namespace Duplicationer
                     if (blockTemplate != null && blockTemplate.parentBOT != null && blockTemplate.parentBOT.parentItemTemplate != null)
                     {
                         AddToShoppingList(shoppingList, blockTemplate.parentBOT.parentItemTemplate);
+                    }
+                    else
+                    {
+                        blocks[i] = 0;
                     }
                 }
             }
@@ -179,11 +190,6 @@ namespace Duplicationer
                 BuildableEntity.BuildableEntityGeneralData generalData = default;
                 var hasGeneralData = BuildingManager.buildingManager_getBuildableEntityGeneralData(bogo.Id, ref generalData);
                 Debug.Assert(hasGeneralData == IOBool.iotrue, $"{bogo.Id} {bogo.template?.identifier}");
-
-                if (bogo.template.type == BuildableObjectTemplate.BuildableObjectType.MinecartDepot)
-                {
-                    minecartDepotIndices.Add(buildingIndex);
-                }
 
                 buildingDataArray[buildingIndex].originalEntityId = bogo.relatedEntityId;
                 buildingDataArray[buildingIndex].templateName = bogo.template.name;
@@ -361,7 +367,7 @@ namespace Duplicationer
             blueprintData.blocks.sizeZ = size.z;
             blueprintData.blocks.ids = blocks;
 
-            return new Blueprint("new blueprint", blueprintData, minecartDepotIndices.ToArray(), shoppingList, new ItemTemplate[0]);
+            return new Blueprint("new blueprint", blueprintData, shoppingList, new ItemTemplate[0]);
         }
 
         public int GetShoppingListEntry(ulong itemTemplateId, out string name)
@@ -422,7 +428,6 @@ namespace Duplicationer
             if (!File.Exists(path)) return null;
 
             var shoppingList = new Dictionary<ulong, ShoppingListData>();
-            var minecartDepotIndices = new List<int>();
 
             var headerSize = System.Runtime.InteropServices.Marshal.SizeOf(typeof(FileHeader));
             var allBytes = File.ReadAllBytes(path);
@@ -450,85 +455,29 @@ namespace Duplicationer
 
             ulong dataSize;
             var rawData = SaveManager.decompressByteArray(reader.ReadBytes(allBytes.Length - headerSize), out dataSize);
-            var blueprintData = LoadDataFromString(Encoding.UTF8.GetString(rawData.Take((int)dataSize).ToArray()), shoppingList, minecartDepotIndices);
+            var blueprintData = LoadDataFromString(Encoding.UTF8.GetString(rawData.Take((int)dataSize).ToArray()), shoppingList);
 
             reader.Close();
             reader.Dispose();
 
-            return new Blueprint(name, blueprintData, minecartDepotIndices.ToArray(), shoppingList, iconItemTemplates.ToArray());
+            return new Blueprint(name, blueprintData, shoppingList, iconItemTemplates.ToArray());
         }
 
-        private static BlueprintData LoadDataFromString(string blueprint, Dictionary<ulong, ShoppingListData> shoppingList, List<int> minecartDepotIndices)
+        private static BlueprintData LoadDataFromString(string blueprint, Dictionary<ulong, ShoppingListData> shoppingList)
         {
             var blueprintData = JSON.Load(blueprint).Make<BlueprintData>();
 
-            var powerlineEntityIds = new List<ulong>();
-            int buildingIndex = 0;
-            foreach (var buildingData in blueprintData.buildableObjects)
-            {
-                var buildingTemplate = ItemTemplateManager.getBuildableObjectTemplate(buildingData.templateId);
-                if (buildingTemplate != null && buildingTemplate.parentItemTemplate != null)
-                {
-                    if (buildingTemplate.type == BuildableObjectTemplate.BuildableObjectType.MinecartDepot)
-                    {
-                        minecartDepotIndices.Add(buildingIndex);
-                    }
-
-                    AddToShoppingList(shoppingList, buildingTemplate.parentItemTemplate);
-                }
-
-                powerlineEntityIds.Clear();
-                GetCustomDataList(ref blueprintData, buildingIndex, "powerline", powerlineEntityIds);
-                if (powerlineEntityIds.Count > 0) AddToShoppingList(shoppingList, PowerlineItemTemplate, powerlineEntityIds.Count);
-
-                ++buildingIndex;
-            }
-
-            int blockIndex = 0;
-            for (int z = 0; z < blueprintData.blocks.sizeZ; ++z)
-            {
-                for (int y = 0; y < blueprintData.blocks.sizeY; ++y)
-                {
-                    for (int x = 0; x < blueprintData.blocks.sizeX; ++x)
-                    {
-                        var blockId = blueprintData.blocks.ids[blockIndex++];
-                        if (blockId >= GameRoot.BUILDING_PART_ARRAY_IDX_START)
-                        {
-                            var partTemplate = ItemTemplateManager.getBuildingPartTemplate(GameRoot.BuildingPartIdxLookupTable.table[blockId]);
-                            if (partTemplate != null)
-                            {
-                                var itemTemplate = partTemplate.parentItemTemplate;
-                                if (itemTemplate != null)
-                                {
-                                    AddToShoppingList(shoppingList, itemTemplate);
-                                }
-                            }
-                        }
-                        else if (blockId > 0)
-                        {
-                            var blockTemplate = ItemTemplateManager.getTerrainBlockTemplateByByteIdx(blockId);
-                            if (blockTemplate != null && blockTemplate.parentBOT != null)
-                            {
-                                var itemTemplate = blockTemplate.parentBOT.parentItemTemplate;
-                                if (itemTemplate != null)
-                                {
-                                    AddToShoppingList(shoppingList, itemTemplate);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+            BuildShoppingList(blueprintData, shoppingList);
 
             return blueprintData;
         }
 
         public void Save(string path, string name, ItemTemplate[] iconItemTemplates)
         {
-            this.name = name;
-            this.iconItemTemplates = iconItemTemplates;
+            _name = name;
+            _iconItemTemplates = iconItemTemplates;
 
-            var json = JSON.Dump(data, EncodeOptions.PrettyPrint | EncodeOptions.NoTypeHints);
+            var json = JSON.Dump(_data, EncodeOptions.PrettyPrint | EncodeOptions.NoTypeHints);
 
             var compressed = SaveManager.compressByteArray(Encoding.UTF8.GetBytes(json), out ulong dataSize);
 
@@ -564,17 +513,17 @@ namespace Duplicationer
 
             AABB3D aabb = ObjectPoolManager.aabb3ds.getObject();
 
-            if (data.blocks.ids == null) throw new System.ArgumentNullException(nameof(data.blocks.ids));
+            if (_data.blocks.ids == null) throw new System.ArgumentNullException(nameof(_data.blocks.ids));
 
             var quadTreeArray = StreamingSystem.getBuildableObjectGOQuadtreeArray();
             int blockIndex = 0;
-            for (int z = 0; z < data.blocks.sizeZ; z++)
+            for (int z = 0; z < _data.blocks.sizeZ; z++)
             {
-                for (int y = 0; y < data.blocks.sizeY; y++)
+                for (int y = 0; y < _data.blocks.sizeY; y++)
                 {
-                    for (int x = 0; x < data.blocks.sizeX; x++)
+                    for (int x = 0; x < _data.blocks.sizeX; x++)
                     {
-                        var blockId = data.blocks.ids[blockIndex++];
+                        var blockId = _data.blocks.ids[blockIndex++];
                         if (blockId > 0)
                         {
                             var worldPos = new Vector3Int(x, y, z) + anchorPosition;
@@ -667,9 +616,9 @@ namespace Duplicationer
             }
 
             int buildingIndex = 0;
-            foreach (var buildableObjectData in data.buildableObjects)
+            foreach (var buildableObjectData in _data.buildableObjects)
             {
-                postBuildActions.Clear();
+                _postBuildActions.Clear();
 
                 var template = ItemTemplateManager.getBuildableObjectTemplate(buildableObjectData.templateId);
                 Debug.Assert(template != null);
@@ -726,7 +675,7 @@ namespace Duplicationer
                             var pipeLoaderFilterTemplateId = GetCustomData<ulong>(buildingIndex, "pipeLoaderFilterTemplateId");
                             if (pipeLoaderFilterTemplateId > 0)
                             {
-                                postBuildActions.Add((ConstructionTaskGroup taskGroup, ConstructionTaskGroup.ConstructionTask task) =>
+                                _postBuildActions.Add((ConstructionTaskGroup taskGroup, ConstructionTaskGroup.ConstructionTask task) =>
                                 {
                                     if (task.entityId > 0)
                                     {
@@ -747,7 +696,7 @@ namespace Duplicationer
                 {
                     var balancerInputPriority = GetCustomData<int>(buildingIndex, "balancerInputPriority");
                     var balancerOutputPriority = GetCustomData<int>(buildingIndex, "balancerOutputPriority");
-                    postBuildActions.Add((ConstructionTaskGroup taskGroup, ConstructionTaskGroup.ConstructionTask task) =>
+                    _postBuildActions.Add((ConstructionTaskGroup taskGroup, ConstructionTaskGroup.ConstructionTask task) =>
                     {
                         if (task.entityId > 0)
                         {
@@ -762,7 +711,7 @@ namespace Duplicationer
                     var signUseAutoTextSize = GetCustomData<byte>(buildingIndex, "signUseAutoTextSize");
                     var signTextMinSize = GetCustomData<float>(buildingIndex, "signTextMinSize");
                     var signTextMaxSize = GetCustomData<float>(buildingIndex, "signTextMaxSize");
-                    postBuildActions.Add((ConstructionTaskGroup taskGroup, ConstructionTaskGroup.ConstructionTask task) =>
+                    _postBuildActions.Add((ConstructionTaskGroup taskGroup, ConstructionTaskGroup.ConstructionTask task) =>
                     {
                         if (task.entityId > 0)
                         {
@@ -776,7 +725,7 @@ namespace Duplicationer
                     var modeTemplateId = GetCustomData<ulong>(buildingIndex, "blastFurnaceModeTemplateId");
                     if (modeTemplateId > 0)
                     {
-                        postBuildActions.Add((ConstructionTaskGroup taskGroup, ConstructionTaskGroup.ConstructionTask task) =>
+                        _postBuildActions.Add((ConstructionTaskGroup taskGroup, ConstructionTaskGroup.ConstructionTask task) =>
                         {
                             if (task.entityId > 0)
                             {
@@ -789,7 +738,7 @@ namespace Duplicationer
                 if (template.type == BuildableObjectTemplate.BuildableObjectType.Storage && HasCustomData(buildingIndex, "firstSoftLockedSlotIdx"))
                 {
                     var firstSoftLockedSlotIdx = GetCustomData<uint>(buildingIndex, "firstSoftLockedSlotIdx");
-                    postBuildActions.Add((ConstructionTaskGroup taskGroup, ConstructionTaskGroup.ConstructionTask task) =>
+                    _postBuildActions.Add((ConstructionTaskGroup taskGroup, ConstructionTaskGroup.ConstructionTask task) =>
                     {
                         if (task.entityId > 0)
                         {
@@ -816,7 +765,7 @@ namespace Duplicationer
                     var loadCondition_comparisonType = GetCustomData<byte>(buildingIndex, "loadCondition_comparisonType");
                     var loadCondition_fillRatePercentage = GetCustomData<byte>(buildingIndex, "loadCondition_fillRatePercentage");
                     var loadCondition_seconds = GetCustomData<uint>(buildingIndex, "loadCondition_seconds");
-                    postBuildActions.Add((ConstructionTaskGroup taskGroup, ConstructionTaskGroup.ConstructionTask task) =>
+                    _postBuildActions.Add((ConstructionTaskGroup taskGroup, ConstructionTaskGroup.ConstructionTask task) =>
                     {
                         if (task.entityId > 0)
                         {
@@ -833,7 +782,7 @@ namespace Duplicationer
                 {
                     var stationName = GetCustomData<string>(buildingIndex, "stationName");
                     var stationType = GetCustomData<byte>(buildingIndex, "stationType");
-                    postBuildActions.Add((ConstructionTaskGroup taskGroup, ConstructionTaskGroup.ConstructionTask task) =>
+                    _postBuildActions.Add((ConstructionTaskGroup taskGroup, ConstructionTaskGroup.ConstructionTask task) =>
                     {
                         if (task.entityId > 0)
                         {
@@ -850,7 +799,7 @@ namespace Duplicationer
                 {
                     var modularBuildingDataJSON = GetCustomData<string>(buildingIndex, "modularBuildingData");
                     var modularBuildingData = JSON.Load(modularBuildingDataJSON).Make<ModularBuildingData>();
-                    postBuildActions.Add((ConstructionTaskGroup taskGroup, ConstructionTaskGroup.ConstructionTask task) =>
+                    _postBuildActions.Add((ConstructionTaskGroup taskGroup, ConstructionTaskGroup.ConstructionTask task) =>
                     {
                         if (task.entityId > 0)
                         {
@@ -881,8 +830,8 @@ namespace Duplicationer
                     if (powerlineIndex >= 0)
                     {
                         var fromPos = worldPos;
-                        var toBuildableObjectData = data.buildableObjects[powerlineIndex];
-                        postBuildActions.Add((ConstructionTaskGroup taskGroup, ConstructionTaskGroup.ConstructionTask task) =>
+                        var toBuildableObjectData = _data.buildableObjects[powerlineIndex];
+                        _postBuildActions.Add((ConstructionTaskGroup taskGroup, ConstructionTaskGroup.ConstructionTask task) =>
                         {
                             if (entityIdMap.TryGetValue(toBuildableObjectData.originalEntityId, out var toEntityId))
                             {
@@ -900,7 +849,7 @@ namespace Duplicationer
                 if (existingEntityId > 0)
                 {
                     entityIdMap[buildableObjectData.originalEntityId] = existingEntityId;
-                    var postBuildActionsArray = postBuildActions.ToArray();
+                    var postBuildActionsArray = _postBuildActions.ToArray();
                     constructionTaskGroup.AddTask(buildableObjectData.originalEntityId, (ConstructionTaskGroup taskGroup, ConstructionTaskGroup.ConstructionTask task) => {
                         ActionManager.AddQueuedEvent(() =>
                         {
@@ -912,7 +861,7 @@ namespace Duplicationer
                 }
                 else
                 {
-                    var postBuildActionsArray = postBuildActions.ToArray();
+                    var postBuildActionsArray = _postBuildActions.ToArray();
                     var originalEntityId = buildableObjectData.originalEntityId;
                     constructionTaskGroup.AddTask(originalEntityId, (ConstructionTaskGroup taskGroup, ConstructionTaskGroup.ConstructionTask task) => {
                         var buildEntityEvent = new BuildEntityEvent(
@@ -957,15 +906,15 @@ namespace Duplicationer
 
 
             buildingIndex = 0;
-            foreach (var buildableObjectData in data.buildableObjects)
+            foreach (var buildableObjectData in _data.buildableObjects)
             {
-                dependenciesTemp.Clear();
+                _dependenciesTemp.Clear();
                 if (HasCustomData(buildingIndex, "modularParentId"))
                 {
                     ulong parentId = GetCustomData<ulong>(buildingIndex, "modularParentId");
 
                     var dependency = constructionTaskGroup.GetTask(parentId);
-                    if (dependency != null) dependenciesTemp.Add(dependency);
+                    if (dependency != null) _dependenciesTemp.Add(dependency);
                     else DuplicationerPlugin.log.LogWarning($"Entity id {parentId} not found in blueprint");
                 }
 
@@ -974,14 +923,14 @@ namespace Duplicationer
                 foreach (var powerlineEntityId in powerlineEntityIds)
                 {
                     var dependency = constructionTaskGroup.GetTask(powerlineEntityId);
-                    if (dependency != null) dependenciesTemp.Add(dependency);
+                    if (dependency != null) _dependenciesTemp.Add(dependency);
                     else DuplicationerPlugin.log.LogWarning($"Entity id {powerlineEntityId} not found in blueprint");
                 }
 
-                if (dependenciesTemp.Count > 0)
+                if (_dependenciesTemp.Count > 0)
                 {
                     var task = constructionTaskGroup.GetTask(buildableObjectData.originalEntityId);
-                    if (task != null) task.dependencies = dependenciesTemp.ToArray();
+                    if (task != null) task.dependencies = _dependenciesTemp.ToArray();
                 }
 
                 buildingIndex++;
@@ -990,9 +939,9 @@ namespace Duplicationer
 
         private int FindEntityIndex(ulong entityId)
         {
-            for (int i = 0; i < data.buildableObjects.Length; ++i)
+            for (int i = 0; i < _data.buildableObjects.Length; ++i)
             {
-                if (data.buildableObjects[i].originalEntityId == entityId) return i;
+                if (_data.buildableObjects[i].originalEntityId == entityId) return i;
             }
             return -1;
         }
@@ -1011,27 +960,27 @@ namespace Duplicationer
             return 1;
         }
 
-        public bool HasCustomData(int index, string identifier) => HasCustomData(ref data, index, identifier);
+        public bool HasCustomData(int index, string identifier) => HasCustomData(ref _data, index, identifier);
         public static bool HasCustomData(ref BlueprintData data, int index, string identifier)
         {
             foreach (var customDataEntry in data.buildableObjects[index].customData) if (customDataEntry.identifier == identifier) return true;
             return false;
         }
 
-        public T GetCustomData<T>(int index, string identifier) => GetCustomData<T>(ref data, index, identifier);
+        public T GetCustomData<T>(int index, string identifier) => GetCustomData<T>(ref _data, index, identifier);
         public static T GetCustomData<T>(ref BlueprintData data, int index, string identifier)
         {
             foreach (var customDataEntry in data.buildableObjects[index].customData) if (customDataEntry.identifier == identifier) return (T)System.Convert.ChangeType(customDataEntry.value, typeof(T));
             return default;
         }
 
-        public void GetCustomDataList<T>(int index, string identifier, List<T> list) => GetCustomDataList<T>(ref data, index, identifier, list);
+        public void GetCustomDataList<T>(int index, string identifier, List<T> list) => GetCustomDataList<T>(ref _data, index, identifier, list);
         public static void GetCustomDataList<T>(ref BlueprintData data, int index, string identifier, List<T> list)
         {
             foreach (var customDataEntry in data.buildableObjects[index].customData) if (customDataEntry.identifier == identifier) list.Add((T)System.Convert.ChangeType(customDataEntry.value, typeof(T)));
         }
 
-        internal BlueprintData.BuildableObjectData GetBuildableObjectData(int index) => GetBuildableObjectData(ref data, index);
+        internal BlueprintData.BuildableObjectData GetBuildableObjectData(int index) => GetBuildableObjectData(ref _data, index);
         internal static BlueprintData.BuildableObjectData GetBuildableObjectData(ref BlueprintData data, int index)
         {
             if (index < 0 || index >= data.buildableObjects.Length) throw new System.IndexOutOfRangeException(nameof(index));
@@ -1039,7 +988,7 @@ namespace Duplicationer
             return data.buildableObjects[index];
         }
 
-        internal byte GetBlockId(int x, int y, int z) => GetBlockId(ref data, x, y, z);
+        internal byte GetBlockId(int x, int y, int z) => GetBlockId(ref _data, x, y, z);
         internal static byte GetBlockId(ref BlueprintData data, int x, int y, int z)
         {
             if (x < 0 || x >= data.blocks.sizeX) throw new System.IndexOutOfRangeException(nameof(x));
@@ -1049,7 +998,7 @@ namespace Duplicationer
             return data.blocks.ids[x + (y + z * data.blocks.sizeY) * data.blocks.sizeX];
         }
 
-        internal byte GetBlockId(int index) => GetBlockId(ref data, index);
+        internal byte GetBlockId(int index) => GetBlockId(ref _data, index);
         internal static byte GetBlockId(ref BlueprintData data, int index)
         {
             if (index < 0 || index >= data.blocks.ids.Length) throw new System.IndexOutOfRangeException(nameof(index));
@@ -1059,12 +1008,12 @@ namespace Duplicationer
 
         internal static ulong CheckIfBuildingExists(AABB3D aabb, Vector3Int worldPos, BlueprintData.BuildableObjectData buildableObjectData)
         {
-            bogoQueryResult.Clear();
-            StreamingSystem.getBuildableObjectGOQuadtreeArray().queryAABB3D(aabb, bogoQueryResult, false);
-            if (bogoQueryResult.Count > 0)
+            _bogoQueryResult.Clear();
+            StreamingSystem.getBuildableObjectGOQuadtreeArray().queryAABB3D(aabb, _bogoQueryResult, false);
+            if (_bogoQueryResult.Count > 0)
             {
                 var template = ItemTemplateManager.getBuildableObjectTemplate(buildableObjectData.templateId);
-                foreach (var wbogo in bogoQueryResult)
+                foreach (var wbogo in _bogoQueryResult)
                 {
                     if (Traverse.Create(wbogo).Field("renderMode").GetValue<int>() != 1)
                     {
@@ -1109,12 +1058,12 @@ namespace Duplicationer
             var oldCenter = ((Vector3)oldSize) / 2.0f;
             var newCenter = ((Vector3)newSize) / 2.0f;
 
-            var rotatedData = new BlueprintData(data.buildableObjects.Length, data.blocks.Size);
-            rotatedData.buildableObjects = new BlueprintData.BuildableObjectData[data.buildableObjects.Length];
-            rotatedData.blocks.ids = new byte[data.blocks.ids.Length];
-            for (int i = 0; i < data.buildableObjects.Length; ++i)
+            var rotatedData = new BlueprintData(_data.buildableObjects.Length, _data.blocks.Size);
+            rotatedData.buildableObjects = new BlueprintData.BuildableObjectData[_data.buildableObjects.Length];
+            rotatedData.blocks.ids = new byte[_data.blocks.ids.Length];
+            for (int i = 0; i < _data.buildableObjects.Length; ++i)
             {
-                var buildableObjectData = data.buildableObjects[i];
+                var buildableObjectData = _data.buildableObjects[i];
                 var offsetX = buildableObjectData.worldZ - oldCenter.z;
                 var offsetZ = oldCenter.x - buildableObjectData.worldX;
                 var newX = Mathf.RoundToInt(newCenter.x + offsetX);
@@ -1146,7 +1095,7 @@ namespace Duplicationer
                 rotatedData.buildableObjects[i] = buildableObjectData;
             }
 
-            var newBlockIds = new byte[data.blocks.ids.Length];
+            var newBlockIds = new byte[_data.blocks.ids.Length];
             int fromIndex = 0;
             for (int x = 0; x < newSize.x; x++)
             {
@@ -1154,26 +1103,26 @@ namespace Duplicationer
                 {
                     for (int z = newSize.z - 1; z >= 0; z--)
                     {
-                        newBlockIds[x + (y + z * newSize.y) * newSize.x] = data.blocks.ids[fromIndex++];
+                        newBlockIds[x + (y + z * newSize.y) * newSize.x] = _data.blocks.ids[fromIndex++];
                     }
                 }
             }
 
             rotatedData.blocks = new BlueprintData.BlockData(newSize, newBlockIds);
 
-            data = rotatedData;
+            _data = rotatedData;
         }
 
         public void Mirror()
         {
             var size = Size;
 
-            var mirroredData = new BlueprintData(data.buildableObjects.Length, data.blocks.Size);
-            mirroredData.buildableObjects = new BlueprintData.BuildableObjectData[data.buildableObjects.Length];
-            mirroredData.blocks.ids = new byte[data.blocks.ids.Length];
-            for (int i = 0; i < data.buildableObjects.Length; ++i)
+            var mirroredData = new BlueprintData(_data.buildableObjects.Length, _data.blocks.Size);
+            mirroredData.buildableObjects = new BlueprintData.BuildableObjectData[_data.buildableObjects.Length];
+            mirroredData.blocks.ids = new byte[_data.blocks.ids.Length];
+            for (int i = 0; i < _data.buildableObjects.Length; ++i)
             {
-                var buildableObjectData = data.buildableObjects[i];
+                var buildableObjectData = _data.buildableObjects[i];
                 var newX = size.x - buildableObjectData.worldX;
 
                 var template = ItemTemplateManager.getBuildableObjectTemplate(buildableObjectData.templateId);
@@ -1202,7 +1151,7 @@ namespace Duplicationer
                 mirroredData.buildableObjects[i] = buildableObjectData;
             }
 
-            var newBlockIds = new byte[data.blocks.ids.Length];
+            var newBlockIds = new byte[_data.blocks.ids.Length];
             int fromIndex = 0;
             for (int z = 0; z < size.z; z++)
             {
@@ -1210,14 +1159,176 @@ namespace Duplicationer
                 {
                     for (int x = size.x - 1; x >= 0; x--)
                     {
-                        newBlockIds[x + (y + z * size.y) * size.x] = data.blocks.ids[fromIndex++];
+                        newBlockIds[x + (y + z * size.y) * size.x] = _data.blocks.ids[fromIndex++];
                     }
                 }
             }
 
             mirroredData.blocks = new BlueprintData.BlockData(size, newBlockIds);
 
-            data = mirroredData;
+            _data = mirroredData;
+        }
+
+        internal void ClearRecipes()
+        {
+            _hasRecipes = false;
+            for (int i = 0; i < _data.buildableObjects.Length; ++i)
+            {
+                var buildableObjectData = _data.buildableObjects[i];
+
+                if (buildableObjectData.RemoveCustomData("craftingRecipeId"))
+                {
+                    _data.buildableObjects[i] = buildableObjectData;
+                }
+            }
+        }
+
+        internal void RemoveItem(ItemTemplate template)
+        {
+            if (template.id == PowerlineItemTemplate.id)
+            {
+                for (int i = 0; i < _data.buildableObjects.Length; ++i)
+                {
+                    var buildableObjectData = _data.buildableObjects[i];
+
+                    if (buildableObjectData.RemoveCustomData("powerline"))
+                    {
+                        _data.buildableObjects[i] = buildableObjectData;
+                    }
+                }
+            }
+            else if (template.buildableObjectTemplate != null
+                && template.buildableObjectTemplate.type == BuildableObjectTemplate.BuildableObjectType.BuildingPart)
+            {
+                var bot = template.buildableObjectTemplate;
+                RemoveBuildPartBlocks(bot);
+
+                foreach (var toggleableMode in template.toggleableModes)
+                {
+                    if (toggleableMode.buildableObjectTemplate != null
+                        && toggleableMode.buildableObjectTemplate.type == BuildableObjectTemplate.BuildableObjectType.BuildingPart)
+                    {
+                        RemoveBuildPartBlocks(toggleableMode.buildableObjectTemplate);
+                    }
+                }
+            }
+            else if (template.buildableObjectTemplate != null
+                && template.buildableObjectTemplate.type == BuildableObjectTemplate.BuildableObjectType.TerrainBlock)
+            {
+                if (template.buildableObjectTemplate.terrainBlock_tbt != null)
+                {
+                    RemoveTerrainBlocks(template.buildableObjectTemplate.terrainBlock_tbt);
+                }
+
+                foreach (var toggleableMode in template.toggleableModes)
+                {
+                    if (toggleableMode.buildableObjectTemplate != null
+                        && toggleableMode.buildableObjectTemplate.type == BuildableObjectTemplate.BuildableObjectType.TerrainBlock
+                        && toggleableMode.buildableObjectTemplate.terrainBlock_tbt != null)
+                    {
+                        RemoveTerrainBlocks(toggleableMode.buildableObjectTemplate.terrainBlock_tbt);
+                    }
+                }
+            }
+            else
+            {
+                var newBuildableObjects = new List<BuildableObjectData>(_data.buildableObjects.Length);
+                for (int i = 0; i < _data.buildableObjects.Length; ++i)
+                {
+                    var buildableObjectData = _data.buildableObjects[i];
+
+                    var bot = ItemTemplateManager.getBuildableObjectTemplate(buildableObjectData.templateId);
+                    if (bot == null || bot.parentItemTemplate != template)
+                    {
+                        newBuildableObjects.Add(buildableObjectData);
+                    }
+                }
+                _data.buildableObjects = newBuildableObjects.ToArray();
+            }
+
+            _hasRecipes = false;
+            foreach (var buildableObjectData in _data.buildableObjects)
+            {
+                if (buildableObjectData.HasCustomData("craftingRecipeId")) _hasRecipes = true;
+            }
+
+            BuildShoppingList(_data, ShoppingList);
+        }
+
+        private void RemoveBuildPartBlocks(BuildableObjectTemplate bot)
+        {
+            var index = (byte)GameRoot.BuildingPartIdxLookupTable.getKeyByValue(bot.id);
+            for (int i = 0; i < _data.blocks.ids.Length; ++i)
+            {
+                if (_data.blocks.ids[i] == index) _data.blocks.ids[i] = 0;
+            }
+        }
+
+        private void RemoveTerrainBlocks(TerrainBlockType template)
+        {
+            var index = (byte)GameRoot.TerrainIdxLookupTable.getKeyByValue(template.id);
+            for (int i = 0; i < _data.blocks.ids.Length; ++i)
+            {
+                if (_data.blocks.ids[i] == index) _data.blocks.ids[i] = 0;
+            }
+        }
+
+        public static void BuildShoppingList(BlueprintData blueprintData, Dictionary<ulong, ShoppingListData> shoppingList)
+        {
+            shoppingList.Clear();
+
+            int blockIndex = 0;
+            for (int z = 0; z < blueprintData.blocks.sizeZ; ++z)
+            {
+                for (int y = 0; y < blueprintData.blocks.sizeY; ++y)
+                {
+                    for (int x = 0; x < blueprintData.blocks.sizeX; ++x)
+                    {
+                        var blockId = blueprintData.blocks.ids[blockIndex++];
+                        if (blockId >= GameRoot.BUILDING_PART_ARRAY_IDX_START)
+                        {
+                            var partTemplate = ItemTemplateManager.getBuildingPartTemplate(GameRoot.BuildingPartIdxLookupTable.table[blockId]);
+                            if (partTemplate != null)
+                            {
+                                var itemTemplate = partTemplate.parentItemTemplate;
+                                if (itemTemplate != null)
+                                {
+                                    AddToShoppingList(shoppingList, itemTemplate);
+                                }
+                            }
+                        }
+                        else if (blockId > 0)
+                        {
+                            var blockTemplate = ItemTemplateManager.getTerrainBlockTemplateByByteIdx(blockId);
+                            if (blockTemplate != null && blockTemplate.parentBOT != null)
+                            {
+                                var itemTemplate = blockTemplate.parentBOT.parentItemTemplate;
+                                if (itemTemplate != null)
+                                {
+                                    AddToShoppingList(shoppingList, itemTemplate);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            var powerlineEntityIds = new List<ulong>();
+            int buildingIndex = 0;
+            foreach (var buildingData in blueprintData.buildableObjects)
+            {
+                var buildingTemplate = ItemTemplateManager.getBuildableObjectTemplate(buildingData.templateId);
+                if (buildingTemplate != null && buildingTemplate.parentItemTemplate != null)
+                {
+                    AddToShoppingList(shoppingList, buildingTemplate.parentItemTemplate);
+                }
+
+                powerlineEntityIds.Clear();
+                GetCustomDataList(ref blueprintData, buildingIndex, "powerline", powerlineEntityIds);
+                if (powerlineEntityIds.Count > 0) AddToShoppingList(shoppingList, PowerlineItemTemplate, powerlineEntityIds.Count);
+
+                ++buildingIndex;
+            }
         }
 
         public void Show(Vector3Int anchorPosition, Vector3Int repeatFrom, Vector3Int repeatTo, Vector3Int repeatStepSize, BatchRenderingGroup placeholderRenderGroup, List<BlueprintPlaceholder> buildingPlaceholders, List<BlueprintPlaceholder> terrainPlaceholders)
@@ -1231,9 +1342,9 @@ namespace Duplicationer
                         var repeatIndex = new Vector3Int(rx, ry, rz);
                         var repeatAnchorPosition = anchorPosition + new Vector3Int(rx * repeatStepSize.x, ry * repeatStepSize.y, rz * repeatStepSize.z);
 
-                        for (int buildingIndex = 0; buildingIndex < data.buildableObjects.Length; buildingIndex++)
+                        for (int buildingIndex = 0; buildingIndex < _data.buildableObjects.Length; buildingIndex++)
                         {
-                            var buildableObjectData = data.buildableObjects[buildingIndex];
+                            var buildableObjectData = _data.buildableObjects[buildingIndex];
                             var template = ItemTemplateManager.getBuildableObjectTemplate(buildableObjectData.templateId);
 
                             int wx, wy, wz;
@@ -1288,13 +1399,13 @@ namespace Duplicationer
                         }
 
                         int blockIndex = 0;
-                        for (int z = 0; z < data.blocks.sizeZ; ++z)
+                        for (int z = 0; z < _data.blocks.sizeZ; ++z)
                         {
-                            for (int y = 0; y < data.blocks.sizeY; ++y)
+                            for (int y = 0; y < _data.blocks.sizeY; ++y)
                             {
-                                for (int x = 0; x < data.blocks.sizeX; ++x)
+                                for (int x = 0; x < _data.blocks.sizeX; ++x)
                                 {
-                                    var id = data.blocks.ids[blockIndex];
+                                    var id = _data.blocks.ids[blockIndex];
                                     if (id > 0)
                                     {
                                         var worldPos = new Vector3(x + repeatAnchorPosition.x + 0.5f, y + repeatAnchorPosition.y, z + repeatAnchorPosition.z + 0.5f);
@@ -1410,76 +1521,6 @@ namespace Duplicationer
                     }
                 }
             }
-        }
-
-        internal void GetExistingMinecartDepots(Vector3Int targetPosition, List<MinecartDepotGO> existingMinecartDepots)
-        {
-            AABB3D aabb = ObjectPoolManager.aabb3ds.getObject();
-            foreach (var index in minecartDepotIndices)
-            {
-                if (index >= data.buildableObjects.Length) continue;
-
-                var buildableObjectData = data.buildableObjects[index];
-                var template = ItemTemplateManager.getBuildableObjectTemplate(buildableObjectData.templateId);
-                if (template != null)
-                {
-                    var worldPos = new Vector3Int(buildableObjectData.worldX + targetPosition.x, buildableObjectData.worldY + targetPosition.y, buildableObjectData.worldZ + targetPosition.z);
-                    int wx, wy, wz;
-                    if (template.canBeRotatedAroundXAxis)
-                        BuildingManager.getWidthFromUnlockedOrientation(template, buildableObjectData.orientationUnlocked, out wx, out wy, out wz);
-                    else
-                        BuildingManager.getWidthFromOrientation(template, (BuildingManager.BuildOrientation)buildableObjectData.orientationY, out wx, out wy, out wz);
-                    aabb.reinitialize(worldPos.x, worldPos.y, worldPos.z, wx, wy, wz);
-
-                    var depotEntityId = CheckIfBuildingExists(aabb, worldPos, buildableObjectData);
-                    if (depotEntityId > 0)
-                    {
-                        var bogo = StreamingSystem.getBuildableObjectGOByEntityId(depotEntityId);
-                        if (bogo != null)
-                        {
-                            var depot = (MinecartDepotGO)bogo;
-                            if (depot != null) existingMinecartDepots.Add(depot);
-                        }
-                    }
-                }
-            }
-            ObjectPoolManager.aabb3ds.returnObject(aabb); aabb = null;
-        }
-
-        internal bool HasExistingMinecartDepots(Vector3Int targetPosition)
-        {
-            AABB3D aabb = ObjectPoolManager.aabb3ds.getObject();
-            foreach (var index in minecartDepotIndices)
-            {
-                if (index >= data.buildableObjects.Length) continue;
-
-                var buildableObjectData = data.buildableObjects[index];
-                var template = ItemTemplateManager.getBuildableObjectTemplate(buildableObjectData.templateId);
-                if (template != null)
-                {
-                    var worldPos = new Vector3Int(buildableObjectData.worldX + targetPosition.x, buildableObjectData.worldY + targetPosition.y, buildableObjectData.worldZ + targetPosition.z);
-                    int wx, wy, wz;
-                    if (template.canBeRotatedAroundXAxis)
-                        BuildingManager.getWidthFromUnlockedOrientation(template, buildableObjectData.orientationUnlocked, out wx, out wy, out wz);
-                    else
-                        BuildingManager.getWidthFromOrientation(template, (BuildingManager.BuildOrientation)buildableObjectData.orientationY, out wx, out wy, out wz);
-                    aabb.reinitialize(worldPos.x, worldPos.y, worldPos.z, wx, wy, wz);
-
-                    var depotEntityId = CheckIfBuildingExists(aabb, worldPos, buildableObjectData);
-                    if (depotEntityId > 0)
-                    {
-                        var bogo = StreamingSystem.getBuildableObjectGOByEntityId(depotEntityId);
-                        if (bogo != null)
-                        {
-                            var depot = (MinecartDepotGO)bogo;
-                            if (depot != null) return true;
-                        }
-                    }
-                }
-            }
-            ObjectPoolManager.aabb3ds.returnObject(aabb); aabb = null;
-
-            return false;
         }
 
         [System.Serializable]
