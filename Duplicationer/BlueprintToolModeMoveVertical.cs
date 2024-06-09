@@ -59,7 +59,7 @@ namespace Duplicationer
                         TabletHelper.SetTabletTextQuickActions($@"{GameRoot.getHotkeyStringFromAction("Action")}: Drag Y
 Alt+{GameRoot.getHotkeyStringFromAction("Action")}: Drag Y*{tool.CurrentBlueprint.SizeY}
 {GameRoot.getHotkeyStringFromAction("RotateY")}: Rotate
-Tap {GameRoot.getHotkeyStringFromAction("Modifier 2")}: Move Mode");
+Tap {GameRoot.getHotkeyStringFromAction("Modifier 2")}: Repeat Mode");
 
                         if (InputHelpers.IsMouseInputAllowed && !tool.IsAnyFrameOpen)
                         {
@@ -71,7 +71,7 @@ Tap {GameRoot.getHotkeyStringFromAction("Modifier 2")}: Move Mode");
                             {
                                 if (_altHeldTime < 0.5)
                                 {
-                                    tool.SelectMode(tool.modeMove);
+                                    tool.SelectMode(tool.modeRepeat);
                                     AudioManager.playUISoundEffect(ResourceDB.resourceLinker.audioClip_UIButtonClick);
                                     return;
                                 }
@@ -86,7 +86,7 @@ Tap {GameRoot.getHotkeyStringFromAction("Modifier 2")}: Move Mode");
                     {
                         tool.isDragArrowVisible = false;
                         TabletHelper.SetTabletTextQuickActions($@"{GameRoot.getHotkeyStringFromAction("RotateY")}: Rotate
-Tap {GameRoot.getHotkeyStringFromAction("Modifier 2")}: Move Mode");
+Tap {GameRoot.getHotkeyStringFromAction("Modifier 2")}: Repeat Mode");
                     }
                     break;
 

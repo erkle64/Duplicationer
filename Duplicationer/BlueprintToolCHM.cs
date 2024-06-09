@@ -100,6 +100,7 @@ namespace Duplicationer
         internal LazyIconSprite iconBlack = null;
         internal LazyIconSprite iconEmpty = null;
         internal LazyIconSprite iconCopy = null;
+        internal LazyIconSprite iconCopyInPlace = null;
         internal LazyIconSprite iconMoveVertical = null;
         internal LazyIconSprite iconMove = null;
         internal LazyIconSprite iconMoveSideways = null;
@@ -178,6 +179,11 @@ namespace Duplicationer
                     new CustomRadialMenuOption(
                         "Confirm Copy", iconCopy.Sprite, "",
                         CopySelection,
+                        () => CurrentMode != null && CurrentMode.AllowCopy(this)),
+
+                    new CustomRadialMenuOption(
+                        "Confirm Copy In Place", iconCopyInPlace.Sprite, "",
+                        CopySelectionInPlace,
                         () => CurrentMode != null && CurrentMode.AllowCopy(this)),
 
                     new CustomRadialMenuOption(
@@ -262,6 +268,18 @@ namespace Duplicationer
             isDragArrowVisible = false;
             SelectMode(modePlace);
             boxMode = BoxMode.None;
+            AudioManager.playUISoundEffect(ResourceDB.resourceLinker.audioClip_recipeCopyTool_copy);
+        }
+
+        internal void CopySelectionInPlace()
+        {
+            ClearBlueprintPlaceholders();
+            CurrentBlueprint = Blueprint.Create(DragMin, DragSize);
+            isDragArrowVisible = false;
+            SelectMode(modeRepeat);
+            repeatFrom = repeatTo = Vector3Int.zero;
+            boxMode = BoxMode.Blueprint;
+            ShowBlueprint(DragMin);
             AudioManager.playUISoundEffect(ResourceDB.resourceLinker.audioClip_recipeCopyTool_copy);
         }
 
@@ -1031,6 +1049,7 @@ namespace Duplicationer
             iconBlack = new LazyIconSprite(DuplicationerPlugin.bundleMainAssets, "black");
             iconEmpty = new LazyIconSprite(DuplicationerPlugin.bundleMainAssets, "empty");
             iconCopy = new LazyIconSprite(DuplicationerPlugin.bundleMainAssets, "copy");
+            iconCopyInPlace = new LazyIconSprite(DuplicationerPlugin.bundleMainAssets, "copy-in-place");
             iconMove = new LazyIconSprite(DuplicationerPlugin.bundleMainAssets, "move");
             iconMoveSideways = new LazyIconSprite(DuplicationerPlugin.bundleMainAssets, "move-sideways");
             iconMoveVertical = new LazyIconSprite(DuplicationerPlugin.bundleMainAssets, "move-vertical");

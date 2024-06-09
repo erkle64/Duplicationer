@@ -18,6 +18,10 @@ namespace Duplicationer
 
         private Mode mode = Mode.Idle;
 
+        private int _idAction = -1;
+        private int _idModifier2 = -1;
+        private double _altHeldTime;
+
         public BlueprintToolModeRepeat()
         {
         }
@@ -26,6 +30,9 @@ namespace Duplicationer
 
         public override void Enter(BlueprintToolCHM tool, BlueprintToolMode fromMode)
         {
+            _idAction = InputHelpers.GetActionId("Action");
+            _idModifier2 = InputHelpers.GetActionId("Modifier 2");
+
             mode = Mode.Idle;
             tool.isDragArrowVisible = false;
             TabletHelper.SetTabletTextQuickActions("");
@@ -58,53 +65,76 @@ namespace Duplicationer
                             switch (faceIndex)
                             {
                                 case 0:
-                                    tool.dragArrowMaterial = ResourceDB.material_glow_red;
+                                    tool.dragArrowMaterial = ResourceDB.material_glow_orange;
                                     TabletHelper.SetTabletTextQuickActions($@"{GameRoot.getHotkeyStringFromAction("Action")}: Drag X*{tool.CurrentBlueprint.SizeX}
-{GameRoot.getHotkeyStringFromAction("RotateY")}: Rotate");
+{GameRoot.getHotkeyStringFromAction("RotateY")}: Rotate
+Tap {GameRoot.getHotkeyStringFromAction("Modifier 2")}: Move Mode");
                                     break;
 
                                 case 1:
-                                    tool.dragArrowMaterial = ResourceDB.material_glow_red;
+                                    tool.dragArrowMaterial = ResourceDB.material_glow_orange;
                                     TabletHelper.SetTabletTextQuickActions($@"{GameRoot.getHotkeyStringFromAction("Action")}: Drag X*{tool.CurrentBlueprint.SizeX}
-{GameRoot.getHotkeyStringFromAction("RotateY")}: Rotate");
+{GameRoot.getHotkeyStringFromAction("RotateY")}: Rotate
+Tap {GameRoot.getHotkeyStringFromAction("Modifier 2")}: Move Mode");
                                     break;
 
                                 case 2:
-                                    tool.dragArrowMaterial = ResourceDB.material_glow_yellow;
+                                    tool.dragArrowMaterial = ResourceDB.material_glow_green;
                                     TabletHelper.SetTabletTextQuickActions($@"{GameRoot.getHotkeyStringFromAction("Action")}: Drag Y*{tool.CurrentBlueprint.SizeY}
-{GameRoot.getHotkeyStringFromAction("RotateY")}: Rotate");
+{GameRoot.getHotkeyStringFromAction("RotateY")}: Rotate
+Tap {GameRoot.getHotkeyStringFromAction("Modifier 2")}: Move Mode");
                                     break;
 
                                 case 3:
-                                    tool.dragArrowMaterial = ResourceDB.material_glow_yellow;
+                                    tool.dragArrowMaterial = ResourceDB.material_glow_green;
                                     TabletHelper.SetTabletTextQuickActions($@"{GameRoot.getHotkeyStringFromAction("Action")}: Drag Y*{tool.CurrentBlueprint.SizeY}
-{GameRoot.getHotkeyStringFromAction("RotateY")}: Rotate");
+{GameRoot.getHotkeyStringFromAction("RotateY")}: Rotate
+Tap {GameRoot.getHotkeyStringFromAction("Modifier 2")}: Move Mode");
                                     break;
 
                                 case 4:
-                                    tool.dragArrowMaterial = ResourceDB.material_glow_purple;
+                                    tool.dragArrowMaterial = ResourceDB.material_glow_blue;
                                     TabletHelper.SetTabletTextQuickActions($@"{GameRoot.getHotkeyStringFromAction("Action")}: Drag Z*{tool.CurrentBlueprint.SizeZ}
-{GameRoot.getHotkeyStringFromAction("RotateY")}: Rotate");
+{GameRoot.getHotkeyStringFromAction("RotateY")}: Rotate
+Tap {GameRoot.getHotkeyStringFromAction("Modifier 2")}: Move Mode");
                                     break;
 
                                 case 5:
-                                    tool.dragArrowMaterial = ResourceDB.material_glow_purple;
+                                    tool.dragArrowMaterial = ResourceDB.material_glow_blue;
                                     TabletHelper.SetTabletTextQuickActions($@"{GameRoot.getHotkeyStringFromAction("Action")}: Drag Z*{tool.CurrentBlueprint.SizeZ}
-{GameRoot.getHotkeyStringFromAction("RotateY")}: Rotate");
+{GameRoot.getHotkeyStringFromAction("RotateY")}: Rotate
+Tap {GameRoot.getHotkeyStringFromAction("Modifier 2")}: Move Mode");
                                     break;
                             }
 
-                            if (GlobalStateManager.getRewiredPlayer0().GetButtonDown("Action") && InputHelpers.IsMouseInputAllowed && !tool.IsAnyFrameOpen)
+                            if (InputHelpers.IsMouseInputAllowed && !tool.IsAnyFrameOpen)
                             {
-                                mode = Mode.XPos + faceIndex;
-                                tool.dragFaceRay = new Ray(tool.dragFaceRay.origin, normal);
-                                tool.dragArrowOffset = 0.5f;
+                                if (GlobalStateManager.getRewiredPlayer0().GetButtonDown(_idAction))
+                                {
+                                    mode = Mode.XPos + faceIndex;
+                                    tool.dragFaceRay = new Ray(tool.dragFaceRay.origin, normal);
+                                    tool.dragArrowOffset = 0.5f;
+                                }
+                                else if (GlobalStateManager.getRewiredPlayer0().GetButtonUp(_idModifier2))
+                                {
+                                    if (_altHeldTime < 0.5)
+                                    {
+                                        tool.SelectMode(tool.modeMove);
+                                        AudioManager.playUISoundEffect(ResourceDB.resourceLinker.audioClip_UIButtonClick);
+                                        return;
+                                    }
+                                }
+                                else if (GlobalStateManager.getRewiredPlayer0().GetButton(_idModifier2))
+                                {
+                                    _altHeldTime = GlobalStateManager.getRewiredPlayer0().GetButtonTimePressed(_idModifier2);
+                                }
                             }
                         }
                         else
                         {
                             tool.isDragArrowVisible = false;
-                            TabletHelper.SetTabletTextQuickActions($"{GameRoot.getHotkeyStringFromAction("RotateY")}: Rotate");
+                            TabletHelper.SetTabletTextQuickActions($@"{GameRoot.getHotkeyStringFromAction("RotateY")}: Rotate
+Tap {GameRoot.getHotkeyStringFromAction("Modifier 2")}: Move Mode");
                         }
                     }
                     break;

@@ -1,5 +1,4 @@
-﻿using HarmonyLib;
-using UnityEngine;
+﻿using UnityEngine;
 using System.IO;
 using Unfoundry;
 using System.Collections.Generic;
@@ -15,7 +14,7 @@ namespace Duplicationer
             MODNAME = "duplicationer",
             AUTHOR = "erkle64",
             GUID = AUTHOR + "." + MODNAME,
-            VERSION = "0.4.17";
+            VERSION = "0.4.18";
 
         public static LogSource log;
 
