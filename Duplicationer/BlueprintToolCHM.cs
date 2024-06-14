@@ -273,11 +273,11 @@ namespace Duplicationer
 
         internal void CopySelectionInPlace()
         {
+            repeatFrom = repeatTo = Vector3Int.zero;
             ClearBlueprintPlaceholders();
             CurrentBlueprint = Blueprint.Create(DragMin, DragSize);
             isDragArrowVisible = false;
             SelectMode(modeRepeat);
-            repeatFrom = repeatTo = Vector3Int.zero;
             boxMode = BoxMode.Blueprint;
             ShowBlueprint(DragMin);
             AudioManager.playUISoundEffect(ResourceDB.resourceLinker.audioClip_recipeCopyTool_copy);

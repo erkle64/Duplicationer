@@ -29,8 +29,8 @@ namespace Duplicationer
 
         public override bool AllowCopy(BlueprintToolCHM tool) => false;
         public override bool AllowPaste(BlueprintToolCHM tool) => false;
-        public override bool AllowRotate(BlueprintToolCHM tool) => false;
-        public override bool AllowMirror(BlueprintToolCHM tool) => false;
+        public override bool AllowRotate(BlueprintToolCHM tool) => true;
+        public override bool AllowMirror(BlueprintToolCHM tool) => true;
 
         public override void Update(BlueprintToolCHM tool)
         {
