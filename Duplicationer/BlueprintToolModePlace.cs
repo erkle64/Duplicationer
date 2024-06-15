@@ -22,7 +22,8 @@ namespace Duplicationer
                 return;
             }
 
-            TabletHelper.SetTabletTextQuickActions($"{GameRoot.getHotkeyStringFromAction("Action")}: Place Blueprint");
+            TabletHelper.SetTabletTextQuickActions($@"{GameRoot.getHotkeyStringFromAction("Action")}: Place Blueprint
+{GameRoot.getHotkeyStringFromAction("RotateY")}: Rotate");
             tool.HideBlueprint();
             tool.boxMode = BlueprintToolCHM.BoxMode.None;
         }

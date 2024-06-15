@@ -15,7 +15,7 @@ namespace Duplicationer
     public class Blueprint
     {
         public const uint FileMagicNumber = 0x42649921u;
-        public const uint LatestBlueprintVersion = 3;
+        public const uint LatestBlueprintVersion = 4u;
 
         public string Name => _name;
         public Vector3Int Size => _data.blocks.Size;
@@ -23,8 +23,8 @@ namespace Duplicationer
         public int SizeY => _data.blocks.sizeY;
         public int SizeZ => _data.blocks.sizeZ;
 
-        public ItemTemplate[] IconItemTemplates => _iconItemTemplates;
-        private ItemTemplate[] _iconItemTemplates;
+        public ItemElementTemplate[] IconItemTemplates => _iconItemTemplates;
+        private ItemElementTemplate[] _iconItemTemplates;
 
         public Dictionary<ulong, ShoppingListData> ShoppingList { get; private set; }
 
@@ -76,7 +76,7 @@ namespace Duplicationer
         }
         private static HashSet<PowerlineConnectionPair> _powerlineConnectionPairs = new HashSet<PowerlineConnectionPair>();
 
-        public Blueprint(string name, BlueprintData data, Dictionary<ulong, ShoppingListData> shoppingList, ItemTemplate[] iconItemTemplates)
+        public Blueprint(string name, BlueprintData data, Dictionary<ulong, ShoppingListData> shoppingList, ItemElementTemplate[] iconItemTemplates)
         {
             _name = name;
             _data = data;
@@ -367,7 +367,7 @@ namespace Duplicationer
             blueprintData.blocks.sizeZ = size.z;
             blueprintData.blocks.ids = blocks;
 
-            return new Blueprint("new blueprint", blueprintData, shoppingList, new ItemTemplate[0]);
+            return new Blueprint("new blueprint", blueprintData, shoppingList, new ItemElementTemplate[0]);
         }
 
         public int GetShoppingListEntry(ulong itemTemplateId, out string name)
@@ -410,10 +410,27 @@ namespace Duplicationer
 
             header.version = reader.ReadUInt32();
 
-            header.icon1 = reader.ReadUInt64();
-            header.icon2 = reader.ReadUInt64();
-            header.icon3 = reader.ReadUInt64();
-            header.icon4 = reader.ReadUInt64();
+            if (header.version >= 4u)
+            {
+                header.icon1 = reader.ReadString();
+                header.icon2 = reader.ReadString();
+                header.icon3 = reader.ReadString();
+                header.icon4 = reader.ReadString();
+            }
+            else
+            {
+                string GetIcon(ulong id)
+                {
+                    var template = ItemTemplateManager.getItemTemplate(id);
+                    if (template == null) return string.Empty;
+                    return $"item:{template.identifier}";
+                }
+
+                header.icon1 = GetIcon(reader.ReadUInt64());
+                header.icon2 = GetIcon(reader.ReadUInt64());
+                header.icon3 = GetIcon(reader.ReadUInt64());
+                header.icon4 = GetIcon(reader.ReadUInt64());
+            }
 
             name = reader.ReadString();
 
@@ -440,14 +457,29 @@ namespace Duplicationer
 
             var version = reader.ReadUInt32();
 
-            var iconItemTemplates = new List<ItemTemplate>();
-            for (int i = 0; i < 4; ++i)
+            var iconItemTemplates = new List<ItemElementTemplate>();
+            if (version >= 4u)
             {
-                var iconItemTemplateId = reader.ReadUInt64();
-                if (iconItemTemplateId != 0)
+                for (int i = 0; i < 4; ++i)
                 {
-                    var template = ItemTemplateManager.getItemTemplate(iconItemTemplateId);
-                    if (template != null) iconItemTemplates.Add(template);
+                    var iconItemTemplateIdentifier = reader.ReadString();
+                    if (!string.IsNullOrEmpty(iconItemTemplateIdentifier))
+                    {
+                        var template = ItemElementTemplate.Get(iconItemTemplateIdentifier);
+                        if (template.isValid) iconItemTemplates.Add(template);
+                    }
+                }
+            }
+            else
+            {
+                for (int i = 0; i < 4; ++i)
+                {
+                    var iconItemTemplateId = reader.ReadUInt64();
+                    if (iconItemTemplateId != 0)
+                    {
+                        var template = ItemTemplateManager.getItemTemplate(iconItemTemplateId);
+                        if (template != null) iconItemTemplates.Add(new ItemElementTemplate(template));
+                    }
                 }
             }
 
@@ -472,7 +504,7 @@ namespace Duplicationer
             return blueprintData;
         }
 
-        public void Save(string path, string name, ItemTemplate[] iconItemTemplates)
+        public void Save(string path, string name, ItemElementTemplate[] iconItemTemplates)
         {
             _name = name;
             _iconItemTemplates = iconItemTemplates;
@@ -489,11 +521,11 @@ namespace Duplicationer
             for (int i = 0; i < iconItemTemplates.Length; i++)
             {
                 var template = iconItemTemplates[i];
-                writer.Write(template.id);
+                writer.Write(template.fullIdentifier);
             }
             for (int i = iconItemTemplates.Length; i < 4; i++)
             {
-                writer.Write(0ul);
+                writer.Write(string.Empty);
             }
 
             writer.Write(name);
@@ -1588,10 +1620,10 @@ namespace Duplicationer
         {
             public uint magic;
             public uint version;
-            public ulong icon1;
-            public ulong icon2;
-            public ulong icon3;
-            public ulong icon4;
+            public string icon1;
+            public string icon2;
+            public string icon3;
+            public string icon4;
         }
     }
 }

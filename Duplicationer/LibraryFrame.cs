@@ -222,26 +222,26 @@ namespace Duplicationer
             {
                 if (Blueprint.TryLoadFileHeader(path, out var header, out var name))
                 {
-                    var iconItemTemplates = new List<ItemTemplate>();
-                    if (header.icon1 != 0)
+                    var iconItemTemplates = new List<ItemElementTemplate>();
+                    if (!string.IsNullOrEmpty(header.icon1))
                     {
-                        var template = ItemTemplateManager.getItemTemplate(header.icon1);
-                        if (template != null && template.icon != null) iconItemTemplates.Add(template);
+                        var template = ItemElementTemplate.Get(header.icon1);
+                        if (template.isValid && template.icon != null) iconItemTemplates.Add(template);
                     }
-                    if (header.icon2 != 0)
+                    if (!string.IsNullOrEmpty(header.icon2))
                     {
-                        var template = ItemTemplateManager.getItemTemplate(header.icon2);
-                        if (template != null && template.icon != null) iconItemTemplates.Add(template);
+                        var template = ItemElementTemplate.Get(header.icon2);
+                        if (template.isValid && template.icon != null) iconItemTemplates.Add(template);
                     }
-                    if (header.icon3 != 0)
+                    if (!string.IsNullOrEmpty(header.icon3))
                     {
-                        var template = ItemTemplateManager.getItemTemplate(header.icon3);
-                        if (template != null && template.icon != null) iconItemTemplates.Add(template);
+                        var template = ItemElementTemplate.Get(header.icon3);
+                        if (template.isValid && template.icon != null) iconItemTemplates.Add(template);
                     }
-                    if (header.icon4 != 0)
+                    if (!string.IsNullOrEmpty(header.icon4))
                     {
-                        var template = ItemTemplateManager.getItemTemplate(header.icon4);
-                        if (template != null && template.icon != null) iconItemTemplates.Add(template);
+                        var template = ItemElementTemplate.Get(header.icon4);
+                        if (template.isValid && template.icon != null) iconItemTemplates.Add(template);
                     }
 
                     int iconCount = iconItemTemplates.Count;
@@ -277,7 +277,7 @@ namespace Duplicationer
                                     saveFrame.IconCount = iconCount;
                                     for (int i = 0; i < 4; i++)
                                     {
-                                        saveFrame.IconItemTemplates[i] = (i < iconCount) ? iconItemTemplates[i] : null;
+                                        saveFrame.IconItemTemplates[i] = (i < iconCount) ? iconItemTemplates[i] : ItemElementTemplate.Empty;
                                     }
                                     saveFrame.FillSaveFrameIcons();
                                     saveFrame.FillSavePreview();

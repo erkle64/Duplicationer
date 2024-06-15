@@ -17,7 +17,12 @@ namespace Duplicationer
         private TMP_InputField _saveFrameNameInputField = null;
         private TextMeshProUGUI _saveFramePreviewLabel = null;
         private TextMeshProUGUI _saveFrameMaterialReportText = null;
-        private ItemTemplate[] _saveFrameIconItemTemplates = new ItemTemplate[4] { null, null, null, null };
+        private ItemElementTemplate[] _saveFrameIconItemTemplates = new ItemElementTemplate[4] {
+            ItemElementTemplate.Empty,
+            ItemElementTemplate.Empty,
+            ItemElementTemplate.Empty,
+            ItemElementTemplate.Empty
+        };
         private int _saveFrameIconCount = 0;
 
         public string BlueprintName
@@ -27,7 +32,7 @@ namespace Duplicationer
                 if (_saveFrameNameInputField != null) _saveFrameNameInputField.text = value;
             }
         }
-        public ItemTemplate[] IconItemTemplates
+        public ItemElementTemplate[] IconItemTemplates
         {
             get => _saveFrameIconItemTemplates;
             set => _saveFrameIconItemTemplates = value;
@@ -211,7 +216,7 @@ namespace Duplicationer
             {
                 if (_saveFrameNameInputField != null) _saveFrameNameInputField.text = _tool.CurrentBlueprint.Name;
 
-                for (int i = 0; i < 4; i++) _saveFrameIconItemTemplates[i] = null;
+                for (int i = 0; i < 4; i++) _saveFrameIconItemTemplates[i] = ItemElementTemplate.Empty;
                 _tool.CurrentBlueprint.IconItemTemplates.CopyTo(_saveFrameIconItemTemplates, 0);
                 _saveFrameIconCount = _tool.CurrentBlueprint.IconItemTemplates.Length;
             }
@@ -338,7 +343,7 @@ namespace Duplicationer
             {
                 if (_saveFramePreviewIconImages[i] != null)
                 {
-                    _saveFramePreviewIconImages[i].sprite = _saveFrameIconItemTemplates[i]?.icon ?? _tool.iconEmpty.Sprite;
+                    _saveFramePreviewIconImages[i].sprite = _saveFrameIconItemTemplates[i].icon ?? _tool.iconEmpty.Sprite;
                 }
             }
         }
@@ -349,12 +354,11 @@ namespace Duplicationer
 
             _saveGridObject.transform.DestroyAllChildren();
 
-            foreach (var kv in ItemTemplateManager.getAllItemTemplates())
+            foreach (var itemTemplate in ItemElementTemplate.GatherAll())
             {
-                var itemTemplate = kv.Value;
                 if (itemTemplate.isHiddenItem) continue;
 
-                var gameObject = UnityEngine.Object.Instantiate(_tool.prefabBlueprintButtonIcon.Prefab, _saveGridObject.transform);
+                var gameObject = Object.Instantiate(_tool.prefabBlueprintButtonIcon.Prefab, _saveGridObject.transform);
 
                 var iconImage = gameObject.transform.Find("Icon1")?.GetComponent<Image>();
                 if (iconImage != null) iconImage.sprite = itemTemplate.icon;
@@ -376,7 +380,7 @@ namespace Duplicationer
             {
                 if (_saveFrameIconImages[i] != null)
                 {
-                    _saveFrameIconImages[i].sprite = _saveFrameIconItemTemplates[i]?.icon_256 ?? _tool.iconEmpty.Sprite;
+                    _saveFrameIconImages[i].sprite = _saveFrameIconItemTemplates[i].icon ?? _tool.iconEmpty.Sprite;
                 }
             }
             for (int i = _saveFrameIconCount; i < 4; i++)
@@ -388,7 +392,7 @@ namespace Duplicationer
             }
         }
 
-        private void SaveFrameAddIcon(ItemTemplate itemTemplate)
+        private void SaveFrameAddIcon(ItemElementTemplate itemTemplate)
         {
             if (itemTemplate == null) throw new System.ArgumentNullException(nameof(itemTemplate));
             if (_saveFrameIconCount >= 4) return;
@@ -409,7 +413,7 @@ namespace Duplicationer
             AudioManager.playUISoundEffect(ResourceDB.resourceLinker.audioClip_UIButtonClick);
 
             for (int i = iconIndex; i < 3; i++) _saveFrameIconItemTemplates[i] = _saveFrameIconItemTemplates[i + 1];
-            _saveFrameIconItemTemplates[3] = null;
+            _saveFrameIconItemTemplates[3] = ItemElementTemplate.Empty;
             _saveFrameIconCount--;
 
             FillSavePreview();
