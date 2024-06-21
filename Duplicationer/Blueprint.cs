@@ -1,5 +1,4 @@
-﻿using C3;
-using HarmonyLib;
+﻿using HarmonyLib;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -8,7 +7,7 @@ using System.Text;
 using TinyJSON;
 using Unfoundry;
 using UnityEngine;
-using static Duplicationer.BlueprintData;
+using static Duplicationer.BlueprintData.BuildableObjectData;
 
 namespace Duplicationer
 {
@@ -46,7 +45,7 @@ namespace Duplicationer
 
         private static ItemTemplate _powerlineItemTemplate;
 
-        private static ItemTemplate PowerlineItemTemplate
+        public static ItemTemplate PowerlineItemTemplate
         {
             get => (_powerlineItemTemplate == null) ? _powerlineItemTemplate = ItemTemplateManager.getItemTemplate("_base_power_line_i") : _powerlineItemTemplate;
         }
@@ -158,11 +157,7 @@ namespace Duplicationer
                 if (blockId >= GameRoot.BUILDING_PART_ARRAY_IDX_START)
                 {
                     var partTemplate = ItemTemplateManager.getBuildingPartTemplate(GameRoot.BuildingPartIdxLookupTable.table[blockId]);
-                    if (partTemplate.parentItemTemplate != null)
-                    {
-                        AddToShoppingList(shoppingList, partTemplate.parentItemTemplate);
-                    }
-                    else
+                    if (partTemplate.parentItemTemplate == null)
                     {
                         blocks[i] = 0;
                     }
@@ -170,11 +165,7 @@ namespace Duplicationer
                 else if (blockId > 0)
                 {
                     var blockTemplate = ItemTemplateManager.getTerrainBlockTemplateByByteIdx(blockId);
-                    if (blockTemplate != null && blockTemplate.parentBOT != null && blockTemplate.parentBOT.parentItemTemplate != null)
-                    {
-                        AddToShoppingList(shoppingList, blockTemplate.parentBOT.parentItemTemplate);
-                    }
-                    else
+                    if (blockTemplate == null || blockTemplate.parentBOT == null || blockTemplate.parentBOT.parentItemTemplate == null)
                     {
                         blocks[i] = 0;
                     }
@@ -218,144 +209,16 @@ namespace Duplicationer
                 var bogoType = bogo.GetType();
 
                 customData.Clear();
-                if (typeof(ProducerGO).IsAssignableFrom(bogoType))
+                var customDataWrapper = new CustomDataWrapper(customData);
+                foreach (var gatherer in CustomDataGatherer.All)
                 {
-                    var assembler = (ProducerGO)bogo;
-                    customData.Add(new BlueprintData.BuildableObjectData.CustomData("craftingRecipeId", assembler.getLastPolledRecipeId()));
-                }
-                if (typeof(LoaderGO).IsAssignableFrom(bogoType))
-                {
-                    var loader = (LoaderGO)bogo;
-                    customData.Add(new BlueprintData.BuildableObjectData.CustomData("isInputLoader", loader.isInputLoader() ? "true" : "false"));
-                    if (bogo.template.loader_isFilter)
+                    if (gatherer.ShouldGather(bogo, bogoType))
                     {
-                        customData.Add(new BlueprintData.BuildableObjectData.CustomData("loaderFilterTemplateId", Traverse.Create(loader).Field("_cache_lastSetFilterTemplateId").GetValue<ulong>()));
-                    }
-                }
-                if (typeof(PipeLoaderGO).IsAssignableFrom(bogoType))
-                {
-                    var loader = (PipeLoaderGO)bogo;
-                    customData.Add(new BlueprintData.BuildableObjectData.CustomData("isInputLoader", loader.isInputLoader() ? "true" : "false"));
-                    customData.Add(new BlueprintData.BuildableObjectData.CustomData("pipeLoaderFilterTemplateId", Traverse.Create(loader).Field("_cache_lastSetFilterTemplateId").GetValue<ulong>()));
-                }
-                if (typeof(ConveyorBalancerGO).IsAssignableFrom(bogoType))
-                {
-                    var balancer = (ConveyorBalancerGO)bogo;
-                    customData.Add(new BlueprintData.BuildableObjectData.CustomData("balancerInputPriority", balancer.getInputPriority()));
-                    customData.Add(new BlueprintData.BuildableObjectData.CustomData("balancerOutputPriority", balancer.getOutputPriority()));
-                }
-                if (typeof(SignGO).IsAssignableFrom(bogoType))
-                {
-                    var signTextLength = SignGO.signEntity_getSignTextLength(bogo.relatedEntityId);
-                    var signText = new byte[signTextLength];
-                    byte useAutoTextSize = 0;
-                    float textMinSize = 0;
-                    float textMaxSize = 0;
-                    SignGO.signEntity_getSignText(bogo.relatedEntityId, signText, signTextLength, ref useAutoTextSize, ref textMinSize, ref textMaxSize);
-
-                    customData.Add(new BlueprintData.BuildableObjectData.CustomData("signText", System.Text.Encoding.Default.GetString(signText)));
-                    customData.Add(new BlueprintData.BuildableObjectData.CustomData("signUseAutoTextSize", useAutoTextSize));
-                    customData.Add(new BlueprintData.BuildableObjectData.CustomData("signTextMinSize", textMinSize));
-                    customData.Add(new BlueprintData.BuildableObjectData.CustomData("signTextMaxSize", textMaxSize));
-                }
-                if (typeof(BlastFurnaceBaseGO).IsAssignableFrom(bogoType))
-                {
-                    BlastFurnacePollingUpdateData data = default;
-                    if (BlastFurnaceBaseGO.blastFurnaceEntity_queryPollingData(bogo.relatedEntityId, ref data) == IOBool.iotrue)
-                    {
-                        customData.Add(new BlueprintData.BuildableObjectData.CustomData("blastFurnaceModeTemplateId", data.modeTemplateId));
-                    }
-                }
-                if (typeof(DroneTransportGO).IsAssignableFrom(bogoType))
-                {
-                    DroneTransportPollingUpdateData data = default;
-                    if (DroneTransportGO.droneTransportEntity_queryPollingData(bogo.relatedEntityId, ref data, null, 0U) == IOBool.iotrue)
-                    {
-                        customData.Add(new BlueprintData.BuildableObjectData.CustomData("loadConditionFlags", data.loadConditionFlags));
-                        customData.Add(new BlueprintData.BuildableObjectData.CustomData("loadCondition_comparisonType", data.loadCondition_comparisonType));
-                        customData.Add(new BlueprintData.BuildableObjectData.CustomData("loadCondition_fillRatePercentage", data.loadCondition_fillRatePercentage));
-                        customData.Add(new BlueprintData.BuildableObjectData.CustomData("loadCondition_seconds", data.loadCondition_seconds));
-                    }
-
-                    byte[] stationName = new byte[128];
-                    uint stationNameLength = 0;
-                    byte stationType = (byte)(bogo.template.droneTransport_isStartStation ? 1 : 0);
-                    DroneTransportGO.droneTransportEntity_getStationName(bogo.relatedEntityId, stationType, stationName, (uint)stationName.Length, ref stationNameLength);
-                    customData.Add(new BlueprintData.BuildableObjectData.CustomData("stationName", Encoding.UTF8.GetString(stationName, 0, (int)stationNameLength)));
-                    customData.Add(new BlueprintData.BuildableObjectData.CustomData("stationType", stationType));
-                }
-                if (typeof(ChestGO).IsAssignableFrom(bogoType))
-                {
-                    ulong inventoryId = 0UL;
-                    if (BuildingManager.buildingManager_getInventoryAccessors(bogo.relatedEntityId, 0U, ref inventoryId) == IOBool.iotrue)
-                    {
-                        uint slotCount = 0;
-                        uint categoryLock = 0;
-                        uint firstSoftLockedSlotIdx = 0;
-                        InventoryManager.inventoryManager_getAuxiliaryDataById(inventoryId, ref slotCount, ref categoryLock, ref firstSoftLockedSlotIdx, IOBool.iofalse);
-
-                        customData.Add(new BlueprintData.BuildableObjectData.CustomData("firstSoftLockedSlotIdx", firstSoftLockedSlotIdx));
-                    }
-                }
-                if (typeof(IHasModularEntityBaseManager).IsAssignableFrom(bogoType))
-                {
-                    ModularBuildingData rootNode = null;
-                    uint totalModuleCount = ModularBuildingManagerFrame.modularEntityBase_getTotalModuleCount(bogo.relatedEntityId, 0U);
-                    for (uint id = 1; id <= totalModuleCount; ++id)
-                    {
-                        ulong botId = 0;
-                        uint parentId = 0;
-                        uint parentAttachmentPointIdx = 0;
-                        ModularBuildingManagerFrame.modularEntityBase_getModuleDataForModuleId(bogo.relatedEntityId, id, ref botId, ref parentId, ref parentAttachmentPointIdx, 0U);
-                        if (id == 1U)
-                        {
-                            rootNode = new ModularBuildingData(bogo.template, id);
-                        }
-                        else
-                        {
-                            var nodeById = FindModularBuildingNodeById(rootNode, parentId);
-                            if (nodeById == null)
-                            {
-                                DuplicationerPlugin.log.LogError("parent node not found!");
-                                break;
-                            }
-                            if (nodeById.attachments[(int)parentAttachmentPointIdx] != null)
-                            {
-                                DuplicationerPlugin.log.LogError("parent node attachment point is occupied!");
-                                break;
-                            }
-                            var node = new ModularBuildingData(ItemTemplateManager.getBuildableObjectTemplate(botId), id);
-                            nodeById.attachments[(int)parentAttachmentPointIdx] = node;
-                        }
-                    }
-                    if (rootNode != null)
-                    {
-                        var rootNodeJSON = JSON.Dump(rootNode, EncodeOptions.NoTypeHints);
-                        customData.Add(new BlueprintData.BuildableObjectData.CustomData("modularBuildingData", rootNodeJSON));
-                    }
-                }
-                if (bogo.template.hasPoleGridConnection)
-                {
-                    if (!powerGridBuildings.Contains(bogo))
-                    {
-                        foreach (var powerGridBuilding in powerGridBuildings)
-                        {
-                            if (PowerLineHH.buildingManager_powerlineHandheld_checkIfAlreadyConnected(powerGridBuilding.relatedEntityId, bogo.relatedEntityId) == IOBool.iotrue)
-                            {
-                                customData.Add(new BlueprintData.BuildableObjectData.CustomData("powerline", powerGridBuilding.relatedEntityId));
-                                AddToShoppingList(shoppingList, PowerlineItemTemplate);
-                            }
-                        }
-                        powerGridBuildings.Add(bogo);
+                        gatherer.Gather(bogo, customDataWrapper, powerGridBuildings);
                     }
                 }
 
                 buildingDataArray[buildingIndex].customData = customData.ToArray();
-
-                if (bogo.template.parentItemTemplate != null)
-                {
-                    AddToShoppingList(shoppingList, bogo.template.parentItemTemplate);
-                }
 
                 buildingIndex++;
             }
@@ -366,6 +229,53 @@ namespace Duplicationer
             blueprintData.blocks.sizeY = size.y;
             blueprintData.blocks.sizeZ = size.z;
             blueprintData.blocks.ids = blocks;
+
+            BuildShoppingList(blueprintData, shoppingList);
+
+            return new Blueprint("new blueprint", blueprintData, shoppingList, new ItemElementTemplate[0]);
+        }
+
+        public static Blueprint Create(BlueprintRequest blueprintRequest)
+        {
+            var shoppingList = new Dictionary<ulong, ShoppingListData>();
+
+            var blueprintData = new BlueprintData();
+            blueprintData.buildableObjects = new BlueprintData.BuildableObjectData[blueprintRequest.buildings.Length];
+            for (int i = 0; i < blueprintRequest.buildings.Length; i++)
+            {
+                var building = blueprintRequest.buildings[i];
+                var template = ItemTemplateManager.getBuildableObjectTemplate(building.templateId);
+
+                var customData = new BlueprintData.BuildableObjectData.CustomData[building.customData.Length];
+                for (int j = 0; j < building.customData.Length; j++)
+                {
+                    var (identifier, value) = building.customData[j];
+                    customData[j] = new BlueprintData.BuildableObjectData.CustomData(identifier, value);
+                }
+
+                blueprintData.buildableObjects[i] = new BlueprintData.BuildableObjectData
+                {
+                    originalEntityId = (ulong)(i + 1),
+                    templateName = template.name,
+                    templateId = building.templateId,
+                    worldX = building.anchorPosition.x,
+                    worldY = building.anchorPosition.y,
+                    worldZ = building.anchorPosition.z,
+                    orientationUnlockedX = building.orientationUnlocked.x,
+                    orientationUnlockedY = building.orientationUnlocked.y,
+                    orientationUnlockedZ = building.orientationUnlocked.z,
+                    orientationUnlockedW = building.orientationUnlocked.w,
+                    orientationY = (byte)building.orientationY,
+                    itemMode = building.itemMode,
+                    customData = customData
+                };
+            }
+            blueprintData.blocks.sizeX = blueprintRequest.size.x;
+            blueprintData.blocks.sizeY = blueprintRequest.size.y;
+            blueprintData.blocks.sizeZ = blueprintRequest.size.z;
+            blueprintData.blocks.ids = blueprintRequest.blocks;
+
+            BuildShoppingList(blueprintData, shoppingList);
 
             return new Blueprint("new blueprint", blueprintData, shoppingList, new ItemElementTemplate[0]);
         }
@@ -670,209 +580,23 @@ namespace Duplicationer
                 ulong pasteConfigSettings_01 = 0ul;
                 ulong pasteConfigSettings_02 = 0ul;
 
-                var craftingRecipeId = GetCustomData<ulong>(buildingIndex, "craftingRecipeId");
-                if (craftingRecipeId != 0)
+                var customDataWrapper = new CustomDataWrapper(buildableObjectData.customData);
+                foreach (var applier in CustomDataApplier.All)
                 {
-                    var recipe = ItemTemplateManager.getCraftingRecipeById(craftingRecipeId);
-                    if (recipe != null && (DuplicationerPlugin.configAllowUnresearchedRecipes.Get() || recipe.isResearched()))
+                    if (applier.ShouldApply(template, customDataWrapper))
                     {
-                        usePasteConfigSettings = true;
-                        pasteConfigSettings_01 = craftingRecipeId;
-                    }
-                }
-
-                if (HasCustomData(buildingIndex, "isInputLoader"))
-                {
-                    usePasteConfigSettings = true;
-                    bool isInputLoader = GetCustomData<bool>(buildingIndex, "isInputLoader");
-                    pasteConfigSettings_01 = isInputLoader ? 1u : 0u;
-
-                    if (template.loader_isFilter)
-                    {
-                        if (HasCustomData(buildingIndex, "loaderFilterTemplateId"))
-                        {
-                            var loaderFilterTemplateId = GetCustomData<ulong>(buildingIndex, "loaderFilterTemplateId");
-                            if (loaderFilterTemplateId > 0)
-                            {
-                                usePasteConfigSettings = true;
-                                pasteConfigSettings_02 = loaderFilterTemplateId;
-                            }
-                        }
-                    }
-
-                    if (template.type == BuildableObjectTemplate.BuildableObjectType.PipeLoader)
-                    {
-                        if (HasCustomData(buildingIndex, "pipeLoaderFilterTemplateId"))
-                        {
-                            var pipeLoaderFilterTemplateId = GetCustomData<ulong>(buildingIndex, "pipeLoaderFilterTemplateId");
-                            if (pipeLoaderFilterTemplateId > 0)
-                            {
-                                _postBuildActions.Add((ConstructionTaskGroup taskGroup, ConstructionTaskGroup.ConstructionTask task) =>
-                                {
-                                    if (task.entityId > 0)
-                                    {
-                                        GameRoot.addLockstepEvent(new SetPipeLoaderConfig(usernameHash, task.entityId, pipeLoaderFilterTemplateId, isInputLoader));
-                                    }
-                                });
-                            }
-                        }
-                    }
-                }
-
-                if (HasCustomData(buildingIndex, "modularNodeIndex"))
-                {
-                    additionalData_ulong_01 = GetCustomData<ulong>(buildingIndex, "modularNodeIndex");
-                }
-
-                if (template.type == BuildableObjectTemplate.BuildableObjectType.ConveyorBalancer)
-                {
-                    var balancerInputPriority = GetCustomData<int>(buildingIndex, "balancerInputPriority");
-                    var balancerOutputPriority = GetCustomData<int>(buildingIndex, "balancerOutputPriority");
-                    _postBuildActions.Add((ConstructionTaskGroup taskGroup, ConstructionTaskGroup.ConstructionTask task) =>
-                    {
-                        if (task.entityId > 0)
-                        {
-                            GameRoot.addLockstepEvent(new SetConveyorBalancerConfig(usernameHash, task.entityId, balancerInputPriority, balancerOutputPriority));
-                        }
-                    });
-                }
-
-                if (template.type == BuildableObjectTemplate.BuildableObjectType.Sign)
-                {
-                    var signText = GetCustomData<string>(buildingIndex, "signText");
-                    var signUseAutoTextSize = GetCustomData<byte>(buildingIndex, "signUseAutoTextSize");
-                    var signTextMinSize = GetCustomData<float>(buildingIndex, "signTextMinSize");
-                    var signTextMaxSize = GetCustomData<float>(buildingIndex, "signTextMaxSize");
-                    _postBuildActions.Add((ConstructionTaskGroup taskGroup, ConstructionTaskGroup.ConstructionTask task) =>
-                    {
-                        if (task.entityId > 0)
-                        {
-                            GameRoot.addLockstepEvent(new SignSetTextEvent(usernameHash, task.entityId, signText, signUseAutoTextSize != 0, signTextMinSize, signTextMaxSize));
-                        }
-                    });
-                }
-
-                if (HasCustomData(buildingIndex, "blastFurnaceModeTemplateId"))
-                {
-                    var modeTemplateId = GetCustomData<ulong>(buildingIndex, "blastFurnaceModeTemplateId");
-                    if (modeTemplateId > 0)
-                    {
-                        _postBuildActions.Add((ConstructionTaskGroup taskGroup, ConstructionTaskGroup.ConstructionTask task) =>
-                        {
-                            if (task.entityId > 0)
-                            {
-                                GameRoot.addLockstepEvent(new BlastFurnaceSetModeEvent(usernameHash, task.entityId, modeTemplateId));
-                            }
-                        });
-                    }
-                }
-
-                if (template.type == BuildableObjectTemplate.BuildableObjectType.Storage && HasCustomData(buildingIndex, "firstSoftLockedSlotIdx"))
-                {
-                    var firstSoftLockedSlotIdx = GetCustomData<uint>(buildingIndex, "firstSoftLockedSlotIdx");
-                    _postBuildActions.Add((ConstructionTaskGroup taskGroup, ConstructionTaskGroup.ConstructionTask task) =>
-                    {
-                        if (task.entityId > 0)
-                        {
-                            ulong inventoryId = 0UL;
-                            if (BuildingManager.buildingManager_getInventoryAccessors(task.entityId, 0U, ref inventoryId) == IOBool.iotrue)
-                            {
-                                GameRoot.addLockstepEvent(new SetSoftLockForInventory(usernameHash, inventoryId, firstSoftLockedSlotIdx));
-                            }
-                            else
-                            {
-                                DuplicationerPlugin.log.LogWarning("Failed to get inventory accessor for storage");
-                            }
-                        }
-                        else
-                        {
-                            DuplicationerPlugin.log.LogWarning("Failed to get entity id for storage");
-                        }
-                    });
-                }
-
-                if (template.type == BuildableObjectTemplate.BuildableObjectType.DroneTransport && HasCustomData(buildingIndex, "loadConditionFlags"))
-                {
-                    var loadConditionFlags = GetCustomData<byte>(buildingIndex, "loadConditionFlags");
-                    var loadCondition_comparisonType = GetCustomData<byte>(buildingIndex, "loadCondition_comparisonType");
-                    var loadCondition_fillRatePercentage = GetCustomData<byte>(buildingIndex, "loadCondition_fillRatePercentage");
-                    var loadCondition_seconds = GetCustomData<uint>(buildingIndex, "loadCondition_seconds");
-                    _postBuildActions.Add((ConstructionTaskGroup taskGroup, ConstructionTaskGroup.ConstructionTask task) =>
-                    {
-                        if (task.entityId > 0)
-                        {
-                            GameRoot.addLockstepEvent(new DroneTransportLoadConditionEvent(usernameHash, task.entityId, loadConditionFlags, loadCondition_fillRatePercentage, loadCondition_seconds, loadCondition_comparisonType));
-                        }
-                        else
-                        {
-                            DuplicationerPlugin.log.LogWarning("Failed to get entity id for drone transport");
-                        }
-                    });
-                }
-
-                if (template.type == BuildableObjectTemplate.BuildableObjectType.DroneTransport && HasCustomData(buildingIndex, "stationName"))
-                {
-                    var stationName = GetCustomData<string>(buildingIndex, "stationName");
-                    var stationType = GetCustomData<byte>(buildingIndex, "stationType");
-                    _postBuildActions.Add((ConstructionTaskGroup taskGroup, ConstructionTaskGroup.ConstructionTask task) =>
-                    {
-                        if (task.entityId > 0)
-                        {
-                            GameRoot.addLockstepEvent(new DroneTransportSetNameEvent(usernameHash, stationName, task.entityId, stationType));
-                        }
-                        else
-                        {
-                            DuplicationerPlugin.log.LogWarning("Failed to get entity id for drone transport");
-                        }
-                    });
-                }
-
-                if (HasCustomData(buildingIndex, "modularBuildingData"))
-                {
-                    var modularBuildingDataJSON = GetCustomData<string>(buildingIndex, "modularBuildingData");
-                    var modularBuildingData = JSON.Load(modularBuildingDataJSON).Make<ModularBuildingData>();
-                    _postBuildActions.Add((ConstructionTaskGroup taskGroup, ConstructionTaskGroup.ConstructionTask task) =>
-                    {
-                        if (task.entityId > 0)
-                        {
-                            byte out_mbState = 0;
-                            byte out_isEnabled = 0;
-                            byte out_canBeEnabled = 0;
-                            byte out_constructionIsDismantle = 0;
-                            uint out_assignedConstructionDronePorts = 0;
-                            ModularBuildingManagerFrame.modularEntityBase_getGenericData(task.entityId, ref out_mbState, ref out_isEnabled, ref out_canBeEnabled, ref out_constructionIsDismantle, ref out_assignedConstructionDronePorts);
-                            if (out_mbState == (byte)ModularBuildingManagerFrame.MBState.ConstructionSiteInactive)
-                            {
-                                var moduleCount = ModularBuildingManagerFrame.modularEntityBase_getTotalModuleCount(task.entityId, 0);
-                                if (moduleCount <= 1)
-                                {
-                                    var mbmfData = modularBuildingData.BuildMBMFData();
-                                    GameRoot.addLockstepEvent(new SetModularEntityConstructionStateDataEvent(usernameHash, 0U, task.entityId, mbmfData));
-                                }
-                            }
-                        }
-                    });
-                }
-
-                var powerlineEntityIds = new List<ulong>();
-                GetCustomDataList(buildingIndex, "powerline", powerlineEntityIds);
-                foreach (var powerlineEntityId in powerlineEntityIds)
-                {
-                    var powerlineIndex = FindEntityIndex(powerlineEntityId);
-                    if (powerlineIndex >= 0)
-                    {
-                        var fromPos = worldPos;
-                        var toBuildableObjectData = _data.buildableObjects[powerlineIndex];
-                        _postBuildActions.Add((ConstructionTaskGroup taskGroup, ConstructionTaskGroup.ConstructionTask task) =>
-                        {
-                            if (entityIdMap.TryGetValue(toBuildableObjectData.originalEntityId, out var toEntityId))
-                            {
-                                if (PowerLineHH.buildingManager_powerlineHandheld_checkIfAlreadyConnected(task.entityId, toEntityId) == IOBool.iofalse)
-                                {
-                                    GameRoot.addLockstepEvent(new PoleConnectionEvent(usernameHash, PowerlineItemTemplate.id, task.entityId, toEntityId));
-                                }
-                            }
-                        });
+                        applier.Apply(
+                            template,
+                            customDataWrapper,
+                            _postBuildActions,
+                            usernameHash,
+                            ref usePasteConfigSettings,
+                            ref pasteConfigSettings_01,
+                            ref pasteConfigSettings_02,
+                            ref additionalData_ulong_01,
+                            ref additionalData_ulong_02,
+                            ref _data,
+                            entityIdMap);
                     }
                 }
 
@@ -969,18 +693,9 @@ namespace Duplicationer
             }
         }
 
-        private int FindEntityIndex(ulong entityId)
-        {
-            for (int i = 0; i < _data.buildableObjects.Length; ++i)
-            {
-                if (_data.buildableObjects[i].originalEntityId == entityId) return i;
-            }
-            return -1;
-        }
-
         private int CountModularParents(ulong parentId)
         {
-            var parentIndex = FindEntityIndex(parentId);
+            var parentIndex = _data.FindEntityIndex(parentId);
             if (parentIndex < 0) return 0;
 
             if (HasCustomData(parentIndex, "modularParentId"))
@@ -1264,7 +979,7 @@ namespace Duplicationer
             }
             else
             {
-                var newBuildableObjects = new List<BuildableObjectData>(_data.buildableObjects.Length);
+                var newBuildableObjects = new List<BlueprintData.BuildableObjectData>(_data.buildableObjects.Length);
                 for (int i = 0; i < _data.buildableObjects.Length; ++i)
                 {
                     var buildableObjectData = _data.buildableObjects[i];
@@ -1586,20 +1301,20 @@ namespace Duplicationer
                 }
                 return new MBMFData_BuildingNode(templateId, attachmentPoints, id);
             }
-        }
 
-        private static ModularBuildingData FindModularBuildingNodeById(ModularBuildingData node, uint id)
-        {
-            if (node.id == id) return node;
-            for (uint index = 0; index < node.attachments.Length; ++index)
+            public ModularBuildingData FindModularBuildingNodeById(uint id)
             {
-                if (node.attachments[(int)index] != null)
+                if (this.id == id) return this;
+                for (uint index = 0; index < attachments.Length; ++index)
                 {
-                    var nodeById = FindModularBuildingNodeById(node.attachments[(int)index], id);
-                    if (nodeById != null) return nodeById;
+                    if (attachments[(int)index] != null)
+                    {
+                        var nodeById = attachments[(int)index].FindModularBuildingNodeById(id);
+                        if (nodeById != null) return nodeById;
+                    }
                 }
+                return null;
             }
-            return null;
         }
 
         public struct ShoppingListData

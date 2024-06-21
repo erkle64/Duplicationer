@@ -220,165 +220,172 @@ namespace Duplicationer
 
             foreach (var path in Directory.GetFiles(Path.Combine(DuplicationerPlugin.BlueprintFolder, relativePath), $"*.{DuplicationerPlugin.BlueprintExtension}"))
             {
-                if (Blueprint.TryLoadFileHeader(path, out var header, out var name))
+                try
                 {
-                    var iconItemTemplates = new List<ItemElementTemplate>();
-                    if (!string.IsNullOrEmpty(header.icon1))
+                    if (Blueprint.TryLoadFileHeader(path, out var header, out var name))
                     {
-                        var template = ItemElementTemplate.Get(header.icon1);
-                        if (template.isValid && template.icon != null) iconItemTemplates.Add(template);
-                    }
-                    if (!string.IsNullOrEmpty(header.icon2))
-                    {
-                        var template = ItemElementTemplate.Get(header.icon2);
-                        if (template.isValid && template.icon != null) iconItemTemplates.Add(template);
-                    }
-                    if (!string.IsNullOrEmpty(header.icon3))
-                    {
-                        var template = ItemElementTemplate.Get(header.icon3);
-                        if (template.isValid && template.icon != null) iconItemTemplates.Add(template);
-                    }
-                    if (!string.IsNullOrEmpty(header.icon4))
-                    {
-                        var template = ItemElementTemplate.Get(header.icon4);
-                        if (template.isValid && template.icon != null) iconItemTemplates.Add(template);
-                    }
+                        var iconItemTemplates = new List<ItemElementTemplate>();
+                        if (!string.IsNullOrEmpty(header.icon1))
+                        {
+                            var template = ItemElementTemplate.Get(header.icon1);
+                            if (template.isValid && template.icon != null) iconItemTemplates.Add(template);
+                        }
+                        if (!string.IsNullOrEmpty(header.icon2))
+                        {
+                            var template = ItemElementTemplate.Get(header.icon2);
+                            if (template.isValid && template.icon != null) iconItemTemplates.Add(template);
+                        }
+                        if (!string.IsNullOrEmpty(header.icon3))
+                        {
+                            var template = ItemElementTemplate.Get(header.icon3);
+                            if (template.isValid && template.icon != null) iconItemTemplates.Add(template);
+                        }
+                        if (!string.IsNullOrEmpty(header.icon4))
+                        {
+                            var template = ItemElementTemplate.Get(header.icon4);
+                            if (template.isValid && template.icon != null) iconItemTemplates.Add(template);
+                        }
 
-                    int iconCount = iconItemTemplates.Count;
+                        int iconCount = iconItemTemplates.Count;
 
-                    var gameObject = Object.Instantiate(prefabs[iconCount], libraryGridObject.transform);
+                        var gameObject = Object.Instantiate(prefabs[iconCount], libraryGridObject.transform);
 
-                    var label = gameObject.transform.Find("Label")?.GetComponent<TextMeshProUGUI>();
-                    if (label != null) label.text = name;
+                        var label = gameObject.transform.Find("Label")?.GetComponent<TextMeshProUGUI>();
+                        if (label != null) label.text = name;
 
-                    var iconImages = new Image[] {
+                        var iconImages = new Image[] {
                         gameObject.transform.Find("Icon1")?.GetComponent<Image>(),
                         gameObject.transform.Find("Icon2")?.GetComponent<Image>(),
                         gameObject.transform.Find("Icon3")?.GetComponent<Image>(),
                         gameObject.transform.Find("Icon4")?.GetComponent<Image>()
                     };
 
-                    for (int iconIndex = 0; iconIndex < iconCount; iconIndex++)
-                    {
-                        iconImages[iconIndex].sprite = iconItemTemplates[iconIndex].icon;
-                    }
-
-                    var button = gameObject.GetComponent<Button>();
-                    if (button != null)
-                    {
-                        if (saveFrame != null)
+                        for (int iconIndex = 0; iconIndex < iconCount; iconIndex++)
                         {
-                            var nameForSaveInfo = Path.Combine(relativePath, Path.GetFileNameWithoutExtension(path));
-                            button.onClick.AddListener(new UnityAction(() =>
-                            {
-                                ActionManager.AddQueuedEvent(() =>
-                                {
-                                    saveFrame.BlueprintName = nameForSaveInfo;
-                                    saveFrame.IconCount = iconCount;
-                                    for (int i = 0; i < 4; i++)
-                                    {
-                                        saveFrame.IconItemTemplates[i] = (i < iconCount) ? iconItemTemplates[i] : ItemElementTemplate.Empty;
-                                    }
-                                    saveFrame.FillSaveFrameIcons();
-                                    saveFrame.FillSavePreview();
-                                    Hide();
-                                });
-                            }));
-                        }
-                        else
-                        {
-                            button.onClick.AddListener(new UnityAction(() =>
-                            {
-                                ActionManager.AddQueuedEvent(() =>
-                                {
-                                    Hide();
-                                    _tool.ClearBlueprintPlaceholders();
-                                    _tool.LoadBlueprintFromFile(path);
-                                    _tool.SelectMode(_tool.modePlace);
-                                });
-                            }));
-                        }
-                    }
-
-                    var deleteButton = gameObject.transform.Find("DeleteButton")?.GetComponent<Button>();
-                    if (deleteButton != null)
-                    {
-                        if (saveFrame != null)
-                        {
-                            deleteButton.gameObject.SetActive(false);
-                        }
-                        else
-                        {
-                            var nameToDelete = name;
-                            var pathToDelete = path;
-                            deleteButton.onClick.AddListener(new UnityAction(() =>
-                            {
-                                ActionManager.AddQueuedEvent(() =>
-                                {
-                                    ConfirmationFrame.Show($"Delete '{name}'", "Delete", () =>
-                                    {
-                                        try
-                                        {
-                                            File.Delete(pathToDelete);
-                                            FillLibraryGrid(relativePath);
-                                        }
-                                        catch (System.Exception) { }
-                                    });
-                                });
-                            }));
+                            iconImages[iconIndex].sprite = iconItemTemplates[iconIndex].icon;
                         }
 
-                        var renameButton = gameObject.transform.Find("RenameButton")?.GetComponent<Button>();
-                        if (renameButton != null)
+                        var button = gameObject.GetComponent<Button>();
+                        if (button != null)
                         {
                             if (saveFrame != null)
                             {
-                                renameButton.gameObject.SetActive(false);
-                            }
-                            else
-                            {
-                                var nameToRename = name;
-                                var pathToRename = path;
-                                renameButton.onClick.AddListener(new UnityAction(() =>
+                                var nameForSaveInfo = Path.Combine(relativePath, Path.GetFileNameWithoutExtension(path));
+                                button.onClick.AddListener(new UnityAction(() =>
                                 {
                                     ActionManager.AddQueuedEvent(() =>
                                     {
-                                        TextEntryFrame.Show($"Rename Blueprint", nameToRename, "Rename", (string newName) =>
+                                        saveFrame.BlueprintName = nameForSaveInfo;
+                                        saveFrame.IconCount = iconCount;
+                                        for (int i = 0; i < 4; i++)
                                         {
-                                            string filenameBase = Path.Combine(Path.GetDirectoryName(newName), PathHelpers.MakeValidFileName(Path.GetFileName(newName)));
-                                            string newPath = Path.Combine(DuplicationerPlugin.BlueprintFolder, relativePath, $"{filenameBase}.{DuplicationerPlugin.BlueprintExtension}");
-                                            if (File.Exists(newPath))
+                                            saveFrame.IconItemTemplates[i] = (i < iconCount) ? iconItemTemplates[i] : ItemElementTemplate.Empty;
+                                        }
+                                        saveFrame.FillSaveFrameIcons();
+                                        saveFrame.FillSavePreview();
+                                        Hide();
+                                    });
+                                }));
+                            }
+                            else
+                            {
+                                button.onClick.AddListener(new UnityAction(() =>
+                                {
+                                    ActionManager.AddQueuedEvent(() =>
+                                    {
+                                        Hide();
+                                        _tool.ClearBlueprintPlaceholders();
+                                        _tool.LoadBlueprintFromFile(path);
+                                        _tool.SelectMode(_tool.modePlace);
+                                    });
+                                }));
+                            }
+                        }
+
+                        var deleteButton = gameObject.transform.Find("DeleteButton")?.GetComponent<Button>();
+                        if (deleteButton != null)
+                        {
+                            if (saveFrame != null)
+                            {
+                                deleteButton.gameObject.SetActive(false);
+                            }
+                            else
+                            {
+                                var nameToDelete = name;
+                                var pathToDelete = path;
+                                deleteButton.onClick.AddListener(new UnityAction(() =>
+                                {
+                                    ActionManager.AddQueuedEvent(() =>
+                                    {
+                                        ConfirmationFrame.Show($"Delete '{name}'", "Delete", () =>
+                                        {
+                                            try
                                             {
-                                                ConfirmationFrame.Show($"Overwrite '{newName}'?", "Overwrite", () =>
+                                                File.Delete(pathToDelete);
+                                                FillLibraryGrid(relativePath);
+                                            }
+                                            catch (System.Exception) { }
+                                        });
+                                    });
+                                }));
+                            }
+
+                            var renameButton = gameObject.transform.Find("RenameButton")?.GetComponent<Button>();
+                            if (renameButton != null)
+                            {
+                                if (saveFrame != null)
+                                {
+                                    renameButton.gameObject.SetActive(false);
+                                }
+                                else
+                                {
+                                    var nameToRename = name;
+                                    var pathToRename = path;
+                                    renameButton.onClick.AddListener(new UnityAction(() =>
+                                    {
+                                        ActionManager.AddQueuedEvent(() =>
+                                        {
+                                            TextEntryFrame.Show($"Rename Blueprint", nameToRename, "Rename", (string newName) =>
+                                            {
+                                                string filenameBase = Path.Combine(Path.GetDirectoryName(newName), PathHelpers.MakeValidFileName(Path.GetFileName(newName)));
+                                                string newPath = Path.Combine(DuplicationerPlugin.BlueprintFolder, relativePath, $"{filenameBase}.{DuplicationerPlugin.BlueprintExtension}");
+                                                if (File.Exists(newPath))
+                                                {
+                                                    ConfirmationFrame.Show($"Overwrite '{newName}'?", "Overwrite", () =>
+                                                    {
+                                                        try
+                                                        {
+                                                            DuplicationerPlugin.log.Log($"Renaming blueprint '{nameToRename}' to '{newName}'");
+                                                            File.Delete(newPath);
+                                                            File.Move(pathToRename, newPath);
+                                                            RenameBlueprint(newPath, Path.GetFileName(newName));
+                                                            FillLibraryGrid(relativePath);
+                                                        }
+                                                        catch (System.Exception) { }
+                                                    });
+                                                }
+                                                else
                                                 {
                                                     try
                                                     {
                                                         DuplicationerPlugin.log.Log($"Renaming blueprint '{nameToRename}' to '{newName}'");
-                                                        File.Delete(newPath);
                                                         File.Move(pathToRename, newPath);
                                                         RenameBlueprint(newPath, Path.GetFileName(newName));
                                                         FillLibraryGrid(relativePath);
                                                     }
                                                     catch (System.Exception) { }
-                                                });
-                                            }
-                                            else
-                                            {
-                                                try
-                                                {
-                                                    DuplicationerPlugin.log.Log($"Renaming blueprint '{nameToRename}' to '{newName}'");
-                                                    File.Move(pathToRename, newPath);
-                                                    RenameBlueprint(newPath, Path.GetFileName(newName));
-                                                    FillLibraryGrid(relativePath);
                                                 }
-                                                catch (System.Exception) { }
-                                            }
+                                            });
                                         });
-                                    });
-                                }));
+                                    }));
+                                }
                             }
                         }
                     }
+                }
+                catch(System.Exception ex)
+                {
+                    DuplicationerPlugin.log.LogWarning($"Error loading blueprint info from '{path}': {ex}");
                 }
             }
         }

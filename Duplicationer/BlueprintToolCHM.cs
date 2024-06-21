@@ -155,6 +155,8 @@ namespace Duplicationer
             modeSelectArea.Connect(modeResize);
 
             SetPlaceholderOpacity(DuplicationerPlugin.configPreviewAlpha.Get());
+
+            Messenger.RegisterListener<BlueprintRequest>("Duplicationer.CreateBlueprint", nameof(BlueprintToolCHM), ReceiveBlueprintRequest);
         }
 
         public override void Enter()
@@ -287,6 +289,17 @@ namespace Duplicationer
         {
             ClearBlueprintPlaceholders();
             CurrentBlueprint = Blueprint.Create(from, size, buildings, blocks);
+            TabletHelper.SetTabletTextQuickActions($"{GameRoot.getHotkeyStringFromAction("Action")}: Place Blueprint");
+            isDragArrowVisible = false;
+            SelectMode(modePlace);
+            boxMode = BoxMode.None;
+            AudioManager.playUISoundEffect(ResourceDB.resourceLinker.audioClip_recipeCopyTool_copy);
+        }
+
+        public void ReceiveBlueprintRequest(BlueprintRequest blueprintRequest)
+        {
+            ClearBlueprintPlaceholders();
+            CurrentBlueprint = Blueprint.Create(blueprintRequest);
             TabletHelper.SetTabletTextQuickActions($"{GameRoot.getHotkeyStringFromAction("Action")}: Place Blueprint");
             isDragArrowVisible = false;
             SelectMode(modePlace);

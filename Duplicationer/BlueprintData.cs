@@ -1,5 +1,4 @@
-﻿using Newtonsoft.Json.Linq;
-using System;
+﻿using System.Xml.Linq;
 using UnityEngine;
 
 namespace Duplicationer
@@ -145,5 +144,14 @@ namespace Duplicationer
 
         public BuildableObjectData[] buildableObjects;
         public BlockData blocks;
+
+        public int FindEntityIndex(ulong entityId)
+        {
+            for (int i = 0; i < buildableObjects.Length; ++i)
+            {
+                if (buildableObjects[i].originalEntityId == entityId) return i;
+            }
+            return -1;
+        }
     }
 }
