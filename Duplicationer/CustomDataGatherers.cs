@@ -301,7 +301,7 @@ namespace Duplicationer
                         }
                     }
 
-                    DuplicationerPlugin.log.Log($"colorVariants: {string.Join("|", colorVariants.Select(x => $"{x.Key}={x.Value}"))}");
+                    customData.Add("colorVariants", string.Join("|", colorVariants.Select(x => $"{x.Key}={x.Value}")));
                 }
             }
         }

@@ -392,14 +392,42 @@ namespace Duplicationer
 
         private void RenameBlueprint(string path, string name)
         {
-            var iconItemTemplateIds = new ulong[4];
-
+            var iconItemElementTemplates = new ItemElementTemplate[4];
             var reader = new BinaryReader(new FileStream(path, FileMode.Open, FileAccess.Read));
 
             var magic = reader.ReadUInt32();
             var version = reader.ReadUInt32();
 
-            for (int i = 0; i < 4; i++) iconItemTemplateIds[i] = reader.ReadUInt64();
+            if (version < 4)
+            {
+                for (int i = 0; i < 4; i++)
+                {
+                    var iconItemTemplateId = reader.ReadUInt64();
+                    if (iconItemTemplateId != 0)
+                    {
+                        var template = ItemTemplateManager.getItemTemplate(iconItemTemplateId);
+                        if (template != null)
+                        {
+                            iconItemElementTemplates[i] = new ItemElementTemplate(template);
+                        }
+                    }
+                }
+            }
+            else
+            {
+                for (int i = 0; i < 4; i++)
+                {
+                    var iconItemTemplateIdentifier = reader.ReadString();
+                    if (!string.IsNullOrEmpty(iconItemTemplateIdentifier))
+                    {
+                        var template = ItemElementTemplate.Get(iconItemTemplateIdentifier);
+                        if (template.isValid)
+                        {
+                            iconItemElementTemplates[i] = template;
+                        }
+                    }
+                }
+            }
 
             var oldName = reader.ReadString();
 
@@ -415,7 +443,7 @@ namespace Duplicationer
 
             for (int i = 0; i < 4; i++)
             {
-                writer.Write(iconItemTemplateIds[i]);
+                writer.Write(iconItemElementTemplates[i].fullIdentifier);
             }
 
             writer.Write(name);
