@@ -421,7 +421,8 @@ namespace Duplicationer
 
             var json = JSON.Dump(_data, EncodeOptions.PrettyPrint | EncodeOptions.NoTypeHints);
 
-            var compressed = SaveManager.compressByteArray(Encoding.UTF8.GetBytes(json), out ulong dataSize);
+            var uncompressed = Encoding.UTF8.GetBytes(json);
+            var compressed = SaveManager.compressByteArrayInPlace(uncompressed, out ulong dataSize);
 
             var writer = new BinaryWriter(new FileStream(path, FileMode.Create, FileAccess.Write));
 
